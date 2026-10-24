@@ -128,6 +128,15 @@ def test_interfaces_go_through_the_service_layer() -> None:
     assert _violations(INTERFACE_PACKAGES, ("marketdata.db.repositories",)) == []
 
 
+def test_sec_package_is_transport_and_storage_only() -> None:
+    """sec/ fetches and stores files; recording them in the database is ingest/'s job."""
+    banned = tuple(
+        f"marketdata.{name}"
+        for name in ("api", "db", "ingest", "mcp_server", "service", "tasks", "web", "webhooks")
+    )
+    assert _violations(("marketdata.sec",), banned) == []
+
+
 def test_sql_lives_only_in_repositories() -> None:
     found = []
     for module, tree in _modules().items():

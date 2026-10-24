@@ -7,6 +7,12 @@ original must never change.
 
 `LocalRawStore` keeps files under RAW_STORE_PATH (dev); `S3RawStore` keeps them in an
 S3-compatible bucket (R2 or B2 in production). RAW_STORE_KIND chooses one.
+
+Key layout (E1-S3, D-047):
+- filing documents: `raw/sec/{cik}/{accession_no}/{file}`; they never change once filed;
+- API responses: `raw/sec/api/{endpoint}/{cik}/{fetched_at}.json`. They change over time, so
+  each fetch is a new object. Endpoints without a CIK leave it out; endpoints with more path
+  parameters (companyconcept, frames, older submissions pages) add them before the time.
 """
 
 import asyncio
@@ -15,6 +21,7 @@ import os
 import re
 import tempfile
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,6 +30,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from marketdata.config import Settings, SettingsError
+from marketdata.sec import urls
 
 if TYPE_CHECKING:
     from types_boto3_s3 import S3Client
@@ -236,6 +244,48 @@ def create_raw_store(settings: Settings) -> RawStore:
         ),
     )
     return S3RawStore(client, settings.s3_bucket)
+
+
+def fetched_at_name(fetched_at: datetime) -> str:
+    """A fetch time as a key segment: 20261024T205501.123456Z (UTC, no colons)."""
+    if fetched_at.tzinfo is None:
+        raise ValueError("fetched_at must be timezone-aware")
+    return fetched_at.astimezone(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+
+
+def filing_key(cik: int, accession: str, file: str) -> str:
+    """Where a filing document is kept, e.g. raw/sec/320193/0000320193-24-000123/index.json."""
+    urls.cik10(cik)
+    return check_key(f"raw/sec/{cik}/{urls.accession_no(accession)}/{file}")
+
+
+def api_response_key(
+    endpoint: str, fetched_at: datetime, *, cik: int | None = None, parts: tuple[str, ...] = ()
+) -> str:
+    """Where one fetch of an API response is kept."""
+    segments = ["raw", "sec", "api", endpoint]
+    if cik is not None:
+        urls.cik10(cik)
+        segments.append(str(cik))
+    segments.extend(parts)
+    return check_key("/".join([*segments, f"{fetched_at_name(fetched_at)}.json"]))
+
+
+def key_for_url(url: str, fetched_at: datetime) -> str:
+    """The key for a URL built by sec/urls.py. Raises ValueError for anything else."""
+    parsed = urls.parse(url)
+    if parsed is None:
+        raise ValueError(f"no raw key layout for {url}; pass the key explicitly")
+    if parsed.endpoint == "filing":
+        if parsed.file is None or parsed.cik is None or parsed.accession_no is None:
+            raise ValueError(f"{url} is a folder listing; fetch its index.json instead")
+        return filing_key(parsed.cik, parsed.accession_no, parsed.file)
+    if parsed.endpoint.startswith("bulk_"):
+        raise ValueError(
+            f"{url} is a bulk file of a gigabyte or more; fetch_and_store holds files in "
+            "memory, so bulk files need a streaming fetch (PLAN.md §16)"
+        )
+    return api_response_key(parsed.endpoint, fetched_at, cik=parsed.cik, parts=parsed.parts)
 
 
 def _same_or_conflict(key: str, stored: bytes, new: bytes) -> bool:
