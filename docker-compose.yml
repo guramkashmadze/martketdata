@@ -1,0 +1,23 @@
+name: marketdata
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: marketdata
+      POSTGRES_PASSWORD: marketdata
+      POSTGRES_DB: marketdata
+    # Host port 5433, so it can run next to a local PostgreSQL on 5432 (D-037).
+    # Bound to localhost only: the password above is a dev default.
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketdata -d marketdata"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
