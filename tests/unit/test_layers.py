@@ -42,6 +42,10 @@ IO_MODULES = (
 )
 INTERFACE_PACKAGES = ("marketdata.api", "marketdata.mcp_server", "marketdata.web")
 SQL_ALLOWED = ("marketdata.db.repositories", "marketdata.db.migrations")
+# SEC hosts are named only inside sec/, so every SEC URL comes from sec/urls.py and every
+# SEC request from sec/client.py.
+SEC_HOST_ALLOWED = ("marketdata.sec",)
+SEC_HOST_PATTERN = re.compile(r"\bsec\.gov\b", re.IGNORECASE)
 SQL_PATTERN = re.compile(
     r"^\s*(select\s.+\sfrom\s|insert\s+into\s|update\s+\w+\s+set\s|delete\s+from\s"
     r"|create\s+(table|index)\s|alter\s+table\s|drop\s+(table|index)\s|truncate\s)",
@@ -136,6 +140,23 @@ def test_sql_lives_only_in_repositories() -> None:
                 and isinstance(node.value, str)
                 and id(node) not in docstrings
                 and SQL_PATTERN.match(node.value)
+            ):
+                found.append(f"{module}:{node.lineno}")
+    assert found == []
+
+
+def test_sec_hosts_are_named_only_in_the_sec_package() -> None:
+    found = []
+    for module, tree in _modules().items():
+        if _within(module, SEC_HOST_ALLOWED):
+            continue
+        docstrings = _docstring_nodes(tree)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstrings
+                and SEC_HOST_PATTERN.search(node.value)
             ):
                 found.append(f"{module}:{node.lineno}")
     assert found == []

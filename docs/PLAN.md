@@ -204,11 +204,11 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Packaging | PDM + `pyproject.toml` (D-041); build backend hatchling | `pdm.lock` committed; in-project `.venv`; Python 3.12 from the system (Homebrew on macOS). PDM MIT, hatchling MIT |
 | Lint and format | black (format), isort (imports), flake8 with flake8-bugbear, flake8-simplify, pep8-naming, flake8-async, flake8-datetimez (D-041) | `pdm run lint` checks; `pdm run fmt` fixes. Settings in `pyproject.toml` and `.flake8`. All MIT |
 | Types | mypy `--strict`, with the pydantic plugin | CI gate. MIT |
-| Tests | pytest, pytest-asyncio; httpx for FastAPI's TestClient | No network in unit tests. MIT, Apache-2.0 |
+| Tests | pytest, pytest-asyncio; httpx2 for FastAPI's TestClient | No network in unit tests. MIT, Apache-2.0 |
 | CLI | typer | Entry point `marketdata`. MIT |
-| HTTP client | httpx (async) | |
-| Retries | tenacity | |
-| Rate limiting | Own async token bucket in `sec/client.py` | Process-wide; see D-007 |
+| HTTP client | httpx2 (async), D-042 | pydantic's maintained fork of httpx, same API. BSD-3; pulls in httpcore2 (BSD-3) and truststore (MIT: certificates from the OS trust store) |
+| Retries | tenacity | Apache-2.0 |
+| Rate limiting | Own async token bucket in `sec/client.py` | Process-wide, burst of one; see D-007, D-044 |
 | Database | PostgreSQL 18 | D-002, D-040. Images pinned to the major (`postgres:18`), never `latest` |
 | DB driver | psycopg 3 + psycopg_pool | Plain SQL in `db/repositories/` (Dapper style). LGPL-3.0, used as an unmodified library: allowed (not AGPL) |
 | Migrations | Alembic, SQL written with `op.execute` | MIT. Pulls in SQLAlchemy (MIT) only as its migration runner; our code uses no ORM |
@@ -1089,8 +1089,8 @@ Example `earnings/latest` response body (`data` part):
 | `RAW_STORE_KIND` | `local` or `s3` | E1 |
 | `RAW_STORE_PATH` | `./var/raw` | E1 (local) |
 | `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | — | E1 (s3) |
-| `SEC_USER_AGENT` | `marketdata <your email>` | E1 |
-| `SEC_MAX_RPS` | `8` | E1 |
+| `SEC_USER_AGENT` | `marketdata <your email>` | E1. Required by processes that call the SEC (D-043) |
+| `SEC_MAX_RPS` | `8` | E1. At most 8 (guardrail 6) |
 | `UNIVERSE_FILE` | `data/universe.csv` | E2 |
 | `EXTRACTION_OVERRIDES_FILE` | `data/extraction_overrides.yaml` | E7a |
 | `ALERT_EMAIL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | — | E7c |
@@ -1644,6 +1644,9 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-039 | 2026-10-24 | `Competitors/` (a copy of Financial Datasets' published docs) is kept out of the repository via `.gitignore` | §17: discovery material stays outside the repo, and the content is a third party's. |
 | D-040 | 2026-10-24 | PostgreSQL 18, the latest major (18.6 on this date), everywhere: Docker dev, CI, live and production. Images are pinned to the major (`postgres:18`), never `latest`; moving to a new major is a new decision here. Supersedes the version in D-002 (PostgreSQL stays the only database) and the 16-vs-18 split in D-037 | Guram wants the latest release, and his local server is already 18, so dev, CI and deployments now run the same major. Data directories don't carry over between majors, so a floating `latest` tag would break the volume and change CI without notice when 19 ships. |
 | D-041 | 2026-10-24 | PDM replaces uv for environments, installs and the lockfile (`pdm.lock`); black, isort and flake8 (with flake8-bugbear, flake8-simplify, pep8-naming, flake8-async, flake8-datetimez) replace ruff. `pdm run lint` is the lint gate and `pdm run fmt` formats. `pyproject.toml` keeps standard `[project]` and `[dependency-groups]` metadata, so the tools can change again without touching dependencies. Supersedes the uv and ruff choices in §5 | The endpoint policy on Guram's managed Mac kills uv and ruff, which are signed by OpenAI OpCo, LLC, and the block is company policy that we don't work around. The replacements are mature, MIT-licensed, run on the system Python, and lock and install the same dependencies. flake8-async also caught an unshielded `await` in a `finally` that the earlier checks missed. |
+| D-042 | 2026-10-24 | The SEC client and the tests use `httpx2` instead of `httpx`. Resolves the E0 follow-up on Starlette's TestClient | `httpx2` (pydantic's fork, same API, BSD-3) is maintained: 2.16.0 on 2026-10-21, production/stable. `httpx` has had no release since 0.28.1, only 1.0 dev previews. Starlette 1.10's TestClient imports `httpx2` first and warns when it falls back to `httpx` |
+| D-043 | 2026-10-24 | `SEC_USER_AGENT` is required only by processes that call the SEC: the worker, `marketdata sec …` and `scripts/fetch_fixture.py` fail at startup without it (`SecClient.from_settings`). The API, Alembic and the tests start without it. A value that is set is always validated (`<app name> <contact email>`), and an empty value in `.env` counts as not set. Refines §8 "the app refuses to start without it" | The API, MCP server and web UI never call the SEC (CLAUDE.md), so requiring the value there would add a setting they don't use, a placeholder in CI and in every test's settings |
+| D-044 | 2026-10-24 | SEC client rules: (1) the process-wide token bucket has a burst of one, so requests start at least 1/`SEC_MAX_RPS` apart; (2) `SEC_MAX_RPS` must be above 0 and at most 8; (3) network errors (timeouts, refused or reset connections) are retried like 429 and 5xx, within the same 5 attempts, and a numeric `Retry-After` longer than the backoff is honoured (capped at 60 s); (4) 403 is not retried and raises `SecForbidden`; (5) the client calls only `https://www.sec.gov` and `https://data.sec.gov`, redirects included | (1) A bucket whose burst equals the rate lets 2 × rate requests into one second (16 at 8/s, over the SEC's 10/s); a burst of one keeps every one-second window at or under the rate and still meets the E1-S1 timing AC (40 requests take about 4.9 s). (2) Guardrail 6 enforced in config. (3) Transient network failures are as common as 5xx. (4) The SEC answers 403 to undeclared tools and to rate breaches, and then blocks for a while, so retrying makes it worse. (5) The User-Agent holds a contact email and must not reach other hosts; OpenFIGI (E9) and the price vendor (E10) get their own clients |
 
 ---
 

@@ -1,28 +1,48 @@
 """Settings from environment variables and .env (PLAN.md §11).
 
 Each epic adds the settings it reads. Variables from later epics may already be in .env;
-they are ignored until then.
+they are ignored until then. An empty value (`NAME=`) counts as not set.
 """
 
-from typing import Literal
+import re
+from typing import Annotated, Literal
 
-from pydantic import PostgresDsn, ValidationError
+from pydantic import AfterValidator, Field, PostgresDsn, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Env = Literal["dev", "live", "prod"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+# The SEC asks for "Sample Company Name AdminContact@<sample company domain>.com".
+_SEC_USER_AGENT = re.compile(r"^\S.*\s[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+SEC_USER_AGENT_FORMAT = "'<app name> <contact email>', for example 'marketdata ops@example.com'"
 
 
 class SettingsError(Exception):
     """Configuration is missing or invalid. The message says which variable and how to fix it."""
 
 
+def check_sec_user_agent(value: str) -> str:
+    value = value.strip()
+    if not _SEC_USER_AGENT.match(value):
+        raise ValueError(f"must be {SEC_USER_AGENT_FORMAT}")
+    return value
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", env_ignore_empty=True, extra="ignore"
+    )
 
     env: Env = "dev"
     log_level: LogLevel = "INFO"
     database_url: PostgresDsn
+
+    # E1. Only processes that call the SEC need the User-Agent; they check it at startup with
+    # require_sec_user_agent (D-043). A value that is set is always validated.
+    sec_user_agent: Annotated[str, AfterValidator(check_sec_user_agent)] | None = None
+    # Guardrail 6: at most 8 requests per second; the SEC allows about 10.
+    sec_max_rps: float = Field(default=8.0, gt=0, le=8)
 
 
 def load_settings(env_file: str | None = ".env") -> Settings:
@@ -33,6 +53,15 @@ def load_settings(env_file: str | None = ".env") -> Settings:
         raise SettingsError(_describe(exc)) from None
 
 
+def require_sec_user_agent(settings: Settings) -> str:
+    """The User-Agent for SEC requests. Processes that call the SEC refuse to start without it."""
+    if settings.sec_user_agent is None:
+        raise SettingsError(
+            _message([f"  - SEC_USER_AGENT is missing. Set it to {SEC_USER_AGENT_FORMAT}."])
+        )
+    return settings.sec_user_agent
+
+
 def _describe(exc: ValidationError) -> str:
     lines = []
     for error in exc.errors():
@@ -41,6 +70,10 @@ def _describe(exc: ValidationError) -> str:
             lines.append(f"  - {name} is missing.")
         else:
             lines.append(f"  - {name} is invalid: {error['msg']}.")
+    return _message(lines)
+
+
+def _message(lines: list[str]) -> str:
     return (
         "Invalid configuration:\n"
         + "\n".join(lines)
