@@ -68,7 +68,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 
 | Epic | Title | Session | Depends on | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| E0 | Foundation | 1 | — | In progress | Code, migration 0001, tests and CI workflow done (2026-10-24); tests and migrations pass on PostgreSQL 16 (Docker) and 18 (local). Open: `uv.lock`, a ruff run and the first CI run on main, blocked because this Mac's endpoint policy kills uv and ruff (§16) |
+| E0 | Foundation | 1 | — | In progress | Code, migration 0001, tests and CI workflow done (2026-10-24); tests and migrations pass on PostgreSQL 18 (Docker and local, D-040). Open: `uv.lock`, a ruff run and the first CI run on main, blocked because this Mac's endpoint policy kills uv and ruff (§16) |
 | E1 | SEC client and raw store | 2 | E0 | Not started | |
 | E2 | Security master and universe | 3 | E1, OD-3 | Not started | Classifies domestic filers, foreign issuers and funds |
 | E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
@@ -167,7 +167,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | `api` | FastAPI app serving `/health`, `/v1/*`, `/proof/*`, `/mcp` and, from E15, the web UI at `/` (uvicorn) |
 | `worker` | Claims tasks from the queue and runs their handlers, including webhook delivery and price loads. **One process** with async concurrency in the MVP, so the SEC rate limit lives in one place (D-007) |
 | `scheduler` | APScheduler; only enqueues tasks, never does the work itself |
-| `postgres` | PostgreSQL 16 |
+| `postgres` | PostgreSQL 18 (D-040) |
 | `caddy` | Reverse proxy with automatic TLS (live VM and production) |
 
 **Flow for one earnings release**
@@ -209,7 +209,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | HTTP client | httpx (async) | |
 | Retries | tenacity | |
 | Rate limiting | Own async token bucket in `sec/client.py` | Process-wide; see D-007 |
-| Database | PostgreSQL 16 | D-002 |
+| Database | PostgreSQL 18 | D-002, D-040. Images pinned to the major (`postgres:18`), never `latest` |
 | DB driver | psycopg 3 + psycopg_pool | Plain SQL in `db/repositories/` (Dapper style). LGPL-3.0, used as an unmodified library: allowed (not AGPL) |
 | Migrations | Alembic, SQL written with `op.execute` | MIT. Pulls in SQLAlchemy (MIT) only as its migration runner; our code uses no ORM |
 | Models and config | Pydantic v2, pydantic-settings | MIT |
@@ -1106,7 +1106,7 @@ Example `earnings/latest` response body (`data` part):
 
 **Environments**
 
-- **dev:** PostgreSQL from `docker compose up -d postgres` (16, host port 5433) or a local server (D-037); API, worker and scheduler run with `uv run`; raw store is the local folder `./var/raw`.
+- **dev:** PostgreSQL from `docker compose up -d postgres` (18, host port 5433) or a local PostgreSQL 18 (D-037, D-040); API, worker and scheduler run with `uv run`; raw store is the local folder `./var/raw`.
 - **live (from E7c):** one small always-on VM running all services in Docker Compose behind Caddy, so releases that land around midnight Tbilisi time are processed and the track record starts during the Q3 2026 season (OD-1). The web UI runs there in `private` mode until OD-13 is decided.
 - **prod (E11):** hardened version of the live setup; raw store in R2 or B2.
 
@@ -1137,7 +1137,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Depends on:** OD-7 (name) — use `marketdata` until decided.
 
 - **E0-S1 Dev environment.** As the operator, I want one-command setup so every session starts from a working environment.
-  - AC: `docker compose up -d postgres` starts PostgreSQL 16 with a named volume.
+  - AC: `docker compose up -d postgres` starts PostgreSQL 18 (D-040; was 16) with a named volume.
   - AC: `uv sync` installs everything; Python 3.12 pinned in `pyproject.toml`.
   - AC: `.env.example` lists every variable in §11; `README.md` has a quickstart of at most 6 steps.
 - **E0-S2 Skeleton and config.** As a developer, I want the §6 layout with typed settings and logging so later epics only add code.
@@ -1641,6 +1641,7 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-037 | 2026-10-24 | Dev may use a local PostgreSQL instead of Docker; Guram's machine runs PostgreSQL 18 on 5432. The Docker Postgres in `docker-compose.yml` stays at 16 and publishes host port 5433 (localhost only), so the two can run side by side. CI and deployments stay on 16; D-002 stands | A local PostgreSQL 18 already held port 5432. CI on 16 catches any use of features newer than 16. |
 | D-038 | 2026-10-24 | `GET /health` returns `{"status":"ok","db":"ok"}` (200) or `{"status":"error","db":"down"}` (503), with no envelope and no disclaimer. The API starts while PostgreSQL is down (the pool opens without waiting); the database check gives up after 2 seconds | Health is an operational endpoint that carries no data, so guardrail 1 and §10.1 don't apply. Starting while the database is down lets monitoring see a 503 instead of a refused connection. |
 | D-039 | 2026-10-24 | `Competitors/` (a copy of Financial Datasets' published docs) is kept out of the repository via `.gitignore` | §17: discovery material stays outside the repo, and the content is a third party's. |
+| D-040 | 2026-10-24 | PostgreSQL 18, the latest major (18.6 on this date), everywhere: Docker dev, CI, live and production. Images are pinned to the major (`postgres:18`), never `latest`; moving to a new major is a new decision here. Supersedes the version in D-002 (PostgreSQL stays the only database) and the 16-vs-18 split in D-037 | Guram wants the latest release, and his local server is already 18, so dev, CI and deployments now run the same major. Data directories don't carry over between majors, so a floating `latest` tag would break the volume and change CI without notice when 19 ships. |
 
 ---
 

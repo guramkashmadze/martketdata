@@ -2,7 +2,8 @@ name: marketdata
 
 services:
   postgres:
-    image: postgres:16
+    # Pinned to a major version: data directories don't carry over between majors (D-040).
+    image: postgres:18
     environment:
       POSTGRES_USER: marketdata
       POSTGRES_PASSWORD: marketdata
@@ -11,8 +12,10 @@ services:
     # Bound to localhost only: the password above is a dev default.
     ports:
       - "127.0.0.1:5433:5432"
+    # From 18 the image keeps data in /var/lib/postgresql/<major>/docker, so the volume is
+    # mounted one level up and a later major can be upgraded in place with pg_upgrade.
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U marketdata -d marketdata"]
       interval: 5s
@@ -20,4 +23,4 @@ services:
       retries: 10
 
 volumes:
-  pgdata:
+  postgres-data:

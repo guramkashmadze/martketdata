@@ -10,7 +10,7 @@ Information from public filings. Not investment advice.
 
 ## Quickstart
 
-Needs [uv](https://docs.astral.sh/uv/) and either Docker or a local PostgreSQL 16+.
+Needs [uv](https://docs.astral.sh/uv/) and either Docker or a local PostgreSQL 18.
 
 1. `cp .env.example .env`
 2. Start PostgreSQL: `docker compose up -d postgres` (listens on host port **5433**: set that port in both URLs in `.env`), or use a local server on 5432 with a `marketdata` role (see below).
