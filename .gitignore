@@ -6,9 +6,12 @@ build/
 dist/
 .venv/
 
+# PDM: the selected interpreter is per machine; pdm.lock is committed
+.pdm-python
+.pdm-build/
+
 # Tool caches
 .mypy_cache/
-.ruff_cache/
 .pytest_cache/
 .coverage
 htmlcov/

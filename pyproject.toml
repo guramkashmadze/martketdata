@@ -21,40 +21,43 @@ marketdata = "marketdata.cli:app"
 
 [dependency-groups]
 dev = [
+    "black>=24.10",
+    "flake8>=7.1",
+    "flake8-async>=24.9",     # ASYNC: async pitfalls
+    "flake8-bugbear>=24.8",   # B: likely bugs
+    "flake8-datetimez>=20.10", # DTZ: timezone-aware datetimes only (all timestamps are UTC)
+    "flake8-simplify>=0.21",  # SIM: simpler equivalents
     "httpx>=0.27",
+    "isort>=5.13",
     "mypy>=1.13",
+    "pep8-naming>=0.14",      # N: naming
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
-    "ruff>=0.7",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.ruff]
+# PDM manages the environment and pdm.lock (D-041). flake8 reads its settings from .flake8.
+[tool.pdm.scripts]
+fmt = { composite = ["isort .", "black ."], help = "Sort imports and format the code" }
+lint = { composite = [
+    "black --check .",
+    "isort --check-only --diff .",
+    "flake8",
+    "mypy marketdata",
+], help = "Format check, import order, lint and types: the CI gate" }
+
+[tool.black]
 line-length = 100
-target-version = "py312"
+target-version = ["py312"]
 
-[tool.ruff.lint]
-select = [
-    "E",     # pycodestyle errors
-    "W",     # pycodestyle warnings
-    "F",     # pyflakes
-    "I",     # import order
-    "B",     # bugbear
-    "UP",    # pyupgrade
-    "SIM",   # simplify
-    "N",     # naming
-    "RUF",   # ruff-specific
-    "ASYNC", # async pitfalls
-    "DTZ",   # timezone-aware datetimes only (all timestamps are UTC)
-]
-
-[tool.ruff.lint.per-file-ignores]
-# Revision files are named after their revision id (0001_foundation.py), and their SQL
-# keeps the PLAN.md §7 layout, including long trailing comments.
-"marketdata/db/migrations/versions/*.py" = ["N999", "E501"]
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["marketdata"]
+skip_gitignore = true
 
 [tool.mypy]
 python_version = "3.12"

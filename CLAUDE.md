@@ -5,16 +5,17 @@ SEC filings → raw store → extract / normalize / verify / cross-check → Pos
 The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §1–§11 and the epic you are working on.
 
 ## Commands
-- Start database: docker compose up -d postgres
-- Install: uv sync
-- Migrate: uv run alembic upgrade head
-- Tests: uv run pytest
-- Lint and types: uv run ruff check . && uv run ruff format --check . && uv run mypy marketdata
-- API: uv run uvicorn marketdata.api.app:app --reload
-- Worker: uv run marketdata worker
-- Scheduler: uv run marketdata scheduler
-- Extraction hit rate: uv run marketdata extract report
-- Accuracy report: uv run marketdata quality accuracy
+- Start database: docker compose up -d postgres (PostgreSQL 18 on host port 5433), or use a local PostgreSQL 18 on 5432
+- Install: pdm install
+- Migrate: pdm run alembic upgrade head
+- Tests: pdm run pytest
+- Lint and types: pdm run lint (black --check, isort --check-only, flake8, mypy)
+- Format: pdm run fmt
+- API: pdm run uvicorn marketdata.api.app:app --reload
+- Worker: pdm run marketdata worker
+- Scheduler: pdm run marketdata scheduler
+- Extraction hit rate: pdm run marketdata extract report
+- Accuracy report: pdm run marketdata quality accuracy
 
 ## Rules
 - Layers: api/, mcp_server/ and web/ → service/ → db/repositories/; ingest/ and webhooks/ → db/repositories/. Never skip a layer. SQL only in db/repositories/.
@@ -32,7 +33,8 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Every write is an idempotent upsert.
 - Unit tests use fixtures in tests/fixtures/; no network in unit tests; no live LLM calls in CI.
 - No investment-advice wording anywhere: no buy/sell/hold, no targets, no rankings, scores or signals, no "you should".
-- New dependency: add it to docs/PLAN.md §5 and check its license (no AGPL).
+- New dependency: add it to docs/PLAN.md §5 and check its license (no AGPL). Add it with pdm add and commit pdm.lock.
+- Don't use uv or ruff: the dev machine's endpoint policy blocks them (D-041). Never work around the block.
 - Record every edge case you hit in docs/EDGE_CASES.md.
 - Don't diverge from docs/PLAN.md silently: ask, or record the decision in §15.
 

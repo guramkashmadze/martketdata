@@ -68,7 +68,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 
 | Epic | Title | Session | Depends on | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| E0 | Foundation | 1 | — | In progress | Code, migration 0001, tests and CI workflow done (2026-10-24); tests and migrations pass on PostgreSQL 18 (Docker and local, D-040). Open: `uv.lock`, a ruff run and the first CI run on main, blocked because this Mac's endpoint policy kills uv and ruff (§16) |
+| E0 | Foundation | 1 | — | Done | 2026-10-24. PDM, black, isort and flake8 instead of uv and ruff (D-041); PostgreSQL 18 (D-040). Lint gate and 25 tests green on PostgreSQL 18 (Docker and local). Not yet verified: the first CI run on main, which waits for Guram's OK to push (§16) |
 | E1 | SEC client and raw store | 2 | E0 | Not started | |
 | E2 | Security master and universe | 3 | E1, OD-3 | Not started | Classifies domestic filers, foreign issuers and funds |
 | E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
@@ -201,8 +201,8 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Concern | Choice | Notes |
 | --- | --- | --- |
 | Language | Python 3.12 | Type hints everywhere (D-001) |
-| Packaging | uv + `pyproject.toml`; build backend hatchling | Lockfile committed. uv MIT/Apache-2.0, hatchling MIT |
-| Lint and format | ruff | `ruff check` + `ruff format`. MIT |
+| Packaging | PDM + `pyproject.toml` (D-041); build backend hatchling | `pdm.lock` committed; in-project `.venv`; Python 3.12 from the system (Homebrew on macOS). PDM MIT, hatchling MIT |
+| Lint and format | black (format), isort (imports), flake8 with flake8-bugbear, flake8-simplify, pep8-naming, flake8-async, flake8-datetimez (D-041) | `pdm run lint` checks; `pdm run fmt` fixes. Settings in `pyproject.toml` and `.flake8`. All MIT |
 | Types | mypy `--strict`, with the pydantic plugin | CI gate. MIT |
 | Tests | pytest, pytest-asyncio; httpx for FastAPI's TestClient | No network in unit tests. MIT, Apache-2.0 |
 | CLI | typer | Entry point `marketdata`. MIT |
@@ -226,7 +226,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Error tracking | sentry-sdk | Live VM and production |
 | LLM | **Not used in M1–M4 (D-014).** From E12/E13: `LLMClient` interface; first adapter uses the Anthropic SDK | Model from config; OD-2 |
 | Exploration | Jupyter, pandas, edgartools — in `notebooks/` only | Core code does not import them (D-009) |
-| CI | GitHub Actions: ruff, mypy, pytest with a Postgres service | |
+| CI | GitHub Actions: `pdm install --check`, black, isort, flake8, mypy, migrations, pytest with a PostgreSQL 18 service | `pdm install --check` fails on a missing or stale lockfile |
 | Deploy | Docker Compose on one VM, Caddy for TLS | OD-1 |
 
 Adding a dependency: add it to this table in the same session and check its license.
@@ -273,8 +273,8 @@ tests/
   unit/  integration/  golden/ (incl. golden/earnings/)  fixtures/sec/
 docs/                    PLAN.md, EDGE_CASES.md, DEMO.md, MCP.md, INTEGRATION.md, SECURITY.md, DEPLOY.md
 .github/workflows/ci.yml
-docker-compose.yml  Dockerfile (E7c)  pyproject.toml  uv.lock  .python-version  alembic.ini
-.env.example  README.md  CLAUDE.md
+docker-compose.yml  Dockerfile (E7c)  pyproject.toml  pdm.lock  .python-version  .flake8
+alembic.ini  .env.example  README.md  CLAUDE.md
 ```
 
 Sales material and discovery notes stay outside the repository (§17).
@@ -306,7 +306,7 @@ Sales material and discovery notes stay outside the repository (§17).
 **Definition of Done (per story)**
 
 - Acceptance criteria met and shown (a test, or a command with its output).
-- `ruff check`, `ruff format --check`, `mypy --strict`, `pytest` all green.
+- `pdm run lint` (black, isort, flake8, `mypy --strict`) and `pdm run pytest` all green.
 - Migrations included; `downgrade` works where practical.
 - New settings added to `.env.example` and §11.
 - Edge cases found are appended to `docs/EDGE_CASES.md`.
@@ -1106,7 +1106,7 @@ Example `earnings/latest` response body (`data` part):
 
 **Environments**
 
-- **dev:** PostgreSQL from `docker compose up -d postgres` (18, host port 5433) or a local PostgreSQL 18 (D-037, D-040); API, worker and scheduler run with `uv run`; raw store is the local folder `./var/raw`.
+- **dev:** PostgreSQL from `docker compose up -d postgres` (18, host port 5433) or a local PostgreSQL 18 (D-037, D-040); API, worker and scheduler run with `pdm run`; raw store is the local folder `./var/raw`.
 - **live (from E7c):** one small always-on VM running all services in Docker Compose behind Caddy, so releases that land around midnight Tbilisi time are processed and the track record starts during the Q3 2026 season (OD-1). The web UI runs there in `private` mode until OD-13 is decided.
 - **prod (E11):** hardened version of the live setup; raw store in R2 or B2.
 
@@ -1114,15 +1114,16 @@ Example `earnings/latest` response body (`data` part):
 
 ```bash
 docker compose up -d postgres
-uv sync
-uv run alembic upgrade head
-uv run pytest
-uv run ruff check . && uv run ruff format --check . && uv run mypy marketdata
-uv run uvicorn marketdata.api.app:app --reload
-uv run marketdata worker
-uv run marketdata scheduler
-uv run marketdata extract report
-uv run marketdata quality accuracy
+pdm install
+pdm run alembic upgrade head
+pdm run pytest
+pdm run lint
+pdm run fmt
+pdm run uvicorn marketdata.api.app:app --reload
+pdm run marketdata worker
+pdm run marketdata scheduler
+pdm run marketdata extract report
+pdm run marketdata quality accuracy
 ```
 
 ---
@@ -1138,11 +1139,11 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 
 - **E0-S1 Dev environment.** As the operator, I want one-command setup so every session starts from a working environment.
   - AC: `docker compose up -d postgres` starts PostgreSQL 18 (D-040; was 16) with a named volume.
-  - AC: `uv sync` installs everything; Python 3.12 pinned in `pyproject.toml`.
+  - AC: `pdm install` installs everything from the committed `pdm.lock` (D-041; was `uv sync`); Python 3.12 pinned in `pyproject.toml`.
   - AC: `.env.example` lists every variable in §11; `README.md` has a quickstart of at most 6 steps.
 - **E0-S2 Skeleton and config.** As a developer, I want the §6 layout with typed settings and logging so later epics only add code.
   - AC: package layout matches §6 (empty modules allowed).
-  - AC: `uv run marketdata --help` lists command groups.
+  - AC: `pdm run marketdata --help` lists command groups.
   - AC: settings load from env via pydantic-settings; missing required values fail fast with a clear message.
   - AC: structlog prints JSON when `ENV` is `live` or `prod`, readable output when `ENV=dev`.
 - **E0-S3 Database and migrations.** As a developer, I want versioned migrations so schema changes are repeatable.
@@ -1152,13 +1153,13 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E0-S4 Health endpoint.** As an API integrator, I want a health check so monitoring can tell if the service is up.
   - AC: `GET /health` returns `{"status":"ok","db":"ok"}` with 200; returns 503 with `"db":"down"` when Postgres is unreachable (tested).
 - **E0-S5 CI.** As the operator, I want every push checked automatically so broken code never reaches main.
-  - AC: GitHub Actions workflow runs ruff (check + format), mypy `--strict`, pytest with a Postgres service; green on main.
+  - AC: GitHub Actions workflow runs black, isort and flake8 (D-041; was ruff), mypy `--strict`, pytest with a Postgres service; green on main.
 - **E0-S6 AI context files and edge-case log.** As the operator, I want the plan and the edge-case log in the repo so every session reads and adds to the same record.
   - AC: `docs/PLAN.md` (this file) and `CLAUDE.md` (Appendix A) committed.
   - AC: `docs/EDGE_CASES.md` committed with its format: date, epic, company and accession, what broke, how it was handled.
 
 **Out of scope:** any SEC access.
-**Demo:** `docker compose up -d postgres && uv run alembic upgrade head && uv run uvicorn marketdata.api.app:app` then `curl localhost:8000/health`.
+**Demo:** `docker compose up -d postgres && pdm run alembic upgrade head && pdm run uvicorn marketdata.api.app:app` then `curl localhost:8000/health`.
 
 ### E1 — SEC client and raw store (session 2)
 
@@ -1185,7 +1186,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: committed fixtures: submissions and companyfacts for 3 companies chosen for variety (one September year-end, one December year-end, one January year-end retailer). Trim large files if needed to keep the fixture folder small.
 
 **Out of scope:** parsing.
-**Demo:** a CLI command `uv run marketdata sec get <url>` that fetches through the client, stores the file, and prints the raw key.
+**Demo:** a CLI command `pdm run marketdata sec get <url>` that fetches through the client, stores the file, and prints the raw key.
 
 ### E2 — Security master and universe (session 3)
 
@@ -1196,7 +1197,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: `data/universe.csv` with `ticker,note`; the loader validates each ticker against the SEC ticker lists, prints unknown ones, and prints a count per class (§9.1).
 - **E2-S2 Companies and securities.** As a developer, I want company and ticker records loaded from the SEC so everything else can join on CIK.
   - AC: migration creates `companies` and `securities` (§7) with `filer_type` and `security_type`.
-  - AC: `uv run marketdata ingest security-master` loads tickers from `company_tickers_exchange.json` and `company_tickers_mf.json`, and details from each universe company's submissions JSON; sets `in_universe` and classifies per §9.1.
+  - AC: `pdm run marketdata ingest security-master` loads tickers from `company_tickers_exchange.json` and `company_tickers_mf.json`, and details from each universe company's submissions JSON; sets `in_universe` and classifies per §9.1.
   - AC: re-running changes nothing (idempotent); a test proves it.
 - **E2-S3 Ticker resolution.** As an API integrator, I want `brk.b`, `BRK-B` and `BRK/B` to mean the same thing so integration is forgiving.
   - AC: `service.companies.resolve_ticker(text)` returns the current security, its class and CIK per §9.2; raises `NotFound` otherwise.
@@ -1207,7 +1208,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: `service.companies.capabilities(cik)` returns which data kinds apply (earnings, fundamentals) with a reason; tested for a domestic company, an ETF and a foreign issuer.
 
 **Out of scope:** CUSIP/FIGI (E9), ETF holdings (E14).
-**Demo:** `uv run marketdata company show <TICKER>` prints CIK, name, class, SIC, fiscal year end, tickers and capabilities.
+**Demo:** `pdm run marketdata company show <TICKER>` prints CIK, name, class, SIC, fiscal year end, tickers and capabilities.
 
 ### E3 — Task queue and filings watcher (session 4)
 
@@ -1221,22 +1222,22 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: a concurrency test with two claimers shows no task is processed twice.
   - AC: CLI `marketdata tasks list|retry|purge-done`.
 - **E3-S2 Worker and registry.** As a developer, I want handlers registered by task kind so new epics only add a handler.
-  - AC: `tasks/registry.py` maps kind → async handler; `uv run marketdata worker` runs handlers with configurable concurrency; graceful shutdown on SIGTERM.
+  - AC: `tasks/registry.py` maps kind → async handler; `pdm run marketdata worker` runs handlers with configurable concurrency; graceful shutdown on SIGTERM.
   - AC: handler exceptions are logged with task context and recorded in `last_error`.
 - **E3-S3 Scheduler.** As the operator, I want periodic jobs to enqueue work, not do it, so all work goes through one path.
-  - AC: `uv run marketdata scheduler` enqueues `filings_watch` every 10 minutes and `security_master` daily at 06:00 UTC.
+  - AC: `pdm run marketdata scheduler` enqueues `filings_watch` every 10 minutes and `security_master` daily at 06:00 UTC.
 - **E3-S4 Filings watcher.** As a user, I want new company events to show up quickly so the information is current.
   - AC: migration creates `filings` (§7).
   - AC: for each universe CIK (and, from E9, each curated manager CIK) the watcher reads submissions JSON, inserts unseen accessions with `items_8k` parsed, and enqueues routed tasks per §4 (only for registered kinds).
   - AC: first run on a fixture inserts that company's recent filings; a second run inserts 0; a fixture with one new filing enqueues exactly the expected task.
 - **E3-S5 Filing history backfill.** As the operator, I want five years of filing history so the feed isn't empty on day one.
-  - AC: `uv run marketdata backfill filings --years 5` follows `filings.files` pages.
+  - AC: `pdm run marketdata backfill filings --years 5` follows `filings.files` pages.
 - **E3-S6 Event labels.** As a user, I want 8-K filings and 5% stakes described in plain words so I understand what happened.
   - AC: §9.6 table in code; `service.filings` returns `events: [{item_or_form, label, importance}]` per filing; hidden items are not returned.
   - AC: the actual Schedule 13D/13G form codes and whether issuer submissions list them are verified and recorded in §15; a fixture with a 13D filing yields the activist label.
 
 **Out of scope:** handlers for earnings, facts, Form 4, 13F (later epics).
-**Demo:** run scheduler and worker for 15 minutes; `uv run marketdata filings list <TICKER> --limit 10` shows filings with event labels.
+**Demo:** run scheduler and worker for 15 minutes; `pdm run marketdata filings list <TICKER> --limit 10` shows filings with event labels.
 
 ### E7a — Earnings release extraction and verification, rule-based (session 5)
 
@@ -1257,13 +1258,13 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: crafted cases (wrong scale, value not in the source, sign change, missing prior year, nine-month column picked by mistake) each produce the expected result.
   - AC: migration also creates `value_changes`; a re-run with a changed rule or a new override writes `correction` rows, and an 8-K/A writes `amendment` rows (tested, D-027).
 - **E7a-S5 Backfill and hit-rate report.** As the operator, I want to measure the rules on real releases so we know whether an LLM fallback is needed.
-  - AC: `uv run marketdata backfill earnings --quarters 4` processes the universe.
-  - AC: `uv run marketdata extract report` prints passed / failed / not found per slot and per company, and override counts.
+  - AC: `pdm run marketdata backfill earnings --quarters 4` processes the universe.
+  - AC: `pdm run marketdata extract report` prints passed / failed / not found per slot and per company, and override counts.
   - AC: at least 30 releases hand-checked in `tests/golden/earnings/`, all passing or each difference listed in §16.
   - AC: the report's numbers and the OD-10 decision are recorded in §15.
 
 **Out of scope:** serving (E5a), localization (E7b), LLM (E12), guidance, non-GAAP measures, foreign issuers' 6-K releases.
-**Demo:** `uv run marketdata earnings show <TICKER>` prints the latest release's slots with source quotes and check results.
+**Demo:** `pdm run marketdata earnings show <TICKER>` prints the latest release's slots with source quotes and check results.
 
 ### E7c — Live run and track record (session 6)
 
@@ -1273,13 +1274,13 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E7c-S1 Always-on deployment.** As the operator, I want the watcher running around the clock so releases that land at midnight Tbilisi time are processed.
   - AC: Docker Compose on the live VM behind Caddy (HTTPS); nightly `pg_dump` to object storage; external uptime check on `/health`; Sentry enabled.
 - **E7c-S2 Track-record stats.** As the operator, I want speed and accuracy measured on live data, not only in tests.
-  - AC: `uv run marketdata stats` and a basic `GET /v1/status` report: releases processed, slot pass rate, share of complete releases, median and 90th-percentile minutes from SEC acceptance to verified, overrides used, value changes by reason.
+  - AC: `pdm run marketdata stats` and a basic `GET /v1/status` report: releases processed, slot pass rate, share of complete releases, median and 90th-percentile minutes from SEC acceptance to verified, overrides used, value changes by reason.
   - AC: stats are kept per week so the record shows a trend.
 - **E7c-S3 Alerts.** As the operator, I want to know when a release fails before anyone asks.
   - AC: alerts (email or Telegram) when a universe release fails extraction or verification, or verification takes longer than 60 minutes.
 
 **Out of scope:** the data API (E5a), webhooks and proof pages (E5b).
-**Demo:** `uv run marketdata stats` on the live VM after a week of earnings releases.
+**Demo:** `pdm run marketdata stats` on the live VM after a week of earnings releases.
 
 ### E4a — XBRL facts and reported metrics (session 7)
 
@@ -1289,7 +1290,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E4a-S1 Facts loader.** As a developer, I want every company's XBRL facts in Postgres so metrics are computed with SQL and Python, not by re-reading JSON.
   - AC: migration creates `xbrl_facts` (§7).
   - AC: `facts_refresh` handler loads `us-gaap` and `dei` facts from companyfacts JSON (raw file stored first); idempotent.
-  - AC: `uv run marketdata backfill facts` loads all universe companies (per-company API, or the nightly bulk ZIP if faster).
+  - AC: `pdm run marketdata backfill facts` loads all universe companies (per-company API, or the nightly bulk ZIP if faster).
   - AC: fact counts for a fixture company match a count computed directly from the fixture JSON.
 - **E4a-S2 Metric catalog.** As a developer, I want the metric definitions in one versioned module so rules are reviewable in git.
   - AC: `normalize/metric_catalog.py` implements §9.3 with `CATALOG_VERSION` and marks the core set; a test asserts every metric has at least one concept, a kind and a unit.
@@ -1303,10 +1304,10 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: golden tests for 5 companies × 4 metrics (revenue, net_income, eps_diluted, total_assets) × last 8 quarters, hand-checked against press releases (YAML in `tests/golden/` with the release URL per value).
 
 - **E4a-S5 Universe growth (D-035).** As the operator, I want a rule-based way to grow coverage without licensed index lists.
-  - AC: `uv run marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` (from the nightly bulk companyfacts file) and writes a candidate CSV for review; filers with a missing or stale value are listed separately.
+  - AC: `pdm run marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` (from the nightly bulk companyfacts file) and writes a candidate CSV for review; filers with a missing or stale value are listed separately.
 
 **Out of scope:** YTD differencing, Q4, TTM, computed metrics, quality checks (E4b).
-**Demo:** `uv run marketdata metrics show <TICKER> --metric revenue --period Q` prints values with their source accession numbers.
+**Demo:** `pdm run marketdata metrics show <TICKER> --metric revenue --period Q` prints values with their source accession numbers.
 
 ### E4b — Derived metrics, quality checks, cross-checks (session 8)
 
@@ -1320,12 +1321,12 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: §9.4 rule 8 and the computed metrics in §9.3 (except price-based ones); tests for gaps and contiguity.
 - **E4b-S3 Quality checks.** As the operator, I want suspicious values flagged so I can review them before a user sees a wrong number.
   - AC: every §9.5 check implemented, each with a unit test that triggers it.
-  - AC: `uv run marketdata quality report` lists flags by company and metric.
+  - AC: `pdm run marketdata quality report` lists flags by company and metric.
 - **E4b-S4 Golden set of 10.** As the operator, I want accuracy measured across sectors so we know where the rules break.
   - AC: golden set covers 10 companies including a bank, a January year-end retailer and a September year-end company; core-set metrics first (D-020).
   - AC: all golden tests pass, or each known difference is listed in §16 with its reason.
 - **E4b-S5 Recompute.** As the operator, I want to rebuild all metrics from stored facts so rule changes apply to history.
-  - AC: `uv run marketdata normalize --all` rebuilds `financial_metrics` without any SEC call; prints duration; `calc_version` updated.
+  - AC: `pdm run marketdata normalize --all` rebuilds `financial_metrics` without any SEC call; prints duration; `calc_version` updated.
 - **E4b-S6 Release-vs-filing cross-check (D-028).** As a data evaluator, I want each earnings-release number compared with the audited filing so I can see it was right.
   - AC: when a 10-Q or 10-K for the same quarter is loaded, each `earnings_facts` slot gets `cross_check_status`, `cross_check_value` and `cross_check_accession` per §9.10; mismatches flag `release_vs_filing_mismatch` and appear in the quality report.
   - AC: fixtures for a matching quarter, a quarter whose numbers changed between release and filing, and a slot with no comparable value.
@@ -1367,7 +1368,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E5b-S3 Proof pages.** As a data evaluator, I want to open any number and see where it came from.
   - AC: proof pages per §9.10 for releases and metric values, showing value, proof, SEC links, checks, cross-check and change history; Basic auth with an `api`-scope key.
 - **E5b-S4 Accuracy report.** As a data evaluator, I want published accuracy, not promises.
-  - AC: `uv run marketdata quality accuracy` and `GET /v1/status` publish the §9.10 accuracy figures from live data.
+  - AC: `pdm run marketdata quality accuracy` and `GET /v1/status` publish the §9.10 accuracy figures from live data.
 - **E5b-S5 Demo guide.** As the operator, I want a repeatable demo for any prospective client: product, engineering, and data or compliance people.
   - AC: `docs/DEMO.md` covers: the API in curl or Postman; a webhook received by a test receiver; a proof page for a live number; a release cross-checked against its 10-Q; the accuracy report and live stats; the integration on one page.
 
@@ -1403,7 +1404,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: migration creates `price_vendors` and `prices_eod`; `PriceProvider` interface, `FakePriceProvider` for tests, one real adapter.
   - AC: the service layer returns price fields only for channels in `display_scopes`, otherwise null with flag `price_not_licensed` (tested for each channel).
 - **E10-S2 Daily load and backfill.** As the operator, I want prices loaded automatically every trading day.
-  - AC: a scheduler job at 22:30 UTC enqueues `prices_eod`; `uv run marketdata backfill prices --years 2`; missing days and splits are logged in `docs/EDGE_CASES.md`.
+  - AC: a scheduler job at 22:30 UTC enqueues `prices_eod`; `pdm run marketdata backfill prices --years 2`; missing days and splits are logged in `docs/EDGE_CASES.md`.
 - **E10-S3 Price-based metrics.** As a user, I want market value and P/E next to the fundamentals, with the price date.
   - AC: snapshot, compare and MCP `company_snapshot` show the latest close, market cap and P/E with price date and source where licensed (§9.12).
   - AC: the client-supplied `price` parameter still works and takes precedence; it is never stored; `price_source` says which was used.
@@ -1448,7 +1449,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E8-S3 Amendments.** As a user, I want corrected filings to replace the originals so I don't see a trade twice.
   - AC: §9.7 superseding rule with tests for matched and unmatched amendments.
 - **E8-S4 Backfill.** As the operator, I want two years of history so the feature is useful from day one.
-  - AC: `uv run marketdata backfill insiders --quarters 8` uses the SEC Insider Transactions datasets for universe issuers.
+  - AC: `pdm run marketdata backfill insiders --quarters 8` uses the SEC Insider Transactions datasets for universe issuers.
   - AC: a reconciliation report compares a sample of companies between dataset and XML parsing; differences listed in §16.
 - **E8-S5 Serve.** As a user, I want to see who bought or sold, how much, and at what price.
   - AC: `GET /v1/companies/{ticker}/insiders` and MCP `insider_activity` with the §9.7 aggregation; `signal_only=true` by default; 10b5-1 marked.
@@ -1472,7 +1473,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E9-S4 Positions and changes.** As a user, I want to see a fund's biggest positions and what it bought or sold last quarter.
   - AC: migration creates `fund_positions`; §9.8 merge, weights and change types implemented with tests.
 - **E9-S5 Backfill.** As the operator, I want eight quarters of history for curated managers.
-  - AC: `uv run marketdata backfill funds --quarters 8` from per-filing XML (or the SEC 13F datasets if simpler).
+  - AC: `pdm run marketdata backfill funds --quarters 8` from per-filing XML (or the SEC 13F datasets if simpler).
 - **E9-S6 Serve.** As an API integrator and AI chat user, I want portfolios and holders available through the API and MCP.
   - AC: `GET /v1/funds`, `GET /v1/funds/{manager_cik}/holdings`, `GET /v1/companies/{ticker}/funds` and MCP `investor_portfolio`; each shows report period and filing date.
   - AC: fund pages and a "held by" section on the UI company page, showing report period and filing date (§9.14).
@@ -1499,7 +1500,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E11-S6 Security, privacy and license review.** As the operator, I want a checklist I can hand to a client's vendor-risk team.
   - AC: `docs/SECURITY.md`: no end-user data and no contact with a client's users; UI privacy (no accounts, no trackers, truncated IP addresses); secrets handling (including webhook secrets); proof-page and UI access; DB roles (API role read-only); TLS; key rotation; logging and retention; dependency license audit (no AGPL); the licensed-data rule and the price license (D-017, D-031).
 - **E11-S7 Usage metering.** As the operator, I want usage per key across the API and MCP so any pricing can rest on real use.
-  - AC: `uv run marketdata usage --since <date>` reports calls per key, endpoint or tool, and day from `api_requests`.
+  - AC: `pdm run marketdata usage --since <date>` reports calls per key, endpoint or tool, and day from `api_requests`.
 
 **Demo:** the deployed URL, the UI, the status page with the accuracy report, and the integration guide shown end to end.
 
@@ -1642,6 +1643,7 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-038 | 2026-10-24 | `GET /health` returns `{"status":"ok","db":"ok"}` (200) or `{"status":"error","db":"down"}` (503), with no envelope and no disclaimer. The API starts while PostgreSQL is down (the pool opens without waiting); the database check gives up after 2 seconds | Health is an operational endpoint that carries no data, so guardrail 1 and §10.1 don't apply. Starting while the database is down lets monitoring see a 503 instead of a refused connection. |
 | D-039 | 2026-10-24 | `Competitors/` (a copy of Financial Datasets' published docs) is kept out of the repository via `.gitignore` | §17: discovery material stays outside the repo, and the content is a third party's. |
 | D-040 | 2026-10-24 | PostgreSQL 18, the latest major (18.6 on this date), everywhere: Docker dev, CI, live and production. Images are pinned to the major (`postgres:18`), never `latest`; moving to a new major is a new decision here. Supersedes the version in D-002 (PostgreSQL stays the only database) and the 16-vs-18 split in D-037 | Guram wants the latest release, and his local server is already 18, so dev, CI and deployments now run the same major. Data directories don't carry over between majors, so a floating `latest` tag would break the volume and change CI without notice when 19 ships. |
+| D-041 | 2026-10-24 | PDM replaces uv for environments, installs and the lockfile (`pdm.lock`); black, isort and flake8 (with flake8-bugbear, flake8-simplify, pep8-naming, flake8-async, flake8-datetimez) replace ruff. `pdm run lint` is the lint gate and `pdm run fmt` formats. `pyproject.toml` keeps standard `[project]` and `[dependency-groups]` metadata, so the tools can change again without touching dependencies. Supersedes the uv and ruff choices in §5 | The endpoint policy on Guram's managed Mac kills uv and ruff, which are signed by OpenAI OpCo, LLC, and the block is company policy that we don't work around. The replacements are mature, MIT-licensed, run on the system Python, and lock and install the same dependencies. flake8-async also caught an unshielded `await` in a `finally` that the earlier checks missed. |
 
 ---
 
@@ -1662,8 +1664,9 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-19 | Planning | Factual "intelligence" events: guidance direction, several insiders buying in the same week | After M3 (D-029) |
 | 2026-10-23 | Planning | Public MCP listing in Claude's and ChatGPT's directories: needs OAuth and each directory's review | After M2 |
 | 2026-10-23 | Planning | UI accounts, watchlists and alerts: bring personal data and its legal duties; decide only with a chosen market | After OD-12 |
-| 2026-10-24 | E0-S1, S5 | **Blocker.** On Guram's managed Mac (Microsoft Defender, Kandji, Carbon Black), every binary signed with Developer ID "OpenAI OpCo, LLC (2DC432GLL2)" is killed at launch (exit 137). Astral's uv and ruff are signed that way. Until IT allows them, `uv.lock` can't be generated, `uv sync` and ruff can't run locally, and CI (`uv sync --locked`) can't pass. Code was checked meanwhile with mypy, pytest, black and pycodestyle in a pip venv outside the repo | E0 (IT request) |
-| 2026-10-24 | E0-S5 | First push to `origin` (github.com/guramkashmadze/martketdata, still empty) and a green CI run on main, after `uv.lock` exists and Guram approves the push. Consider renaming the repo to `marketdata` before the first push | E0 |
+| 2026-10-24 | E0-S1, S5 | On Guram's managed Mac (Microsoft Defender, Kandji, Carbon Black), every binary signed with Developer ID "OpenAI OpCo, LLC (2DC432GLL2)" is killed at launch (exit 137); Astral's uv and ruff are signed that way. Resolved by D-041 (PDM, black, isort, flake8). If IT later allows these binaries, moving back to uv and ruff is a new decision | — |
+| 2026-10-24 | E0-S5 | First push to `origin` (github.com/guramkashmadze/martketdata, still empty) and a green CI run on main, after Guram approves the push. Consider renaming the repo to `marketdata` before the first push | E0 |
+| 2026-10-24 | E0 | ruff rules with no flake8 equivalent were dropped in D-041: the `RUF` set and `UP` (pyupgrade). Add `pyupgrade --py312-plus` as a check if old-style syntax starts to appear | Later |
 | 2026-10-24 | E0 | `Dockerfile` and the `api`, `worker`, `scheduler` and `caddy` Compose services: E0's compose file has only `postgres` | E7c |
 | 2026-10-24 | E0 | `tasks` has `unique (kind, key)`, so a finished task can't be enqueued again by a plain insert (E0's insert returns the existing row). E3 must decide how a re-run works, for example resetting a done row to `queued` | E3 |
 | 2026-10-24 | E0 | Starlette warns that using `httpx` with its TestClient is deprecated and suggests `httpx2`. Check `httpx2`'s status and license when E1 picks the SEC HTTP client | E1 |
@@ -1697,16 +1700,17 @@ SEC filings → raw store → extract / normalize / verify / cross-check → Pos
 The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §1–§11 and the epic you are working on.
 
 ## Commands
-- Start database: docker compose up -d postgres
-- Install: uv sync
-- Migrate: uv run alembic upgrade head
-- Tests: uv run pytest
-- Lint and types: uv run ruff check . && uv run ruff format --check . && uv run mypy marketdata
-- API: uv run uvicorn marketdata.api.app:app --reload
-- Worker: uv run marketdata worker
-- Scheduler: uv run marketdata scheduler
-- Extraction hit rate: uv run marketdata extract report
-- Accuracy report: uv run marketdata quality accuracy
+- Start database: docker compose up -d postgres (PostgreSQL 18 on host port 5433), or use a local PostgreSQL 18 on 5432
+- Install: pdm install
+- Migrate: pdm run alembic upgrade head
+- Tests: pdm run pytest
+- Lint and types: pdm run lint (black --check, isort --check-only, flake8, mypy)
+- Format: pdm run fmt
+- API: pdm run uvicorn marketdata.api.app:app --reload
+- Worker: pdm run marketdata worker
+- Scheduler: pdm run marketdata scheduler
+- Extraction hit rate: pdm run marketdata extract report
+- Accuracy report: pdm run marketdata quality accuracy
 
 ## Rules
 - Layers: api/, mcp_server/ and web/ → service/ → db/repositories/; ingest/ and webhooks/ → db/repositories/. Never skip a layer. SQL only in db/repositories/.
@@ -1724,7 +1728,8 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Every write is an idempotent upsert.
 - Unit tests use fixtures in tests/fixtures/; no network in unit tests; no live LLM calls in CI.
 - No investment-advice wording anywhere: no buy/sell/hold, no targets, no rankings, scores or signals, no "you should".
-- New dependency: add it to docs/PLAN.md §5 and check its license (no AGPL).
+- New dependency: add it to docs/PLAN.md §5 and check its license (no AGPL). Add it with pdm add and commit pdm.lock.
+- Don't use uv or ruff: the dev machine's endpoint policy blocks them (D-041). Never work around the block.
 - Record every edge case you hit in docs/EDGE_CASES.md.
 - Don't diverge from docs/PLAN.md silently: ask, or record the decision in §15.
 
@@ -1748,7 +1753,7 @@ Before writing code:
 3. Propose an implementation order and the migrations you will add.
 Wait for my OK.
 
-Then implement story by story. After each story, run ruff, mypy and pytest and show me the results and how the acceptance criteria are met.
+Then implement story by story. After each story, run pdm run lint (black, isort, flake8, mypy) and pdm run pytest, and show me the results and how the acceptance criteria are met.
 Append every edge case you hit to docs/EDGE_CASES.md as you go.
 ```
 
@@ -1757,7 +1762,7 @@ Append every edge case you hit to docs/EDGE_CASES.md as you go.
 ## Appendix C — End-of-session checklist
 
 - [ ] Every completed story's acceptance criteria shown (test names or command output).
-- [ ] `ruff check`, `ruff format --check`, `mypy --strict`, `pytest` green.
+- [ ] `pdm run lint` (black, isort, flake8, `mypy --strict`) and `pdm run pytest` green.
 - [ ] Migrations added and applied; downgrade checked where practical.
 - [ ] `.env.example` and §11 updated for any new setting.
 - [ ] No LLM calls added outside E12/E13; no licensed data added without a §15 entry.

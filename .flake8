@@ -1,0 +1,9 @@
+[flake8]
+max-line-length = 100
+# E203, E701 and E704 conflict with black's formatting.
+extend-ignore = E203, E701, E704
+extend-exclude = .venv, .pdm-build, var, build, dist
+# Revision files are named after their revision id (0001_foundation.py), and their SQL keeps
+# the PLAN.md §7 layout, including long trailing comments.
+per-file-ignores =
+    marketdata/db/migrations/versions/*.py: N999, E501

@@ -1,6 +1,6 @@
 """The FastAPI app: /health now; /v1, /proof, /mcp and the web UI are mounted by later epics.
 
-Run with `uv run uvicorn marketdata.api.app:app`.
+Run with `pdm run uvicorn marketdata.api.app:app`.
 """
 
 from collections.abc import AsyncIterator
@@ -20,13 +20,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        pool = create_pool(str(settings.database_url))
-        await pool.open()
-        app.state.pool = pool
-        try:
+        # Opens without waiting for the database (see db/pool.py) and closes on shutdown.
+        async with create_pool(str(settings.database_url)) as pool:
+            app.state.pool = pool
             yield
-        finally:
-            await pool.close()
 
     app = FastAPI(title="marketdata", lifespan=lifespan)
     app.include_router(health.router)

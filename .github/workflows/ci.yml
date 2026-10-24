@@ -40,24 +40,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: pdm-project/setup-pdm@v4
         with:
-          enable-cache: true
+          python-version: "3.12"
+          cache: true
 
+      # Fails if pdm.lock is missing or out of date with pyproject.toml.
       - name: Install
-        run: uv sync --locked
-
-      - name: Lint
-        run: uv run ruff check .
+        run: pdm install --check
 
       - name: Format
-        run: uv run ruff format --check .
+        run: pdm run black --check .
+
+      - name: Import order
+        run: pdm run isort --check-only --diff .
+
+      - name: Lint
+        run: pdm run flake8
 
       - name: Types
-        run: uv run mypy marketdata
+        run: pdm run mypy marketdata
 
       - name: Migrate
-        run: uv run alembic upgrade head
+        run: pdm run alembic upgrade head
 
       - name: Tests
-        run: uv run pytest
+        run: pdm run pytest
