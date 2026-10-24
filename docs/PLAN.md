@@ -68,7 +68,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 
 | Epic | Title | Session | Depends on | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| E0 | Foundation | 1 | — | Not started | Creates `docs/EDGE_CASES.md` |
+| E0 | Foundation | 1 | — | In progress | Code, migration 0001, tests and CI workflow done (2026-10-24). Open: `uv.lock`, a ruff run and the first CI run on main, blocked because this Mac's endpoint policy kills uv and ruff (§16) |
 | E1 | SEC client and raw store | 2 | E0 | Not started | |
 | E2 | Security master and universe | 3 | E1, OD-3 | Not started | Classifies domestic filers, foreign issuers and funds |
 | E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
@@ -201,28 +201,28 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Concern | Choice | Notes |
 | --- | --- | --- |
 | Language | Python 3.12 | Type hints everywhere (D-001) |
-| Packaging | uv + `pyproject.toml` | Lockfile committed |
-| Lint and format | ruff | `ruff check` + `ruff format` |
-| Types | mypy `--strict` | CI gate |
-| Tests | pytest, pytest-asyncio | No network in unit tests |
-| CLI | typer | Entry point `marketdata` |
+| Packaging | uv + `pyproject.toml`; build backend hatchling | Lockfile committed. uv MIT/Apache-2.0, hatchling MIT |
+| Lint and format | ruff | `ruff check` + `ruff format`. MIT |
+| Types | mypy `--strict`, with the pydantic plugin | CI gate. MIT |
+| Tests | pytest, pytest-asyncio; httpx for FastAPI's TestClient | No network in unit tests. MIT, Apache-2.0 |
+| CLI | typer | Entry point `marketdata`. MIT |
 | HTTP client | httpx (async) | |
 | Retries | tenacity | |
 | Rate limiting | Own async token bucket in `sec/client.py` | Process-wide; see D-007 |
 | Database | PostgreSQL 16 | D-002 |
-| DB driver | psycopg 3 + psycopg_pool | Plain SQL in `db/repositories/` (Dapper style) |
-| Migrations | Alembic, SQL written with `op.execute` | |
-| Models and config | Pydantic v2, pydantic-settings | |
+| DB driver | psycopg 3 + psycopg_pool | Plain SQL in `db/repositories/` (Dapper style). LGPL-3.0, used as an unmodified library: allowed (not AGPL) |
+| Migrations | Alembic, SQL written with `op.execute` | MIT. Pulls in SQLAlchemy (MIT) only as its migration runner; our code uses no ORM |
+| Models and config | Pydantic v2, pydantic-settings | MIT |
 | XML / HTML | lxml; selectolax for HTML-to-text | Press release tables parsed with lxml (E7a) |
 | HTML pages and templates | Jinja2: proof pages (E5b), web UI (E15), sandboxed client templates (E7b) | BSD-3 |
 | Web UI interactivity | htmx for server-rendered partials, Chart.js for charts; both vendored as static files with pinned versions | Permissive (BSD-family, MIT); verify in E15 (D-034) |
 | Prices | `PriceProvider` interface; first real adapter per OD-4 | E10 (D-031) |
 | Webhook signing | stdlib `hmac` / `hashlib`; secrets encrypted at rest with `cryptography` (Fernet) | Apache-2.0 / BSD (E5b) |
-| API | FastAPI + uvicorn | |
+| API | FastAPI + uvicorn | MIT, BSD-3 |
 | MCP | Official `mcp` Python SDK, Streamable HTTP, mounted in the FastAPI app | |
 | Scheduler | APScheduler | |
 | Object storage | boto3 against the S3 API; local-folder adapter for dev | Cloudflare R2 or Backblaze B2 in production |
-| Logging | structlog (JSON in prod, pretty in dev) | |
+| Logging | structlog (JSON in live and prod, pretty in dev) | MIT/Apache-2.0. Standard-library loggers (uvicorn, alembic, psycopg) share its formatter; logs go to stderr |
 | Error tracking | sentry-sdk | Live VM and production |
 | LLM | **Not used in M1–M4 (D-014).** From E12/E13: `LLMClient` interface; first adapter uses the Anthropic SDK | Model from config; OD-2 |
 | Exploration | Jupyter, pandas, edgartools — in `notebooks/` only | Core code does not import them (D-009) |
@@ -240,8 +240,9 @@ Adding a dependency: add it to this table in the same session and check its lice
 ```
 marketdata/
   config.py              settings (pydantic-settings)
+  log.py                 structlog setup (E0)
   cli.py                 typer CLI: ingest, backfill, extract, normalize, universe, tasks, clients, keys,
-                         webhooks, quality, stats, usage (E7b adds: review, templates)
+                         webhooks, quality, stats, usage, sec (E7b adds: review, templates)
   db/
     pool.py              connection pool
     migrations/          Alembic
@@ -271,7 +272,9 @@ scripts/                 fetch_fixture.py and other one-off tools
 tests/
   unit/  integration/  golden/ (incl. golden/earnings/)  fixtures/sec/
 docs/                    PLAN.md, EDGE_CASES.md, DEMO.md, MCP.md, INTEGRATION.md, SECURITY.md, DEPLOY.md
-docker-compose.yml  Dockerfile  pyproject.toml  .env.example  CLAUDE.md
+.github/workflows/ci.yml
+docker-compose.yml  Dockerfile (E7c)  pyproject.toml  uv.lock  .python-version  alembic.ini
+.env.example  README.md  CLAUDE.md
 ```
 
 Sales material and discovery notes stay outside the repository (§17).
@@ -294,7 +297,8 @@ Sales material and discovery notes stay outside the repository (§17).
 **Testing**
 
 - Parsers and extractors are tested with real SEC files saved in `tests/fixtures/sec/` (use `scripts/fetch_fixture.py`). Keep fixtures small (total under 20 MB; trim large JSON where possible).
-- Integration tests run against Postgres in Docker.
+- Integration tests (`tests/integration/`, marker `integration`) run against PostgreSQL at `TEST_DATABASE_URL`. Its database name must end in `_test`: each session drops and recreates the schema with Alembic, and each test runs in a transaction that is rolled back. They fail rather than skip when PostgreSQL is down. `pytest -m "not integration"` runs the unit tests alone.
+- `tests/unit/test_layers.py` enforces the layer rules by reading imports: `verify/` never imports `extract/`, pure modules import nothing that does I/O, interfaces never import `db/repositories/`, and SQL string literals appear only in `db/repositories/` and migrations.
 - Golden tests (`tests/golden/*.yaml`, `tests/golden/earnings/*.yaml`) hold hand-checked values, each with the SEC URL it was checked against. They are the accuracy contract.
 - The four-quarter earnings backfill is the extraction test set; `marketdata extract report` measures the hit rate on it (§9.9).
 - LLM tests (E12/E13 only) use `FakeLLMClient` with recorded responses; no live LLM calls in CI.
@@ -1080,7 +1084,8 @@ Example `earnings/latest` response body (`data` part):
 | --- | --- | --- |
 | `ENV` | `dev`, `live` or `prod` | all |
 | `LOG_LEVEL` | `INFO` | all |
-| `DATABASE_URL` | `postgresql://marketdata:marketdata@localhost:5432/marketdata` | all |
+| `DATABASE_URL` | `postgresql://marketdata:marketdata@localhost:5432/marketdata` | all. Required. The Docker Postgres is on host port 5433 (D-037) |
+| `TEST_DATABASE_URL` | `postgresql://marketdata:marketdata@localhost:5432/marketdata_test` | tests only; name must end in `_test` |
 | `RAW_STORE_KIND` | `local` or `s3` | E1 |
 | `RAW_STORE_PATH` | `./var/raw` | E1 (local) |
 | `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | — | E1 (s3) |
@@ -1101,7 +1106,7 @@ Example `earnings/latest` response body (`data` part):
 
 **Environments**
 
-- **dev:** `docker compose up -d postgres`; API, worker and scheduler run with `uv run`; raw store is the local folder `./var/raw`.
+- **dev:** PostgreSQL from `docker compose up -d postgres` (16, host port 5433) or a local server (D-037); API, worker and scheduler run with `uv run`; raw store is the local folder `./var/raw`.
 - **live (from E7c):** one small always-on VM running all services in Docker Compose behind Caddy, so releases that land around midnight Tbilisi time are processed and the track record starts during the Q3 2026 season (OD-1). The web UI runs there in `private` mode until OD-13 is decided.
 - **prod (E11):** hardened version of the live setup; raw store in R2 or B2.
 
@@ -1633,6 +1638,9 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-034 | 2026-10-23 | The web UI is server-rendered in the same FastAPI app (Jinja2, htmx, Chart.js), read-only, with no accounts, trackers or third-party scripts; every number links to its proof. It starts private (Basic auth) and goes public only when the price license and OD-5 allow (OD-13) | Stays in Python with one deployment and a small security and privacy surface; makes proof the centre of the UI. |
 | D-035 | 2026-10-23 | Universe: a starter list of about 30 domestic filers chosen for variety, plus a few ETFs and foreign issuers; growth toward the roughly 500 largest domestic filers by `dei:EntityPublicFloat` from SEC data, not index membership lists | A neutral start that tests edge cases early; growth needs no licensed data. |
 | D-036 | 2026-10-23 | OD-5 resolved: Guram confirmed the employment check is OK. The code lives in his personal GitHub account | Clears the last blocker before E0. |
+| D-037 | 2026-10-24 | Dev may use a local PostgreSQL instead of Docker; Guram's machine runs PostgreSQL 18 on 5432. The Docker Postgres in `docker-compose.yml` stays at 16 and publishes host port 5433 (localhost only), so the two can run side by side. CI and deployments stay on 16; D-002 stands | A local PostgreSQL 18 already held port 5432. CI on 16 catches any use of features newer than 16. |
+| D-038 | 2026-10-24 | `GET /health` returns `{"status":"ok","db":"ok"}` (200) or `{"status":"error","db":"down"}` (503), with no envelope and no disclaimer. The API starts while PostgreSQL is down (the pool opens without waiting); the database check gives up after 2 seconds | Health is an operational endpoint that carries no data, so guardrail 1 and §10.1 don't apply. Starting while the database is down lets monitoring see a 503 instead of a refused connection. |
+| D-039 | 2026-10-24 | `Competitors/` (a copy of Financial Datasets' published docs) is kept out of the repository via `.gitignore` | §17: discovery material stays outside the repo, and the content is a third party's. |
 
 ---
 
@@ -1653,6 +1661,12 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-19 | Planning | Factual "intelligence" events: guidance direction, several insiders buying in the same week | After M3 (D-029) |
 | 2026-10-23 | Planning | Public MCP listing in Claude's and ChatGPT's directories: needs OAuth and each directory's review | After M2 |
 | 2026-10-23 | Planning | UI accounts, watchlists and alerts: bring personal data and its legal duties; decide only with a chosen market | After OD-12 |
+| 2026-10-24 | E0-S1, S5 | **Blocker.** On Guram's managed Mac (Microsoft Defender, Kandji, Carbon Black), every binary signed with Developer ID "OpenAI OpCo, LLC (2DC432GLL2)" is killed at launch (exit 137). Astral's uv and ruff are signed that way. Until IT allows them, `uv.lock` can't be generated, `uv sync` and ruff can't run locally, and CI (`uv sync --locked`) can't pass. Code was checked meanwhile with mypy, pytest, black and pycodestyle in a pip venv outside the repo | E0 (IT request) |
+| 2026-10-24 | E0-S5 | First push to `origin` (github.com/guramkashmadze/martketdata, still empty) and a green CI run on main, after `uv.lock` exists and Guram approves the push. Consider renaming the repo to `marketdata` before the first push | E0 |
+| 2026-10-24 | E0 | `Dockerfile` and the `api`, `worker`, `scheduler` and `caddy` Compose services: E0's compose file has only `postgres` | E7c |
+| 2026-10-24 | E0 | `tasks` has `unique (kind, key)`, so a finished task can't be enqueued again by a plain insert (E0's insert returns the existing row). E3 must decide how a re-run works, for example resetting a done row to `queued` | E3 |
+| 2026-10-24 | E0 | Starlette warns that using `httpx` with its TestClient is deprecated and suggests `httpx2`. Check `httpx2`'s status and license when E1 picks the SEC HTTP client | E1 |
+| 2026-10-24 | E0 | Plan text: D-034 and §9.14 say the UI goes public when "OD-5" allows, but OD-5 was the employment check (D-036); this probably means OD-13 | Next plan revision |
 
 ---
 
