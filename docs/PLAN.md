@@ -1689,6 +1689,7 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-24 | E1 | Tests that build `Settings` must pass `_env_file=None` (see `make_settings` in the tests); otherwise they read the developer's `.env`, which broke one test once `SEC_USER_AGENT` was set | All epics |
 | 2026-10-24 | E1 | httpx2 logs an INFO line ("HTTP Request: GET …") for every request, next to our own `sec_response` debug line. Lower the `httpx2` logger to WARNING in `log.py` if it gets noisy in live runs | E7c |
 | 2026-10-24 | E1 | Tooling: `pdm add` rewrites the dependency arrays in `pyproject.toml` and drops their inline comments (restored by hand in E1). PDM isn't on Guram's PATH: E0 and E1 ran a copy from a session's temporary folder. `brew install pdm` makes it permanent | Guram |
+| 2026-10-24 | E1 push | The first CI run on E1 ([run 40138306918](https://github.com/guramkashmadze/martketdata/actions/runs/40138306918), commit `28ad7d2`) failed in Tests, and its log needs a GitHub sign-in. The same commit passed 216 tests locally, from a clean clone, and 10 of 10 times in Linux containers (arm64 and amd64, 2 CPUs). Likely a flake: the S3 concurrent-put test relied on moto, which checks `If-None-Match` and writes in two steps; it now runs on the local store only. CI now lists failed tests as annotations, which can be read without a sign-in | E1 |
 
 ---
 

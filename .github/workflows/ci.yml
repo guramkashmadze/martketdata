@@ -64,5 +64,15 @@ jobs:
       - name: Migrate
         run: pdm run alembic upgrade head
 
+      # bash here runs with pipefail, so a failing pytest still fails the step through tee.
       - name: Tests
-        run: pdm run pytest
+        shell: bash
+        env:
+          COLUMNS: "250"  # keep pytest's short failure summary lines whole
+        run: pdm run pytest -rfE 2>&1 | tee pytest.log
+
+      # Job logs need a GitHub sign-in; annotations don't. List failed tests there (max 10).
+      - name: Annotate failed tests
+        if: failure()
+        shell: bash
+        run: grep -E '^(FAILED|ERROR) ' pytest.log | head -10 | sed 's/^/::error title=pytest::/' || true
