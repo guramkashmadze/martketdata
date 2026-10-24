@@ -98,7 +98,13 @@ async def test_keys_are_plain_relative_paths(store: RawStore, key: str) -> None:
         await store.put(key, b"x", None)
 
 
-async def test_concurrent_puts_of_different_bytes_keep_exactly_one(store: RawStore) -> None:
+# --- Local specifics ---
+
+
+async def test_concurrent_puts_of_different_bytes_keep_exactly_one(tmp_path: Path) -> None:
+    """Only the local store: moto checks If-None-Match and then writes, so two threads can both
+    pass its check. Real S3 is atomic; test_s3_new_keys_are_written_only_if_absent covers it."""
+    store = LocalRawStore(tmp_path)
     results = await asyncio.gather(
         *(store.put(KEY, f"version {i}".encode(), None) for i in range(8)),
         return_exceptions=True,
@@ -108,9 +114,6 @@ async def test_concurrent_puts_of_different_bytes_keep_exactly_one(store: RawSto
     assert len(written) == 1
     assert all(isinstance(r, RawObjectConflict) for r in results if r is not True)
     assert (await store.get(KEY)).startswith(b"version ")
-
-
-# --- Local specifics ---
 
 
 async def test_local_store_leaves_no_temporary_files(tmp_path: Path) -> None:
