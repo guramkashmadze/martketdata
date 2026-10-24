@@ -148,12 +148,13 @@ def test_document_paths_stay_inside_the_folder(file: str) -> None:
 def test_insider_13f_and_nport_data_sets() -> None:
     assert urls.INSIDER_DATA_SETS == "https://www.sec.gov/dera/data/form-345"
     assert urls.F13_DATA_SETS == "https://www.sec.gov/dera/data/form-13f"
-    assert urls.NPORT_DATA_SETS.startswith("https://www.sec.gov/")
-    # The quarterly ZIPs are linked from those pages; their paths are turned into URLs here.
     assert (
-        urls.www_path("/files/structureddata/data/form-345-data-sets/2024q1_form345.zip")
-        == "https://www.sec.gov/files/structureddata/data/form-345-data-sets/2024q1_form345.zip"
+        urls.NPORT_DATA_SETS
+        == "https://www.sec.gov/data-research/sec-markets-data/form-n-port-data-sets"
     )
+    # A ZIP link as the insider page listed it on 2026-10-24.
+    link = "/files/datastandardsinnovation/data/insider-transactions-data-sets/2026q3_form345.zip"
+    assert urls.www_path(link) == "https://www.sec.gov" + link
 
 
 def test_openfigi_is_listed_but_not_an_sec_url() -> None:

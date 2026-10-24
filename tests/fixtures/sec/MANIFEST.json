@@ -1,0 +1,56 @@
+{
+  "companyfacts/AAPL.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+    "fetched_at": "2026-10-24T18:18:23+00:00",
+    "original_size_bytes": 3789099,
+    "original_sha256": "73a86c6aedc31f77cac2ea4df5f80f0b3bd7e6eb58bb4e01444fbedf3afb9c43",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only",
+    "size_bytes": 864163,
+    "sha256": "9b4630ad91fdcf9d01e96829f0b3d0f358148c44014887673d2c83f10eed0af7"
+  },
+  "companyfacts/GOOGL.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001652044.json",
+    "fetched_at": "2026-10-24T18:18:29+00:00",
+    "original_size_bytes": 3164517,
+    "original_sha256": "a017f26ee88cb4a639d1c1ddb06d53b4afe22f0ac89cabec7cd67c88919fe1c5",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only",
+    "size_bytes": 425493,
+    "sha256": "b4cc62663d82d9189fd3a5ff985d9e0faaea77cf6743f1b6328fb5a96b4748dc"
+  },
+  "companyfacts/TGT.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000027419.json",
+    "fetched_at": "2026-10-24T18:18:35+00:00",
+    "original_size_bytes": 3761536,
+    "original_sha256": "eb15a2cd524e99ff27675db78840d039ec4a68b9cc2dcb10accbcb299933a487",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only",
+    "size_bytes": 840612,
+    "sha256": "db08e841d6ac411d0588f8d7a9e3fc510d5038e6ccd4e2a8ad5741a0ccaec2e8"
+  },
+  "submissions/AAPL.json": {
+    "url": "https://data.sec.gov/submissions/CIK0000320193.json",
+    "fetched_at": "2026-10-24T18:18:54+00:00",
+    "original_size_bytes": 163917,
+    "original_sha256": "47e4383b0133a4146cc631725f9aa28bac6d5679d504f735a78f1a1923c4b622",
+    "trim": null,
+    "size_bytes": 163917,
+    "sha256": "47e4383b0133a4146cc631725f9aa28bac6d5679d504f735a78f1a1923c4b622"
+  },
+  "submissions/GOOGL.json": {
+    "url": "https://data.sec.gov/submissions/CIK0001652044.json",
+    "fetched_at": "2026-10-24T18:18:57+00:00",
+    "original_size_bytes": 152401,
+    "original_sha256": "5f29ed0c43529dca319199d592e504a97b3628143a918d60d5852904b9f62c14",
+    "trim": null,
+    "size_bytes": 152401,
+    "sha256": "5f29ed0c43529dca319199d592e504a97b3628143a918d60d5852904b9f62c14"
+  },
+  "submissions/TGT.json": {
+    "url": "https://data.sec.gov/submissions/CIK0000027419.json",
+    "fetched_at": "2026-10-24T18:18:59+00:00",
+    "original_size_bytes": 149737,
+    "original_sha256": "3d133aa9e678fcf843c4ed95e51dd6c5f298df3a21cc6b6e2b84429a8b506975",
+    "trim": null,
+    "size_bytes": 149737,
+    "sha256": "3d133aa9e678fcf843c4ed95e51dd6c5f298df3a21cc6b6e2b84429a8b506975"
+  }
+}

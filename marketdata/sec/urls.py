@@ -17,11 +17,12 @@ COMPANY_TICKERS_MF = f"{WWW}/files/company_tickers_mf.json"
 BULK_COMPANYFACTS = f"{WWW}/Archives/edgar/daily-index/xbrl/companyfacts.zip"
 BULK_SUBMISSIONS = f"{WWW}/Archives/edgar/daily-index/bulkdata/submissions.zip"
 
-# Landing pages that link to the quarterly data-set ZIPs. The ZIP names are read from these
-# pages (or verified) in the epic that loads them: E8, E9 and E14. Use `www_path` for the links.
+# Landing pages that link to the data-set ZIPs, checked live on 2026-10-24. The ZIPs sit in
+# folders that differ between and within data sets, so their links are read from these pages
+# in the epic that loads them (E8, E9, E14); `www_path` turns a link into a URL.
 INSIDER_DATA_SETS = f"{WWW}/dera/data/form-345"
 F13_DATA_SETS = f"{WWW}/dera/data/form-13f"
-NPORT_DATA_SETS = f"{WWW}/dera/data/form-n-port-data-sets"
+NPORT_DATA_SETS = f"{WWW}/data-research/sec-markets-data/form-n-port-data-sets"
 
 # Not an SEC URL, so never fetched through SecClient (it refuses other hosts). Used from E9.
 OPENFIGI_MAPPING = "https://api.openfigi.com/v3/mapping"

@@ -1,0 +1,205 @@
+"""Save an SEC response under tests/fixtures/sec/ for offline tests (E1-S5).
+
+    pdm run python scripts/fetch_fixture.py <url> <name> [--trim]
+
+The request goes through the SEC client (User-Agent, rate limit, retries), so this script
+needs SEC_USER_AGENT. `name` is a path under tests/fixtures/sec/, e.g.
+`companyfacts/AAPL.json`. `--trim` keeps a fixture small (PLAN.md §6):
+
+- companyfacts: only the concepts in the metric catalog (PLAN.md §9.3) and the dei cover
+  facts; with --since-year, only facts from filings in or after that year;
+- submissions: only the newest --keep-recent rows of `filings.recent` (every column).
+
+Each fixture is recorded in tests/fixtures/sec/MANIFEST.json with its source URL, fetch time,
+the size and sha256 of the original response, the trim applied, and the size and sha256 of
+the file saved. This is the only code outside the SEC client that reaches the network, and
+unit tests never run it.
+"""
+
+import argparse
+import asyncio
+import hashlib
+import json
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from marketdata.config import SettingsError, load_settings
+from marketdata.sec import urls
+from marketdata.sec.client import SecClient, SecError
+
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests" / "fixtures" / "sec"
+MANIFEST = FIXTURES / "MANIFEST.json"
+
+# PLAN.md §9.3, in catalog order; E4a's normalize/metric_catalog.py becomes the source.
+CATALOG_CONCEPTS = {
+    "us-gaap": [
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "SalesRevenueNet",
+        "CostOfRevenue",
+        "CostOfGoodsAndServicesSold",
+        "CostOfGoodsSold",
+        "GrossProfit",
+        "ResearchAndDevelopmentExpense",
+        "SellingGeneralAndAdministrativeExpense",
+        "OperatingIncomeLoss",
+        "InterestExpense",
+        "InterestExpenseNonoperating",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",  # noqa: E501
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",  # noqa: E501
+        "IncomeTaxExpenseBenefit",
+        "NetIncomeLoss",
+        "ProfitLoss",
+        "EarningsPerShareBasic",
+        "EarningsPerShareDiluted",
+        "WeightedAverageNumberOfDilutedSharesOutstanding",
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAndAmortization",
+        "NetCashProvidedByUsedInOperatingActivities",
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsOfDividends",
+        "PaymentsOfDividendsCommonStock",
+        "PaymentsForRepurchaseOfCommonStock",
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+        "AssetsCurrent",
+        "Assets",
+        "LiabilitiesCurrent",
+        "Liabilities",
+        "LiabilitiesAndStockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        "LongTermDebtNoncurrent",
+        "LongTermDebt",
+        "StockholdersEquity",
+        "CommonStockSharesOutstanding",
+    ],
+    "dei": ["EntityCommonStockSharesOutstanding", "EntityPublicFloat"],
+}
+
+
+def trim_companyfacts(data: dict[str, Any], since_year: int | None = None) -> tuple[Any, str]:
+    facts = data.get("facts", {})
+    kept: dict[str, Any] = {}
+    for taxonomy, concepts in CATALOG_CONCEPTS.items():
+        available = facts.get(taxonomy, {})
+        kept[taxonomy] = {}
+        for concept in concepts:
+            if concept not in available:
+                continue
+            entry = dict(available[concept])
+            if since_year is not None:
+                entry["units"] = {
+                    unit: [fact for fact in rows if int(fact["filed"][:4]) >= since_year]
+                    for unit, rows in entry.get("units", {}).items()
+                }
+            kept[taxonomy][concept] = entry
+    trimmed = {**data, "facts": kept}
+    rule = "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only"
+    if since_year is not None:
+        rule += f"; facts filed in {since_year} or later"
+    return trimmed, rule
+
+
+def trim_submissions(data: dict[str, Any], keep_recent: int) -> tuple[Any, str]:
+    recent = data["filings"]["recent"]
+    total = len(recent["accessionNumber"])
+    trimmed_recent = {column: values[:keep_recent] for column, values in recent.items()}
+    trimmed = {**data, "filings": {**data["filings"], "recent": trimmed_recent}}
+    rule = f"submissions: newest {min(keep_recent, total)} of {total} rows in filings.recent"
+    return trimmed, rule
+
+
+def trim(url: str, raw: bytes, *, keep_recent: int, since_year: int | None) -> tuple[bytes, str]:
+    parsed = urls.parse(url)
+    endpoint = parsed.endpoint if parsed else None
+    data = json.loads(raw)
+    if endpoint == "companyfacts":
+        trimmed, rule = trim_companyfacts(data, since_year)
+    elif endpoint == "submissions":
+        trimmed, rule = trim_submissions(data, keep_recent)
+    else:
+        raise ValueError(f"no trim rule for {url}; save it untrimmed")
+    # Compact, like the SEC's own JSON; key order is kept.
+    return json.dumps(trimmed, separators=(",", ":"), ensure_ascii=False).encode(), rule
+
+
+def record(name: str, entry: dict[str, Any]) -> None:
+    manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+    manifest[name] = entry
+    MANIFEST.write_text(
+        json.dumps(dict(sorted(manifest.items())), indent=2, ensure_ascii=False) + "\n"
+    )
+
+
+def _target(name: str) -> Path:
+    target = (FIXTURES / name).resolve()
+    if not target.is_relative_to(FIXTURES) or name == MANIFEST.name:
+        raise ValueError(f"{name!r} must be a path under tests/fixtures/sec/")
+    return target
+
+
+async def fetch(
+    url: str, name: str, *, trimmed: bool, keep_recent: int, since_year: int | None
+) -> Path:
+    target = _target(name)
+    settings = load_settings()
+    async with SecClient.from_settings(settings) as sec:
+        response = await sec.get(url)
+    fetched_at = datetime.now(UTC)
+    raw = response.content
+    data, rule = (
+        trim(url, raw, keep_recent=keep_recent, since_year=since_year) if trimmed else (raw, None)
+    )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    record(
+        name,
+        {
+            "url": url,
+            "fetched_at": fetched_at.isoformat(timespec="seconds"),
+            "original_size_bytes": len(raw),
+            "original_sha256": hashlib.sha256(raw).hexdigest(),
+            "trim": rule,
+            "size_bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        },
+    )
+    return target
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument(
+        "url", help="SEC URL, e.g. https://data.sec.gov/submissions/CIK0000320193.json"
+    )
+    parser.add_argument("name", help="path under tests/fixtures/sec/, e.g. submissions/AAPL.json")
+    parser.add_argument("--trim", action="store_true", help="apply the endpoint's trim rule")
+    parser.add_argument("--keep-recent", type=int, default=300, help="submissions rows to keep")
+    parser.add_argument(
+        "--since-year", type=int, help="companyfacts: keep facts filed from this year"
+    )
+    args = parser.parse_args(argv)
+    try:
+        target = asyncio.run(
+            fetch(
+                args.url,
+                args.name,
+                trimmed=args.trim,
+                keep_recent=args.keep_recent,
+                since_year=args.since_year,
+            )
+        )
+    except (SettingsError, SecError, ValueError) as exc:
+        print(exc, file=sys.stderr)
+        return 2 if isinstance(exc, SettingsError | ValueError) else 1
+    print(f"{target.relative_to(ROOT)} ({target.stat().st_size:,} bytes)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

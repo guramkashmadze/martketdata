@@ -3,6 +3,7 @@
 import asyncio
 import time
 from collections.abc import Callable
+from typing import Any
 
 import httpx2
 import pytest
@@ -27,6 +28,11 @@ URL = "https://data.sec.gov/submissions/CIK0000320193.json"
 DB = "postgresql://marketdata:marketdata@localhost:5432/marketdata"
 
 Handler = Callable[[httpx2.Request], httpx2.Response]
+
+
+def make_settings(**values: Any) -> Settings:
+    """Settings from these values and the environment, never from the developer's .env."""
+    return Settings(_env_file=None, **values)  # type: ignore[call-arg]
 
 
 @pytest.fixture(autouse=True)
@@ -82,8 +88,9 @@ async def test_every_request_sends_the_user_agent() -> None:
     assert transport.requests[0].headers["Accept-Encoding"] == "gzip, deflate"
 
 
-def test_startup_fails_without_user_agent() -> None:
-    settings = Settings.model_validate({"database_url": DB})
+def test_startup_fails_without_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    settings = make_settings(database_url=DB)
 
     with pytest.raises(SettingsError, match="SEC_USER_AGENT is missing"):
         SecClient.from_settings(settings)
@@ -104,7 +111,7 @@ def test_user_agent_must_name_app_and_email(bad: str) -> None:
 
 
 async def test_from_settings_uses_the_process_bucket() -> None:
-    settings = Settings.model_validate({"database_url": DB, "sec_user_agent": UA})
+    settings = make_settings(database_url=DB, sec_user_agent=UA)
 
     async with SecClient.from_settings(settings) as one, SecClient.from_settings(settings) as two:
         assert one._bucket is two._bucket is process_bucket(8.0)
@@ -129,7 +136,7 @@ def test_timeouts_are_set() -> None:
 
 async def test_40_requests_take_at_least_40_over_rate_minus_one_seconds() -> None:
     """AC: 40 requests at SEC_MAX_RPS = 8 take at least 40 / 8 - 1 = 4 seconds (real time)."""
-    rate = Settings.model_validate({"database_url": DB}).sec_max_rps
+    rate = make_settings(database_url=DB).sec_max_rps
     transport = Recorder(status(200))
     sec = SecClient(UA, bucket=TokenBucket(rate), transport=httpx2.MockTransport(transport))
 

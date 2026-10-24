@@ -29,6 +29,11 @@ BUCKET = "marketdata-raw-test"
 DB = "postgresql://marketdata:marketdata@localhost:5432/marketdata"
 
 
+def make_settings(**values: Any) -> Settings:
+    """Settings from these values and the environment, never from the developer's .env."""
+    return Settings(_env_file=None, **values)  # type: ignore[call-arg]
+
+
 @pytest.fixture
 def s3() -> Iterator["S3Client"]:
     with mock_aws():
@@ -170,7 +175,7 @@ async def test_s3_get_checks_the_recorded_sha256(s3: "S3Client") -> None:
 
 
 def test_local_store_is_the_default(tmp_path: Path) -> None:
-    settings = Settings.model_validate({"database_url": DB, "raw_store_path": tmp_path})
+    settings = make_settings(database_url=DB, raw_store_path=tmp_path)
 
     store = create_raw_store(settings)
 
@@ -179,15 +184,13 @@ def test_local_store_is_the_default(tmp_path: Path) -> None:
 
 
 async def test_s3_store_from_settings(s3: "S3Client") -> None:
-    settings = Settings.model_validate(
-        {
-            "database_url": DB,
-            "raw_store_kind": "s3",
-            "s3_bucket": BUCKET,
-            "s3_region": "us-east-1",
-            "s3_access_key_id": "testing",
-            "s3_secret_access_key": "testing",
-        }
+    settings = make_settings(
+        database_url=DB,
+        raw_store_kind="s3",
+        s3_bucket=BUCKET,
+        s3_region="us-east-1",
+        s3_access_key_id="testing",
+        s3_secret_access_key="testing",
     )
 
     store = create_raw_store(settings)
@@ -198,13 +201,13 @@ async def test_s3_store_from_settings(s3: "S3Client") -> None:
 
 
 def test_s3_store_needs_a_bucket() -> None:
-    settings = Settings.model_validate({"database_url": DB, "raw_store_kind": "s3"})
+    settings = make_settings(database_url=DB, raw_store_kind="s3")
 
     with pytest.raises(SettingsError, match="S3_BUCKET is missing"):
         create_raw_store(settings)
 
 
 def test_secret_key_is_not_shown() -> None:
-    settings = Settings.model_validate({"database_url": DB, "s3_secret_access_key": "hunter2"})
+    settings = make_settings(database_url=DB, s3_secret_access_key="hunter2")
 
     assert "hunter2" not in repr(settings)

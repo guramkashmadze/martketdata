@@ -12,7 +12,7 @@ Information from public filings. Not investment advice.
 
 Needs Python 3.12, [PDM](https://pdm-project.org/) (on macOS: `brew install python@3.12 pdm`), and either Docker or a local PostgreSQL 18.
 
-1. `cp .env.example .env`
+1. `cp .env.example .env`, and set `SEC_USER_AGENT` to `<app name> <contact email>` (needed only for commands that call the SEC)
 2. Start PostgreSQL: `docker compose up -d postgres` (listens on host port **5433**: set that port in both URLs in `.env`), or use a local server on 5432 with a `marketdata` role (see below).
 3. `pdm install` (creates `.venv` and installs exactly what `pdm.lock` pins)
 4. `pdm run alembic upgrade head`
@@ -32,6 +32,8 @@ pdm run lint                          # black --check, isort --check-only, flake
 pdm run fmt                           # isort and black, rewriting files
 pdm run pytest -m "not integration"   # unit tests only, no database
 pdm run marketdata --help
+pdm run marketdata sec get <url>      # fetch through the SEC client, keep the raw file, print its key
+pdm run python scripts/fetch_fixture.py <url> <name> [--trim]   # save a test fixture
 pdm add <package>                     # new dependency; also list it in docs/PLAN.md §5 with its license
 ```
 
