@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Local settings and data
+.env
+var/
+
+# OS
+.DS_Store
+
+# Discovery material stays outside the repository (PLAN.md §17)
+Competitors/
