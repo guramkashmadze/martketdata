@@ -5,9 +5,10 @@ they are ignored until then. An empty value (`NAME=`) counts as not set.
 """
 
 import re
+from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, Field, PostgresDsn, ValidationError
+from pydantic import AfterValidator, Field, HttpUrl, PostgresDsn, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Env = Literal["dev", "live", "prod"]
@@ -43,6 +44,16 @@ class Settings(BaseSettings):
     sec_user_agent: Annotated[str, AfterValidator(check_sec_user_agent)] | None = None
     # Guardrail 6: at most 8 requests per second; the SEC allows about 10.
     sec_max_rps: float = Field(default=8.0, gt=0, le=8)
+
+    # E1 raw store. With s3, S3_BUCKET is required (checked by create_raw_store). Without an
+    # endpoint URL boto3 talks to AWS; R2 and B2 need S3_ENDPOINT_URL, and B2 its S3_REGION.
+    raw_store_kind: Literal["local", "s3"] = "local"
+    raw_store_path: Path = Path("var/raw")
+    s3_endpoint_url: HttpUrl | None = None
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: SecretStr | None = None
 
 
 def load_settings(env_file: str | None = ".env") -> Settings:

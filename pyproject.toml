@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.13",
+    "boto3>=1.43",           # S3RawStore (R2 or B2 in production)
     "fastapi>=0.115",
     "httpx2>=2.16",          # SEC client; also what Starlette's TestClient uses (D-042)
     "psycopg[binary]>=3.2",
@@ -30,10 +31,12 @@ dev = [
     "flake8-datetimez>=20.10", # DTZ: timezone-aware datetimes only (all timestamps are UTC)
     "flake8-simplify>=0.21",  # SIM: simpler equivalents
     "isort>=5.13",
+    "moto[s3]>=5.2",          # in-process S3 for the S3RawStore tests
     "mypy>=1.13",
     "pep8-naming>=0.14",      # N: naming
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "types-boto3[s3]>=1.43",  # boto3 types for mypy --strict
 ]
 
 [build-system]

@@ -203,8 +203,8 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Language | Python 3.12 | Type hints everywhere (D-001) |
 | Packaging | PDM + `pyproject.toml` (D-041); build backend hatchling | `pdm.lock` committed; in-project `.venv`; Python 3.12 from the system (Homebrew on macOS). PDM MIT, hatchling MIT |
 | Lint and format | black (format), isort (imports), flake8 with flake8-bugbear, flake8-simplify, pep8-naming, flake8-async, flake8-datetimez (D-041) | `pdm run lint` checks; `pdm run fmt` fixes. Settings in `pyproject.toml` and `.flake8`. All MIT |
-| Types | mypy `--strict`, with the pydantic plugin | CI gate. MIT |
-| Tests | pytest, pytest-asyncio; httpx2 for FastAPI's TestClient | No network in unit tests. MIT, Apache-2.0 |
+| Types | mypy `--strict`, with the pydantic plugin; `types-boto3[s3]` for boto3 | CI gate. MIT |
+| Tests | pytest, pytest-asyncio; httpx2 for FastAPI's TestClient; moto (in-process S3) for the S3 raw store | No network in unit tests. MIT, Apache-2.0; moto Apache-2.0 (dev only) |
 | CLI | typer | Entry point `marketdata`. MIT |
 | HTTP client | httpx2 (async), D-042 | pydantic's maintained fork of httpx, same API. BSD-3; pulls in httpcore2 (BSD-3) and truststore (MIT: certificates from the OS trust store) |
 | Retries | tenacity | Apache-2.0 |
@@ -221,7 +221,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | API | FastAPI + uvicorn | MIT, BSD-3 |
 | MCP | Official `mcp` Python SDK, Streamable HTTP, mounted in the FastAPI app | |
 | Scheduler | APScheduler | |
-| Object storage | boto3 against the S3 API; local-folder adapter for dev | Cloudflare R2 or Backblaze B2 in production |
+| Object storage | boto3 against the S3 API; local-folder adapter for dev | Cloudflare R2 or Backblaze B2 in production. Apache-2.0 (with botocore, s3transfer; jmespath and urllib3 MIT; python-dateutil Apache-2.0/BSD). Write-once details in D-046 |
 | Logging | structlog (JSON in live and prod, pretty in dev) | MIT/Apache-2.0. Standard-library loggers (uvicorn, alembic, psycopg) share its formatter; logs go to stderr |
 | Error tracking | sentry-sdk | Live VM and production |
 | LLM | **Not used in M1–M4 (D-014).** From E12/E13: `LLMClient` interface; first adapter uses the Anthropic SDK | Model from config; OD-2 |
@@ -1088,7 +1088,7 @@ Example `earnings/latest` response body (`data` part):
 | `TEST_DATABASE_URL` | `postgresql://marketdata:marketdata@localhost:5432/marketdata_test` | tests only; name must end in `_test` |
 | `RAW_STORE_KIND` | `local` or `s3` | E1 |
 | `RAW_STORE_PATH` | `./var/raw` | E1 (local) |
-| `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | — | E1 (s3) |
+| `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | — | E1 (s3). `S3_REGION` added in E1 (D-046): B2 signs with its region; R2 accepts `auto` |
 | `SEC_USER_AGENT` | `marketdata <your email>` | E1. Required by processes that call the SEC (D-043) |
 | `SEC_MAX_RPS` | `8` | E1. At most 8 (guardrail 6) |
 | `UNIVERSE_FILE` | `data/universe.csv` | E2 |
@@ -1648,6 +1648,7 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-043 | 2026-10-24 | `SEC_USER_AGENT` is required only by processes that call the SEC: the worker, `marketdata sec …` and `scripts/fetch_fixture.py` fail at startup without it (`SecClient.from_settings`). The API, Alembic and the tests start without it. A value that is set is always validated (`<app name> <contact email>`), and an empty value in `.env` counts as not set. Refines §8 "the app refuses to start without it" | The API, MCP server and web UI never call the SEC (CLAUDE.md), so requiring the value there would add a setting they don't use, a placeholder in CI and in every test's settings |
 | D-044 | 2026-10-24 | SEC client rules: (1) the process-wide token bucket has a burst of one, so requests start at least 1/`SEC_MAX_RPS` apart; (2) `SEC_MAX_RPS` must be above 0 and at most 8; (3) network errors (timeouts, refused or reset connections) are retried like 429 and 5xx, within the same 5 attempts, and a numeric `Retry-After` longer than the backoff is honoured (capped at 60 s); (4) 403 is not retried and raises `SecForbidden`; (5) the client calls only `https://www.sec.gov` and `https://data.sec.gov`, redirects included | (1) A bucket whose burst equals the rate lets 2 × rate requests into one second (16 at 8/s, over the SEC's 10/s); a burst of one keeps every one-second window at or under the rate and still meets the E1-S1 timing AC (40 requests take about 4.9 s). (2) Guardrail 6 enforced in config. (3) Transient network failures are as common as 5xx. (4) The SEC answers 403 to undeclared tools and to rate breaches, and then blocks for a while, so retrying makes it worse. (5) The User-Agent holds a contact email and must not reach other hosts; OpenFIGI (E9) and the price vendor (E10) get their own clients |
 | D-045 | 2026-10-24 | `sec/urls.py` builds every SEC row of the §8 endpoint table and `parse()` maps a URL back to its endpoint. For the insider, 13F and N-PORT data sets it builds the landing pages plus `www_path()` for the ZIP links found there; the ZIP name patterns are verified in E8, E9 and E14. OpenFIGI is a constant marked as not for `SecClient`; the price vendor row has no URL until OD-4 | Guessing the data-set ZIP names now would put unverified URLs in the code; the SEC has renamed those pages and windows before. OpenFIGI and the vendor are not SEC hosts, so the SEC client refuses them (D-044) |
+| D-046 | 2026-10-24 | Raw store details: the interface is async (`put` returns whether it wrote); `LocalRawStore` writes a temporary file and hard-links it into place; `S3RawStore` keeps each object's sha256 in its metadata, writes new keys with `If-None-Match: *`, checks the sha256 on `get`, sends checksums only where the API requires them, and runs boto3 in a thread. It is tested with moto in-process rather than MinIO. New optional setting `S3_REGION` | A link or a conditional put makes write-once hold even with two writers. The metadata sha256 lets a re-run compare without downloading. boto3 1.36 started adding CRC32 checksum headers by default, which some S3-compatible services rejected. moto needs no Docker in CI; the MinIO server is AGPL-3.0. B2 needs its region for request signing |
 
 ---
 
