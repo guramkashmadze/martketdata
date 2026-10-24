@@ -68,7 +68,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 
 | Epic | Title | Session | Depends on | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| E0 | Foundation | 1 | — | Done | 2026-10-24. PDM, black, isort and flake8 instead of uv and ruff (D-041); PostgreSQL 18 (D-040). Lint gate and 25 tests green on PostgreSQL 18 (Docker and local). Not yet verified: the first CI run on main, which waits for Guram's OK to push (§16) |
+| E0 | Foundation | 1 | — | Done | 2026-10-24. PDM, black, isort and flake8 instead of uv and ruff (D-041); PostgreSQL 18 (D-040). Lint gate and 25 tests green on PostgreSQL 18 (Docker and local), and the first CI run on main is green ([run 40113361253](https://github.com/guramkashmadze/martketdata/actions/runs/40113361253), commit `a384273`) |
 | E1 | SEC client and raw store | 2 | E0 | Not started | |
 | E2 | Security master and universe | 3 | E1, OD-3 | Not started | Classifies domestic filers, foreign issuers and funds |
 | E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
@@ -1665,7 +1665,8 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-23 | Planning | Public MCP listing in Claude's and ChatGPT's directories: needs OAuth and each directory's review | After M2 |
 | 2026-10-23 | Planning | UI accounts, watchlists and alerts: bring personal data and its legal duties; decide only with a chosen market | After OD-12 |
 | 2026-10-24 | E0-S1, S5 | On Guram's managed Mac (Microsoft Defender, Kandji, Carbon Black), every binary signed with Developer ID "OpenAI OpCo, LLC (2DC432GLL2)" is killed at launch (exit 137); Astral's uv and ruff are signed that way. Resolved by D-041 (PDM, black, isort, flake8). If IT later allows these binaries, moving back to uv and ruff is a new decision | — |
-| 2026-10-24 | E0-S5 | First push to `origin` (github.com/guramkashmadze/martketdata, still empty) and a green CI run on main, after Guram approves the push. Consider renaming the repo to `marketdata` before the first push | E0 |
+| 2026-10-24 | E0-S5 | Done: pushed to `origin` (github.com/guramkashmadze/martketdata; Guram kept the name) and the first CI run on main is green | — |
+| 2026-10-24 | E0 | The GitHub repository is public, so the code, this plan and `CLAUDE.md` are readable by anyone. Decide whether it should be private; no secrets are committed | Guram |
 | 2026-10-24 | E0 | ruff rules with no flake8 equivalent were dropped in D-041: the `RUF` set and `UP` (pyupgrade). Add `pyupgrade --py312-plus` as a check if old-style syntax starts to appear | Later |
 | 2026-10-24 | E0 | `Dockerfile` and the `api`, `worker`, `scheduler` and `caddy` Compose services: E0's compose file has only `postgres` | E7c |
 | 2026-10-24 | E0 | `tasks` has `unique (kind, key)`, so a finished task can't be enqueued again by a plain insert (E0's insert returns the existing row). E3 must decide how a re-run works, for example resetting a done row to `queued` | E3 |
