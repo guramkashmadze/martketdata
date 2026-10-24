@@ -68,7 +68,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 
 | Epic | Title | Session | Depends on | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| E0 | Foundation | 1 | — | In progress | Code, migration 0001, tests and CI workflow done (2026-10-24). Open: `uv.lock`, a ruff run and the first CI run on main, blocked because this Mac's endpoint policy kills uv and ruff (§16) |
+| E0 | Foundation | 1 | — | In progress | Code, migration 0001, tests and CI workflow done (2026-10-24); tests and migrations pass on PostgreSQL 16 (Docker) and 18 (local). Open: `uv.lock`, a ruff run and the first CI run on main, blocked because this Mac's endpoint policy kills uv and ruff (§16) |
 | E1 | SEC client and raw store | 2 | E0 | Not started | |
 | E2 | Security master and universe | 3 | E1, OD-3 | Not started | Classifies domestic filers, foreign issuers and funds |
 | E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
