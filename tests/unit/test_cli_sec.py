@@ -1,5 +1,6 @@
 """E1-S3: `marketdata sec get` refuses to start without the settings it needs."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ from marketdata.cli import app
 
 DB = "postgresql://marketdata:marketdata@127.0.0.1:1/marketdata"
 URL = "https://data.sec.gov/submissions/CIK0000320193.json"
+# Typer forces coloured help when GITHUB_ACTIONS is set, so CI output has escape codes.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 @pytest.fixture(autouse=True)
@@ -43,4 +46,4 @@ def test_sec_get_help_works_without_settings(monkeypatch: pytest.MonkeyPatch) ->
     result = CliRunner().invoke(app, ["sec", "get", "--help"])
 
     assert result.exit_code == 0
-    assert "--key" in result.output
+    assert "--key" in ANSI_ESCAPE.sub("", result.output)
