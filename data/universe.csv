@@ -1,0 +1,40 @@
+ticker,note
+AAPL,September 52/53-week year (fiscalYearEnd 0926; FY2025 ended 2025-09-27); E1 fixture
+MSFT,June 30 year end
+GOOGL,December; GOOGL (Class A) GOOG (Class C) and GOOGM GOOGN (depositary shares of convertible preferred) on one CIK; E1 fixture
+NVDA,Late-January year end at a non-retailer (FY2026 ended 2026-01-25); names its year after the year it ends
+AMZN,Plain December case; one of the most looked-up companies
+META,Formerly Facebook; its old ticker FB now belongs to a ProShares fund series in the SEC fund list
+TSLA,Plain December case; incorporated in Texas
+TGT,January retailer with 52/53-week years; names its fiscal year after the year it starts; E1 fixture
+WMT,January 31 fixed year end; names its fiscal year after the year it ends (fy 2026 = year to 2026-01-31)
+COST,August 52/53-week year with 12-week Q1-Q3 and a 16-week Q4: its 24- and 36-week YTD facts fall outside the §9.4 ranges
+LULU,Retailer whose fiscal 2025 ended 2026-02-01; reports in thousands
+JPM,Bank (SIC 6021); seven preferred tickers and two ETNs on its CIK; 26404 filings in one year (mostly 424B2)
+TRV,Property and casualty insurer (SIC 6331)
+BRK-B,Class A and Class B on one CIK (the brk.b / BRK-B / BRK/B example in §9.2); insurer-led conglomerate (SIC 6331)
+O,REIT (SIC 6798); reports in thousands
+XOM,Ticker moved to a new holding-company CIK on 2026-07-01 (8-K12B); the FY2025 10-K and earlier history are under old CIK 34088
+JNJ,December 52/53-week year (FY2025 ended 2025-12-28); fiscalYearEnd 0103 because fiscal 2026 ends 2027-01-03
+UNH,Health insurer (SIC 6324): inside the §9.4 SIC 6000-6999 financial range but with meaningful revenue
+KO,December 31 year end but quarters end on Fridays (Q2 2026 ended 2026-07-03)
+PG,June 30 year end
+NKE,May 31 year end
+DIS,Saturday-nearest-September-30 year end (fiscalYearEnd 1003); CIK registered in 2018 as TWDC Holdco 613 Corp
+V,September 30 year end; payments network (SIC 7389)
+NEE,Utility (SIC 4911) with six preferred tickers on its CIK
+BA,Recent losses (negative net income in the 2026-06-30 10-Q); preferred ticker BA-PA
+INTC,Last-Saturday-of-December year end (FY2025 ended 2025-12-27); recent losses
+DE,52/53-week year ending near October 31 (fiscalYearEnd 1101; FY2025 ended 2025-11-02)
+ACN,Incorporated in Ireland but files 10-K and 10-Q (domestic by forms); August 31 year end; reports in thousands
+DECK,March 31 year end; reports in thousands
+SHOP,Canadian; filed 40-F and 6-K until 2024 and 10-K and 10-Q since 2025: the latest periodic report decides the class
+SPCX,2026 IPO with 10-Qs but no 10-K yet; the SEC fund list also gives SPCX to another registrant's series
+SPY,ETF organised as a unit investment trust: in the exchange list not the fund list; a fund by its NPORT-P filings
+QQQ,ETF whose trust became an open-end fund (new series S000101292 in the fund list); its submissions list no ticker
+VOO,ETF share class of a Vanguard series that also has mutual fund classes (VFINX VFIAX VFFSX)
+GLD,Gold trust ETF (SIC 6221) that files 10-K and 10-Q and is not in the fund list: §9.1 as written calls it domestic
+TSM,Foreign private issuer (20-F and 6-K); NYSE ticker TSM and OTC ticker TSMWF on one CIK
+TM,Foreign private issuer with a March 31 year end (20-F)
+RY,Canadian bank filing 40-F; October 31 year end; 4423 filings in one year (mostly 424B2)
+BABA,Foreign private issuer (20-F) whose submissions have no fiscalYearEnd; three tickers on its CIK

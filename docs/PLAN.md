@@ -70,7 +70,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | --- | --- | --- | --- | --- | --- |
 | E0 | Foundation | 1 | — | Done | 2026-10-24. PDM, black, isort and flake8 instead of uv and ruff (D-041); PostgreSQL 18 (D-040). Lint gate and 25 tests green on PostgreSQL 18 (Docker and local), and the first CI run on main is green ([run 40113361253](https://github.com/guramkashmadze/martketdata/actions/runs/40113361253), commit `a384273`) |
 | E1 | SEC client and raw store | 2 | E0 | Done | 2026-10-24. httpx2 replaces httpx (D-042); `SEC_USER_AGENT` is required only by processes that call the SEC (D-043); rate limiter with a burst of one (D-044); migration `0002` (`raw_objects`). Fixtures for AAPL, GOOGL and TGT, 2.6 MB in total (D-048). Lint gate and 216 tests green on local PostgreSQL 18; the live demo stored 14 files through `marketdata sec get`. 12 edge cases logged. CI on main is green ([run 40181002170](https://github.com/guramkashmadze/martketdata/actions/runs/40181002170), commit `3b0d6b7`), after a CLI help test was fixed for GitHub's forced colour output (§16) |
-| E2 | Security master and universe | 3 | E1, OD-3 | Not started | Classifies domestic filers, foreign issuers and funds |
+| E2 | Security master and universe | 3 | E1, OD-3 | In progress | 2026-10-25. Starter universe of 39 tickers (D-050) |
 | E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
 | E7a | Earnings release extraction and verification (rule-based) | 5 | E3 | Not started | No LLM (D-014) |
 | E7c | Live run and track record | 6 | E7a, OD-1 | Not started | Starts the track record during the Q3 2026 season |
@@ -254,7 +254,8 @@ marketdata/
   ingest/                security_master.py, watcher.py, earnings.py, facts.py, prices.py, form4.py, f13.py
   extract/               interface.py (Extractor), html_tables.py, earnings_rules.py, columns.py, units.py
   verify/                number_check.py, sanity.py, cross_check.py
-  normalize/             metric_catalog.py, periods.py, metrics.py, changes.py, insiders.py, holdings.py, quality.py
+  normalize/             metric_catalog.py, periods.py, metrics.py, changes.py, insiders.py, holdings.py, quality.py,
+                         tickers.py, universe.py, security_master.py (E2)
   prices/                E10: provider.py (PriceProvider), fake.py, <vendor>.py
   webhooks/              outbox.py, signing.py, deliver.py
   content/               E7b only: names_ka.py, periods_ka.py, numbers_ka.py, templates.py
@@ -265,7 +266,7 @@ marketdata/
   api/                   app.py, auth.py, envelope.py, errors.py, routes/, proof_pages/
   mcp_server/            server.py, tools.py
   web/                   E15: routes.py, templates/, static/ (vendored htmx and Chart.js)
-data/                    universe.csv, extraction_overrides.yaml, managers.csv
+data/                    universe.csv, security_overrides.csv, extraction_overrides.yaml, managers.csv
                          (E7b: company_names_ka.csv, glossary_ka.csv, templates/)
 notebooks/               exploration only
 scripts/                 fetch_fixture.py and other one-off tools
@@ -757,7 +758,7 @@ create table drafts (
 
 ### 9.1 Universe
 
-- `data/universe.csv` with columns `ticker,note`, maintained by hand (OD-3). The starter list is about 30 domestic filers chosen for variety (at least a bank, an insurer, a REIT, a January year-end retailer, a September year-end company and a company that reports in thousands), plus a few ETFs and foreign issuers.
+- `data/universe.csv` with columns `ticker,note`, maintained by hand (D-050, which resolved OD-3). The starter list is 31 domestic filers chosen for variety (at least a bank, an insurer, a REIT, a January year-end retailer, a September year-end company and a company that reports in thousands), plus 4 ETFs and 4 foreign private issuers. One ticker per company is enough; the company's other tickers load with it. The file is checked before anything is fetched: header, canonical tickers, no duplicates, a note on every row.
 - **Growth (D-035):** after E4a, `marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` and writes a candidate list for review. Index membership lists are not used, to avoid depending on index providers' data.
 - Each ticker is classified on load (D-018): `domestic` (files 10-K/10-Q), `foreign_private_issuer` (files 20-F, 6-K or 40-F), `fund` (listed in the SEC fund ticker file, or files N-PORT/N-CSR), `other`. Nothing is rejected; the loader prints a count per class.
 - In the MVP, earnings facts and fundamentals are produced for `domestic` companies only. Other classes resolve and return a clear reason, e.g. "fund: fundamentals not applicable".
@@ -768,6 +769,8 @@ create table drafts (
 - Several tickers can map to one CIK (e.g. two share classes). Each gets its own `securities` row.
 - Ticker input is case-insensitive, and `.`, `-` and `/` are treated as the same class separator: `brk.b`, `BRK-B` and `BRK/B` all resolve to the SEC's `BRK-B`.
 - When a ticker disappears from the SEC list or moves to another CIK, close the old row (`valid_to`) and open a new one.
+- Security types come from the ticker's suffix (D-051): `-P` or `-P<letter>` preferred; `-WT`, `-UN`, `-RI`, `-WI` other; a one-letter suffix is a share class of common stock; fund-list entries are `fund`. `data/security_overrides.csv` (`ticker,security_type,source_url`) corrects tickers the rules get wrong, each with the SEC page that shows the type. `adr` is not inferred.
+- A ticker listed by both SEC lists under different CIKs keeps the exchange list's entry (D-051).
 - Sector information comes from SIC codes only. No GICS (D-017).
 
 ### 9.3 Metric catalog
@@ -1092,6 +1095,7 @@ Example `earnings/latest` response body (`data` part):
 | `SEC_USER_AGENT` | `marketdata <your email>` | E1. Required by processes that call the SEC (D-043) |
 | `SEC_MAX_RPS` | `8` | E1. At most 8 (guardrail 6) |
 | `UNIVERSE_FILE` | `data/universe.csv` | E2 |
+| `SECURITY_OVERRIDES_FILE` | `data/security_overrides.csv` | E2 (D-051) |
 | `EXTRACTION_OVERRIDES_FILE` | `data/extraction_overrides.yaml` | E7a |
 | `ALERT_EMAIL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | — | E7c |
 | `SENTRY_DSN` | — | E7c |
@@ -1584,7 +1588,6 @@ Resolve each before the epic in "Needed by" starts. When decided, move it to §1
 | --- | --- | --- | --- |
 | OD-1 | Hosting | One small always-on VM (e.g. Hetzner) for the live run, reused for M2–M4 / AWS or Azure in an EU region | E7c |
 | OD-2 | LLM provider and model | Anthropic (first adapter planned) / other. Not needed for M1–M4 | E12 or E13 |
-| OD-3 | Starter universe | About 30 domestic filers chosen for variety (§9.1), plus a few ETFs and foreign issuers; growth by D-035 | E2 |
 | OD-4 | Price vendor | End-of-day (or delayed) prices with display rights for our UI and MCP, and optionally API redistribution; compare cost, attribution rules and history depth (D-031) | E10 |
 | OD-6 | Georgian number formatting | Decimal and thousands separators, currency and scale words | E7b (on demand) |
 | OD-7 | Product and repository name | `marketdata` is a placeholder | E0 |
@@ -1652,6 +1655,8 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-047 | 2026-10-24 | Fetch and store: `RawFetcher.fetch_and_store(url, key)` lives in `ingest/fetch.py` (it writes to the database, and `sec/` must not); it saves to the raw store, then inserts the `raw_objects` row, keeping the first row for a key (its `fetched_at` is when those bytes were first stored). Key layout beyond E1-S3's two patterns: endpoints without a CIK leave it out (`raw/sec/api/company_tickers_exchange/{fetched_at}.json`); extra path parameters come before the time (`…/companyconcept/{cik}/{taxonomy}/{concept}/`, `…/frames/{taxonomy}/{concept}/{unit}/{period}/`, older submissions pages `…/submissions/{cik}/{page}/`); `fetched_at` is written `20261024T205501.123456Z`; CIKs unpadded. Bulk ZIPs are refused until a streaming fetch exists. Migration `0002` adds checks to the §7 table: `sha256` is 64 lowercase hex digits, `size_bytes >= 0` | The raw file first, so a crash never leaves a row without a file. Raw objects are write-once, so a later fetch of the same bytes changes nothing. The plan's layout didn't cover endpoints without a CIK or with more parameters; microseconds keep two fetches of one endpoint from sharing a key, and no colons keeps keys valid on every file system. Bulk files are a gigabyte or more and `fetch_and_store` holds the body in memory |
 | D-048 | 2026-10-24 | E1 fixtures: submissions and companyfacts for AAPL (September year end), GOOGL (December; several share classes on one CIK) and TGT (January retailer, 52/53-week years, names its fiscal year after the year it starts). Submissions files are kept whole (about 150 KB each, unchanged SEC bytes). companyfacts files are trimmed to the §9.3 catalog concepts plus `dei:EntityCommonStockSharesOutstanding` and `dei:EntityPublicFloat` (3.2–3.8 MB down to 0.4–0.9 MB). `tests/fixtures/sec/MANIFEST.json` records each file's URL, fetch time, original size and sha256, trim rule, and saved size and sha256 | Untrimmed submissions keep every column and the whole `filings.recent` window that E3 will parse, at little cost. companyfacts beyond the catalog isn't used before E4a. The manifest gives fixtures the same provenance as served values, and `test_fixtures.py` checks it |
 | D-049 | 2026-10-25 | Python 3.15 (3.15.1 on this date), the latest release, for development, CI and deployments: `requires-python = ">=3.15,<3.16"`, `.python-version` 3.15, and black and mypy target 3.15. Moving to a newer Python is a new decision here. Supersedes the version in D-001 (Python stays the language) | Guram wants the latest release. 3.12 has had security fixes only since 2025-04-02; 3.15 (released 2026-10-09) gets bug fixes until 2028-10 and security fixes until 2031-10. Checked before switching: every locked package installs on 3.15 at the same version (85 packages unchanged); every compiled package has a native 3.15 build except PyYAML (compiled from source, dev-only for now) and black (runs as plain Python); `pdm run lint` and all 215 tests pass; GitHub's runners have 3.15.1 |
+| D-050 | 2026-10-25 | OD-3 resolved: the starter universe is the 39 tickers in `data/universe.csv` (31 domestic filers, 4 ETFs, 4 foreign private issuers), each with a one-line note saying why it is there. Every ticker, CIK, class and fiscal year end was checked against the SEC's own files fetched through the SEC client on 2026-10-25: both ticker lists, the submissions JSON of each company, and NetIncomeLoss values (companyconcept) for which companies report in thousands. One row per company: its other tickers load with it. The loader checks the file before fetching anything (header `ticker,note`, canonical tickers, no duplicates, a note on every row) and reports every problem with its line number | §9.1's required kinds are covered: bank JPM; insurer TRV (also BRK-B and UNH); REIT O; January year-end retailers TGT, WMT and LULU; September year ends AAPL, V and DIS; reports in thousands O, LULU, ACN and DECK. The other picks bring edge cases found in the data: XOM's ticker moved to a new CIK, Costco's 12- and 16-week quarters, J&J's 0103 year end, Shopify's move from 40-F to 10-K, SpaceX's SPCX collision, GLD's 10-K filings, BABA's missing fiscal year end, JPM's 26,404 filings a year (EDGE_CASES.md) |
+| D-051 | 2026-10-25 | Ticker rules for the security master (§9.2): (1) canonical spelling: upper case, `.` and `/` become `-`, surrounding parentheses are dropped; stored tickers and lookups both use it, and every exchange-list ticker is already in that form; (2) entries that still aren't tickers (`NONE.`, an empty fund symbol) are skipped and reported; (3) the security type comes from the suffix: `-P` or `-P<letter>` preferred, `-WT`, `-WT<letter>`, `-UN`, `-RI` and `-WI` other, any other one-letter suffix a share class of common stock (`share_class` holds the letter), any other suffix other, no suffix common; fund-list entries are `fund`; `adr` is never inferred; (4) `data/security_overrides.csv` (`ticker,security_type,source_url`; setting `SECURITY_OVERRIDES_FILE`) corrects tickers the rules get wrong, each with the SEC page that shows the type; an override for a ticker no list has is reported; (5) a ticker listed in both lists under different CIKs keeps the exchange list's entry and the other is reported; the same CIK in both lists gives one `fund` security | The SEC lists carry no security type, and plain tickers are not always common stock: the 10-Q cover pages show GOOGM and GOOGN are depositary shares of Alphabet's mandatory convertible preferred and AMJB and VYLD are JPMorgan ETNs. Hand-kept overrides with a source keep the four known universe cases right without guessing; reading cover-page XBRL automatically is a follow-up (§16). For SPCX the exchange list is the current one: SpaceX listed in 2026, while the fund list still has an old series |
 
 ---
 
@@ -1694,6 +1699,8 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-25 | D-049 | PyYAML 6.0.3 has no Python 3.15 build yet, so PDM compiles it from source. Today it is dev-only (via flake8-async's libcst and moto). E7a needs a YAML parser at runtime for `data/extraction_overrides.yaml`: check for 3.15 builds then, and make sure the E7c Docker image can compile it or use a parser that has them. black also has no compiled 3.15 build and runs as plain Python (same output, a little slower) | E7a, E7c |
 | 2026-10-25 | D-049 | Done: Homebrew had installed python@3.15 only as PDM's dependency, so `brew autoremove` could have deleted the interpreter `.venv` uses. Guram ran `brew install python@3.15`, which marks it as installed on request | — |
 | 2026-10-25 | D-049 | A new Python comes out every October. Decide each year whether to move (a §15 entry), after checking that the locked packages publish builds for it | Each October |
+| 2026-10-25 | E2-S1 | Done: GOOGM and GOOGN (Alphabet's extra tickers from the E1 follow-up) are depositary shares of its 6.25% Series A and B mandatory convertible preferred; `data/security_overrides.csv` types them `preferred` (D-051) | — |
+| 2026-10-25 | E2-S1 | Security types from the cover page: every 10-K and 10-Q tags its registered securities (`dei:Security12bTitle`, `dei:TradingSymbol`, `dei:SecurityExchangeName`), which would type every listed security of a universe company without overrides. companyfacts omits these dimensional facts, so this needs the filing's XBRL instance. The cover page also writes JPM's preferreds as `JPM PR D` while the ticker list says `JPM-PD` | E4a or E9 |
 
 ---
 

@@ -1,0 +1,5 @@
+ticker,security_type,source_url
+GOOGM,preferred,https://www.sec.gov/Archives/edgar/data/1652044/000165204426000071/R1.htm
+GOOGN,preferred,https://www.sec.gov/Archives/edgar/data/1652044/000165204426000071/R1.htm
+AMJB,other,https://www.sec.gov/Archives/edgar/data/19617/000162828026054343/R1.htm
+VYLD,other,https://www.sec.gov/Archives/edgar/data/19617/000162828026054343/R1.htm

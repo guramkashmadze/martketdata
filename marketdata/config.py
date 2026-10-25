@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     s3_access_key_id: str | None = None
     s3_secret_access_key: SecretStr | None = None
 
+    # E2. Hand-maintained files, relative to the working directory (PLAN.md §9.1, D-051).
+    universe_file: Path = Path("data/universe.csv")
+    security_overrides_file: Path = Path("data/security_overrides.csv")
+
 
 def load_settings(env_file: str | None = ".env") -> Settings:
     """Load settings, failing fast with one line per missing or invalid variable."""

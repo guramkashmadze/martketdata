@@ -8,7 +8,8 @@ needs SEC_USER_AGENT. `name` is a path under tests/fixtures/sec/, e.g.
 
 - companyfacts: only the concepts in the metric catalog (PLAN.md §9.3) and the dei cover
   facts; with --since-year, only facts from filings in or after that year;
-- submissions: only the newest --keep-recent rows of `filings.recent` (every column).
+- submissions: only the newest --keep-recent rows of `filings.recent` (every column);
+- company_tickers_exchange and company_tickers_mf: only the rows of the --keep-ciks companies.
 
 Each fixture is recorded in tests/fixtures/sec/MANIFEST.json with its source URL, fetch time,
 the size and sha256 of the original response, the trim applied, and the size and sha256 of
@@ -113,7 +114,23 @@ def trim_submissions(data: dict[str, Any], keep_recent: int) -> tuple[Any, str]:
     return trimmed, rule
 
 
-def trim(url: str, raw: bytes, *, keep_recent: int, since_year: int | None) -> tuple[bytes, str]:
+def trim_ticker_list(data: dict[str, Any], endpoint: str, keep_ciks: set[int]) -> tuple[Any, str]:
+    column = data["fields"].index("cik")
+    rows = data["data"]
+    kept = [row for row in rows if row[column] in keep_ciks]
+    ciks = ", ".join(str(cik) for cik in sorted(keep_ciks))
+    rule = f"{endpoint}: rows of CIKs {ciks} ({len(kept)} of {len(rows)} rows)"
+    return {**data, "data": kept}, rule
+
+
+def trim(
+    url: str,
+    raw: bytes,
+    *,
+    keep_recent: int,
+    since_year: int | None,
+    keep_ciks: set[int] | None = None,
+) -> tuple[bytes, str]:
     parsed = urls.parse(url)
     endpoint = parsed.endpoint if parsed else None
     data = json.loads(raw)
@@ -121,6 +138,10 @@ def trim(url: str, raw: bytes, *, keep_recent: int, since_year: int | None) -> t
         trimmed, rule = trim_companyfacts(data, since_year)
     elif endpoint == "submissions":
         trimmed, rule = trim_submissions(data, keep_recent)
+    elif endpoint in ("company_tickers_exchange", "company_tickers_mf"):
+        if not keep_ciks:
+            raise ValueError(f"trimming {endpoint} needs --keep-ciks")
+        trimmed, rule = trim_ticker_list(data, endpoint, keep_ciks)
     else:
         raise ValueError(f"no trim rule for {url}; save it untrimmed")
     # Compact, like the SEC's own JSON; key order is kept.
@@ -143,7 +164,13 @@ def _target(name: str) -> Path:
 
 
 async def fetch(
-    url: str, name: str, *, trimmed: bool, keep_recent: int, since_year: int | None
+    url: str,
+    name: str,
+    *,
+    trimmed: bool,
+    keep_recent: int,
+    since_year: int | None,
+    keep_ciks: set[int] | None = None,
 ) -> Path:
     target = _target(name)
     settings = load_settings()
@@ -152,7 +179,9 @@ async def fetch(
     fetched_at = datetime.now(UTC)
     raw = response.content
     data, rule = (
-        trim(url, raw, keep_recent=keep_recent, since_year=since_year) if trimmed else (raw, None)
+        trim(url, raw, keep_recent=keep_recent, since_year=since_year, keep_ciks=keep_ciks)
+        if trimmed
+        else (raw, None)
     )
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +212,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--since-year", type=int, help="companyfacts: keep facts filed from this year"
     )
+    parser.add_argument("--keep-ciks", help="ticker lists: comma-separated CIKs whose rows to keep")
     args = parser.parse_args(argv)
+    keep_ciks = {int(cik) for cik in args.keep_ciks.split(",")} if args.keep_ciks else None
     try:
         target = asyncio.run(
             fetch(
@@ -192,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
                 trimmed=args.trim,
                 keep_recent=args.keep_recent,
                 since_year=args.since_year,
+                keep_ciks=keep_ciks,
             )
         )
     except (SettingsError, SecError, ValueError) as exc:

@@ -104,9 +104,39 @@ def test_trim_picks_the_rule_by_url_and_writes_compact_json() -> None:
 def test_trim_refuses_urls_without_a_rule() -> None:
     with pytest.raises(ValueError, match="no trim rule"):
         script.trim(
-            "https://www.sec.gov/files/company_tickers_exchange.json",
+            "https://data.sec.gov/api/xbrl/frames/us-gaap/Assets/USD/CY2025Q4I.json",
             b"{}",
             keep_recent=1,
+            since_year=None,
+        )
+
+
+def test_ticker_lists_keep_the_rows_of_chosen_companies() -> None:
+    raw = json.dumps(
+        {
+            "fields": ["cik", "name", "ticker", "exchange"],
+            "data": [[320193, "Apple Inc.", "AAPL", "Nasdaq"], [1, "Other", "OTHR", "NYSE"]],
+        }
+    ).encode()
+
+    data, rule = script.trim(
+        "https://www.sec.gov/files/company_tickers_exchange.json",
+        raw,
+        keep_recent=300,
+        since_year=None,
+        keep_ciks={320193},
+    )
+
+    assert json.loads(data)["data"] == [[320193, "Apple Inc.", "AAPL", "Nasdaq"]]
+    assert rule == "company_tickers_exchange: rows of CIKs 320193 (1 of 2 rows)"
+
+
+def test_ticker_lists_need_the_companies_to_keep() -> None:
+    with pytest.raises(ValueError, match="needs --keep-ciks"):
+        script.trim(
+            "https://www.sec.gov/files/company_tickers_mf.json",
+            b'{"fields": ["cik"], "data": []}',
+            keep_recent=300,
             since_year=None,
         )
 

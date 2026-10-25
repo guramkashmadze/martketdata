@@ -52,5 +52,23 @@
     "trim": null,
     "size_bytes": 149737,
     "sha256": "3d133aa9e678fcf843c4ed95e51dd6c5f298df3a21cc6b6e2b84429a8b506975"
+  },
+  "tickers/company_tickers_exchange.json": {
+    "url": "https://www.sec.gov/files/company_tickers_exchange.json",
+    "fetched_at": "2026-10-25T10:44:26+00:00",
+    "original_size_bytes": 523122,
+    "original_sha256": "f5a8b5c09137999ca3815f91df8b97a3602f24d0818255001e38bc77aae9c472",
+    "trim": "company_tickers_exchange: rows of CIKs 14272, 14693, 19617, 27419, 63754, 201533, 314808, 320193, 884394, 1046179, 1067983, 1181412, 1222333, 1276187, 1326801, 1347123, 1427437, 1577552, 1594805, 1636519, 1652044, 1895262, 2102713, 2115436, 2156068 (51 of 10429 rows)",
+    "size_bytes": 2492,
+    "sha256": "aaa1a019b8a1d3ef0e5625a574166688ede99277a21bee987193a0651dadb57f"
+  },
+  "tickers/company_tickers_mf.json": {
+    "url": "https://www.sec.gov/files/company_tickers_mf.json",
+    "fetched_at": "2026-10-25T10:44:28+00:00",
+    "original_size_bytes": 1236153,
+    "original_sha256": "9e376ab376494057f172ad231929b9709650e95db885cf8c8e1c79b35e18864c",
+    "trim": "company_tickers_mf: rows of CIKs 32339, 36405, 1048702, 1067839, 1174610, 1719812, 2078265 (447 of 28610 rows)",
+    "size_bytes": 19323,
+    "sha256": "0eac192bba35e80374bf418ea948f9a89a7ae1a807f537bdc347ff8c26db5481"
   }
 }

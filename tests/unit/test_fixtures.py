@@ -42,11 +42,19 @@ def test_fixture_matches_its_manifest_entry(name: str) -> None:
         assert entry["sha256"] == entry["original_sha256"]
 
 
+# E1's fixtures (D-048); the rest arrived with E2.
+E1_FIXTURES = {
+    f"{kind}/{ticker}.json" for kind in ("companyfacts", "submissions") for ticker, *_ in COMPANIES
+}
+
+
 def test_fixture_folder_stays_small() -> None:
     total = sum(p.stat().st_size for p in FIXTURES.rglob("*") if p.is_file())
     assert total < 20 * 1024 * 1024  # PLAN.md §6, all epics together
-    e1 = sum(entry["size_bytes"] for entry in MANIFEST.values())
+    e1 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name in E1_FIXTURES)
     assert e1 < 3 * 1024 * 1024  # E1's share
+    e2 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name not in E1_FIXTURES)
+    assert e2 < 1.5 * 1024 * 1024  # E2's share
 
 
 @pytest.mark.parametrize(("ticker", "cik", "fy_end_month"), COMPANIES)
