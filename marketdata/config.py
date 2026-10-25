@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     universe_file: Path = Path("data/universe.csv")
     security_overrides_file: Path = Path("data/security_overrides.csv")
 
+    # E3. Tasks the worker runs at once; they share the process's one SEC rate limit (D-007).
+    worker_concurrency: int = Field(default=4, ge=1, le=32)
+
 
 def load_settings(env_file: str | None = ".env") -> Settings:
     """Load settings, failing fast with one line per missing or invalid variable."""

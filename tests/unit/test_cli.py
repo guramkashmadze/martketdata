@@ -37,3 +37,12 @@ def test_group_help_works_without_settings(monkeypatch: pytest.MonkeyPatch) -> N
     result = CliRunner().invoke(app, ["extract", "--help"])
 
     assert result.exit_code == 0
+
+
+def test_worker_is_a_top_level_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    result = CliRunner().invoke(app, ["worker", "--help"])
+
+    assert result.exit_code == 0
+    assert "Run queued tasks until stopped" in result.output

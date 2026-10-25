@@ -17,6 +17,7 @@ from marketdata.config import Settings, SettingsError, load_settings
 from marketdata.db.pool import create_pool
 from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
 from marketdata.ingest.fetch import RawFetcher
+from marketdata.ingest.sec_lock import SecProcessBusy, sec_process_lock
 from marketdata.ingest.security_master import (
     LoadReport,
     SecurityMasterLoader,
@@ -38,6 +39,8 @@ from marketdata.service.companies import (
 )
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.tasks import queue
+from marketdata.tasks.handlers import build_registry
+from marketdata.tasks.worker import serve
 
 app = typer.Typer(
     help="marketdata: trusted, verified data from SEC filings. Information, not investment advice.",
@@ -112,8 +115,14 @@ def sec_get(
     except SettingsError as exc:
         raise _fail(str(exc), 2) from None
 
+    database_url = str(settings.database_url)
+
     async def run() -> str:
-        async with sec, create_pool(str(settings.database_url), max_size=2) as pool:
+        async with (
+            sec_process_lock(database_url, "marketdata sec get"),
+            sec,
+            create_pool(database_url, max_size=2) as pool,
+        ):
             fetcher = RawFetcher(sec, store, pool.connection)
             if key is None:
                 stored_key, _ = await fetcher.fetch_url(url)
@@ -125,7 +134,32 @@ def sec_get(
         typer.echo(asyncio.run(run()))
     except ValueError as exc:  # no key layout for this URL, or a bad key
         raise _fail(str(exc), 2) from None
-    except (SecError, RawStoreError) as exc:
+    except (SecError, RawStoreError, SecProcessBusy) as exc:
+        raise _fail(str(exc)) from None
+
+
+@app.command("worker")
+def worker(
+    concurrency: Annotated[
+        int | None,
+        typer.Option(min=1, max=32, help="Tasks run at once; default WORKER_CONCURRENCY."),
+    ] = None,
+) -> None:
+    """Run queued tasks until stopped (SIGTERM or Ctrl-C), as the one process calling the SEC.
+
+    On a stop it finishes running tasks for up to a minute and puts the rest back in the queue;
+    a second Ctrl-C puts them back at once.
+    """
+    settings = _settings()
+    try:
+        sec = SecClient.from_settings(settings)
+        store = create_raw_store(settings)
+    except SettingsError as exc:
+        raise _fail(str(exc), 2) from None
+    concurrency = concurrency or settings.worker_concurrency
+    try:
+        asyncio.run(serve(settings, build_registry(), sec, store, concurrency=concurrency))
+    except SecProcessBusy as exc:
         raise _fail(str(exc)) from None
 
 
@@ -157,8 +191,14 @@ def ingest_security_master(
     except SettingsError as exc:
         raise _fail(str(exc), 2) from None
 
+    database_url = str(settings.database_url)
+
     async def run() -> LoadReport:
-        async with sec, create_pool(str(settings.database_url), max_size=2) as pool:
+        async with (
+            sec_process_lock(database_url, "marketdata ingest security-master"),
+            sec,
+            create_pool(database_url, max_size=2) as pool,
+        ):
             fetcher = RawFetcher(sec, store, pool.connection)
             loader = SecurityMasterLoader(fetcher, pool.connection)
             today = datetime.now(UTC).date()
@@ -168,7 +208,7 @@ def ingest_security_master(
         report = asyncio.run(run())
     except SnapshotRefused as exc:
         raise _fail(str(exc), 2) from None
-    except (SecError, RawStoreError, SecFileError) as exc:
+    except (SecError, RawStoreError, SecFileError, SecProcessBusy) as exc:
         raise _fail(str(exc)) from None
     for line in report.lines(str(settings.universe_file)):
         typer.echo(line)
