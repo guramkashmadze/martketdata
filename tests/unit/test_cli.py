@@ -46,3 +46,12 @@ def test_worker_is_a_top_level_command(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert "Run queued tasks until stopped" in result.output
+
+
+def test_scheduler_is_a_top_level_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    result = CliRunner().invoke(app, ["scheduler", "--help"])
+
+    assert result.exit_code == 0
+    assert "Enqueue periodic tasks until stopped" in result.output

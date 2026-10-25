@@ -39,6 +39,7 @@ from marketdata.service.companies import (
 )
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.tasks import queue
+from marketdata.tasks import scheduler as task_scheduler
 from marketdata.tasks.handlers import build_registry
 from marketdata.tasks.worker import serve
 
@@ -161,6 +162,17 @@ def worker(
         asyncio.run(serve(settings, build_registry(), sec, store, concurrency=concurrency))
     except SecProcessBusy as exc:
         raise _fail(str(exc)) from None
+
+
+@app.command("scheduler")
+def scheduler() -> None:
+    """Enqueue periodic tasks until stopped (SIGTERM or Ctrl-C); the worker runs them.
+
+    Every 10 minutes, a filings watch for each universe company; daily at 06:00 UTC, the
+    security-master load (at once if started later in the day and it hasn't run).
+    """
+    settings = _settings()
+    asyncio.run(task_scheduler.serve(settings))
 
 
 def _data_files(settings: Settings) -> tuple[list[UniverseEntry], list[SecurityOverride]]:
