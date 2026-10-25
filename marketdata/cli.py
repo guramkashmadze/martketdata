@@ -164,6 +164,39 @@ def worker(
         raise _fail(str(exc)) from None
 
 
+@groups["backfill"].command("filings")
+def backfill_filings(
+    years: Annotated[
+        int, typer.Option(min=1, max=30, help="How many years of filings to load.")
+    ] = 5,
+) -> None:
+    """Queue a filing-history backfill for each universe company; the worker runs them.
+
+    Each task watches the company, then reads the older pages of its submissions back to the
+    start date. Exits with 1 when the universe is empty.
+    """
+    settings = _settings()
+    since = task_scheduler.years_before(datetime.now(UTC).date(), years)
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        return await task_scheduler.enqueue_backfills(conn, since)
+
+    queued = _in_transaction(settings, work)
+    if not queued:
+        raise _fail("No universe companies: run `marketdata ingest security-master` first.")
+    start = since.isoformat()
+    mine = [task for task in queued if task.status == "queued" and task.payload["since"] == start]
+    typer.echo(
+        f"Queued {len(mine)} filing backfills back to {since} for {len(queued)} universe "
+        "companies; the worker runs them."
+    )
+    if len(mine) < len(queued):
+        typer.echo(
+            f"  {len(queued) - len(mine)} were already pending and keep their own start date."
+        )
+    typer.echo("Follow them with `marketdata tasks list --kind filings_backfill`.")
+
+
 @app.command("scheduler")
 def scheduler() -> None:
     """Enqueue periodic tasks until stopped (SIGTERM or Ctrl-C); the worker runs them.

@@ -12,10 +12,15 @@ A watch of one company:
 
 A company's first watch only records what is there: history goes through each epic's backfill,
 so the first watch routes nothing.
+
+The backfill (E3-S5) watches the company, then reads the older pages its file lists, as far back
+as asked. Those filings are more than a year old and never routed. A page's acceptance times
+are checked on the whole page before the rows outside the window are dropped.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import structlog
@@ -28,6 +33,7 @@ from marketdata.normalize.filings import (
     Submissions,
     check_acceptance_times,
     parse_submissions,
+    parse_submissions_page,
     plan_filings,
     route,
     without_acceptance_times,
@@ -58,6 +64,19 @@ class WatchReport:
     stored: StoreReport | None  # None: the file had not changed
 
 
+@dataclass(frozen=True)
+class BackfillReport:
+    cik: int
+    since: date
+    watch: WatchReport
+    pages: tuple[StoreReport, ...]  # the older pages read, newest first
+
+    @property
+    def inserted(self) -> int:
+        recent = self.watch.stored.inserted if self.watch.stored else 0
+        return recent + sum(page.inserted for page in self.pages)
+
+
 class FilingsWatcher:
     def __init__(self, fetcher: RawFetcher, connect: Connect, kinds: frozenset[str]) -> None:
         self._fetcher = fetcher
@@ -80,11 +99,53 @@ class FilingsWatcher:
         report = await self._store(cik, submissions.filings, fetched, watched=True)
         return WatchReport(cik, first_watch=report.first_watch, stored=report.store)
 
+    async def backfill(self, cik: int, since: date) -> BackfillReport:
+        """Watch `cik`, then store its older filings filed on or after `since` from the pages
+        its submissions file lists (PLAN.md §8)."""
+        watch = await self.watch(cik)
+        async with self._connect() as conn:
+            state = await watch_state.get(conn, cik)
+        if state is None:
+            raise RuntimeError(f"CIK {cik} has no watch state after a watch")
+        # The file the watch processed, now or earlier, lists the pages.
+        submissions = _own(parse_submissions(await self._fetcher.read(state.raw_key)), cik)
+        pages = []
+        for page in submissions.pages:
+            if page.filed_to < since:
+                continue
+            fetched = await self._fetcher.fetch_if_changed(urls.submissions_page(page.name), None)
+            if fetched.data is None:
+                raise RuntimeError(f"{page.name} was fetched but not stored")
+            rows = parse_submissions_page(fetched.data, cik)
+            check = check_acceptance_times(rows, fetched.fetched_at)
+            window = [row for row in rows if row.filed_at >= since]
+            stored = await self._store(cik, window, fetched, watched=False, check=check)
+            pages.append(stored.store)
+        report = BackfillReport(cik, since, watch, tuple(pages))
+        log.info(
+            "filings_backfilled",
+            cik=cik,
+            since=since.isoformat(),
+            pages=len(pages),
+            inserted=report.inserted,
+        )
+        return report
+
     async def _store(
-        self, cik: int, rows: Sequence[FilingRow], fetched: Fetched, *, watched: bool
+        self,
+        cik: int,
+        rows: Sequence[FilingRow],
+        fetched: Fetched,
+        *,
+        watched: bool,
+        check: AcceptanceCheck | None = None,
     ) -> "_Stored":
-        assert fetched.key is not None
-        check = check_acceptance_times(rows, fetched.fetched_at)
+        """Store the listings of one file; `watched` files route work and become the company's
+        processed file. `check` is the file's acceptance check when `rows` are only part of it.
+        """
+        if fetched.key is None:
+            raise ValueError("only a stored file can be stored")
+        check = check or check_acceptance_times(rows, fetched.fetched_at)
         if not check.trusted:
             log.warning(
                 "acceptance_times_dropped", cik=cik, raw_key=fetched.key, reason=check.reason

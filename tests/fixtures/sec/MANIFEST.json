@@ -76,6 +76,16 @@
     "sha256": "5891cf875f690e38f26ca628f7091184c9d73ca34ca7646b9cecd5013aeac4ab",
     "raw_key": "raw/sec/api/submissions/320193/20261025T161850.560938Z.json"
   },
+  "submissions/AAPL-page-001-20261024.json": {
+    "url": "https://data.sec.gov/submissions/CIK0000320193-submissions-001.json",
+    "fetched_at": "2026-10-24T18:20:24+00:00",
+    "original_size_bytes": 205532,
+    "original_sha256": "9abd1c93ebd0c6ec5965e7dac865bfd0beca776a322a357b0de0963aca31fa13",
+    "trim": null,
+    "size_bytes": 205532,
+    "sha256": "9abd1c93ebd0c6ec5965e7dac865bfd0beca776a322a357b0de0963aca31fa13",
+    "raw_key": "raw/sec/api/submissions/320193/001/20261024T182024.736465Z.json"
+  },
   "submissions/AAPL.json": {
     "url": "https://data.sec.gov/submissions/CIK0000320193.json",
     "fetched_at": "2026-10-24T18:18:54+00:00",

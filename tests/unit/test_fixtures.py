@@ -42,9 +42,14 @@ def test_fixture_matches_its_manifest_entry(name: str) -> None:
         assert entry["sha256"] == entry["original_sha256"]
 
 
-# E1's fixtures (D-048); the rest arrived with E2.
+# E1's fixtures (D-048); E3's: index pages, copies from the raw store and 13D examples.
 E1_FIXTURES = {
     f"{kind}/{ticker}.json" for kind in ("companyfacts", "submissions") for ticker, *_ in COMPANIES
+}
+E3_FIXTURES = {
+    name
+    for name, entry in MANIFEST.items()
+    if name.startswith("filing_index/") or "raw_key" in entry
 }
 
 
@@ -53,7 +58,13 @@ def test_fixture_folder_stays_small() -> None:
     assert total < 20 * 1024 * 1024  # PLAN.md §6, all epics together
     e1 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name in E1_FIXTURES)
     assert e1 < 3 * 1024 * 1024  # E1's share
-    e2 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name not in E1_FIXTURES)
+    e3 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name in E3_FIXTURES)
+    assert e3 < 1.5 * 1024 * 1024  # E3's share
+    e2 = sum(
+        entry["size_bytes"]
+        for name, entry in MANIFEST.items()
+        if name not in E1_FIXTURES and name not in E3_FIXTURES
+    )
     assert e2 < 1.5 * 1024 * 1024  # E2's share
 
 

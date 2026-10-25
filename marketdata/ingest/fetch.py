@@ -69,6 +69,10 @@ class RawFetcher:
         await self._keep(url, key, response.content, response.content_type, fetched_at)
         return Fetched(url, digest, fetched_at, key=key, data=response.content)
 
+    async def read(self, key: str) -> bytes:
+        """A file stored earlier, from the raw store; no SEC request."""
+        return await self._store.get(key)
+
     async def _keep(
         self, url: str, key: str, data: bytes, content_type: str | None, fetched_at: datetime
     ) -> None:

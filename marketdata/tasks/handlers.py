@@ -4,7 +4,7 @@ Handlers are thin wrappers around ingest/: they turn what an ingest step reports
 a retry (an exception) or TaskRefused, so ingest/ never depends on the queue.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import structlog
 
@@ -13,7 +13,7 @@ from marketdata.ingest.security_master import SecurityMasterLoader, read_data_fi
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
 from marketdata.normalize.security_master import SnapshotRefused
 from marketdata.normalize.universe import DataFileError
-from marketdata.tasks.kinds import FILINGS_WATCH, SECURITY_MASTER
+from marketdata.tasks.kinds import FILINGS_BACKFILL, FILINGS_WATCH, SECURITY_MASTER
 from marketdata.tasks.registry import Registry, TaskContext, TaskRefused
 
 log = structlog.get_logger(__name__)
@@ -58,6 +58,26 @@ async def watch_filings(context: TaskContext, task: Task) -> None:
     log.debug("filings_watched", **watch_summary(report))
 
 
+async def backfill_filings(context: TaskContext, task: Task) -> None:
+    """One company's filing history back to the payload's `since` date (E3-S5)."""
+    cik, since = _cik(task), _since(task)
+    watcher = FilingsWatcher(context.fetcher, context.connect, context.kinds)
+    report = await watcher.backfill(cik, since)
+    log.debug("filings_backfill_done", cik=cik, pages=len(report.pages), inserted=report.inserted)
+
+
+def _since(task: Task) -> date:
+    since = task.payload.get("since")
+    try:
+        return date.fromisoformat(since) if isinstance(since, str) else _no_since(task)
+    except ValueError:
+        return _no_since(task)
+
+
+def _no_since(task: Task) -> date:
+    raise TaskRefused(f"the task's payload has no since date (YYYY-MM-DD): {task.payload}")
+
+
 def _cik(task: Task) -> int:
     cik = task.payload.get("cik")
     if isinstance(cik, bool) or not isinstance(cik, int) or cik <= 0:
@@ -70,4 +90,5 @@ def build_registry() -> Registry:
     registry = Registry()
     registry.register(SECURITY_MASTER, load_security_master)
     registry.register(FILINGS_WATCH, watch_filings)
+    registry.register(FILINGS_BACKFILL, backfill_filings)
     return registry

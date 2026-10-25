@@ -28,7 +28,7 @@ from marketdata.db.repositories import companies
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.fetch import Connect
 from marketdata.tasks import queue
-from marketdata.tasks.kinds import FILINGS_WATCH, SECURITY_MASTER
+from marketdata.tasks.kinds import FILINGS_BACKFILL, FILINGS_WATCH, SECURITY_MASTER
 
 WATCH_EVERY = timedelta(minutes=10)
 SECURITY_MASTER_AT = time(6, 0, tzinfo=UTC)
@@ -43,6 +43,28 @@ async def enqueue_watches(conn: AsyncConnection[Any]) -> list[Task]:
         await queue.enqueue(conn, FILINGS_WATCH, str(company.cik), {"cik": company.cik}, force=True)
         for company in universe
     ]
+
+
+async def enqueue_backfills(conn: AsyncConnection[Any], since: date) -> list[Task]:
+    """On demand (`marketdata backfill filings`): one filings_backfill per universe company,
+    back to `since`. The worker runs them, so the SEC is called from one process; a finished
+    backfill runs again, one still pending keeps its own start date."""
+    universe = await companies.list_in_universe(conn)
+    payload = {"since": since.isoformat()}
+    return [
+        await queue.enqueue(
+            conn, FILINGS_BACKFILL, str(company.cik), {"cik": company.cik, **payload}, force=True
+        )
+        for company in universe
+    ]
+
+
+def years_before(day: date, years: int) -> date:
+    """The same day `years` years earlier; 29 February becomes the 28th."""
+    try:
+        return day.replace(year=day.year - years)
+    except ValueError:
+        return day.replace(year=day.year - years, day=28)
 
 
 async def enqueue_security_master(conn: AsyncConnection[Any], day: date) -> Task:
