@@ -33,6 +33,9 @@ pdm run fmt                           # isort and black, rewriting files
 pdm run pytest -m "not integration"   # unit tests only, no database
 pdm run marketdata --help
 pdm run marketdata sec get <url>      # fetch through the SEC client, keep the raw file, print its key
+pdm run marketdata ingest security-master   # load tickers and the universe from the SEC (data/universe.csv)
+pdm run marketdata universe check     # check data/universe.csv against the stored security master
+pdm run marketdata company show <TICKER>   # CIK, name, class, SIC, fiscal year end, tickers, what data applies
 pdm run python scripts/fetch_fixture.py <url> <name> [--trim]   # save a test fixture
 pdm add <package>                     # new dependency; also list it in docs/PLAN.md §5 with its license
 ```
