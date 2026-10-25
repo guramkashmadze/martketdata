@@ -8,6 +8,7 @@ GROUPS = [
     "ingest",
     "universe",
     "company",
+    "filings",
     "tasks",
     "backfill",
     "extract",

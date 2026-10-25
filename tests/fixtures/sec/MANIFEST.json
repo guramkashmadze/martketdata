@@ -104,6 +104,26 @@
     "size_bytes": 108883,
     "sha256": "19a69f4c88d049bfe6c9133bf3fb46b7888c67b3f8f4090f1e943629b9fdd60f"
   },
+  "submissions/DIS.json": {
+    "url": "https://data.sec.gov/submissions/CIK0001744489.json",
+    "fetched_at": "2026-10-25T16:18:57+00:00",
+    "original_size_bytes": 165313,
+    "original_sha256": "4fdce1d0a4ef455f37ced1fe0f33715efb4d50c9e08f44db0e0d5b99e07af0d1",
+    "trim": null,
+    "size_bytes": 165313,
+    "sha256": "4fdce1d0a4ef455f37ced1fe0f33715efb4d50c9e08f44db0e0d5b99e07af0d1",
+    "raw_key": "raw/sec/api/submissions/1744489/20261025T161857.247121Z.json"
+  },
+  "submissions/FUBO.json": {
+    "url": "https://data.sec.gov/submissions/CIK0001484769.json",
+    "fetched_at": "2026-10-25T16:19:04+00:00",
+    "original_size_bytes": 113719,
+    "original_sha256": "9676c7e38373ed9b893abae00ccd2ea068adb948c3a7ad1e71310c5f863692b3",
+    "trim": null,
+    "size_bytes": 113719,
+    "sha256": "9676c7e38373ed9b893abae00ccd2ea068adb948c3a7ad1e71310c5f863692b3",
+    "raw_key": "raw/sec/api/submissions/1484769/20261025T161904.845673Z.json"
+  },
   "submissions/GLD.json": {
     "url": "https://data.sec.gov/submissions/CIK0001222333.json",
     "fetched_at": "2026-10-25T10:51:32+00:00",

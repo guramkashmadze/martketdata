@@ -38,6 +38,7 @@ from marketdata.service.companies import (
     resolve_ticker,
 )
 from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.service.filings import FilingView, recent_filings
 from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
 from marketdata.tasks.handlers import build_registry
@@ -54,6 +55,7 @@ _GROUPS = [
     ("ingest", "Load the security master and filings into the database.", "E2"),
     ("universe", "Load and grow the covered universe.", "E2"),
     ("company", "Look up a company: identity, class, tickers and what data applies.", "E2"),
+    ("filings", "A company's filings with plain-language event labels.", "E3"),
     ("tasks", "List, retry and purge queued tasks.", "E3"),
     ("backfill", "Load history: filings, earnings, facts, prices, insiders, funds.", "E3"),
     ("extract", "Earnings extraction and the hit-rate report.", "E7a"),
@@ -468,3 +470,54 @@ def tasks_purge_done(
 
     deleted = _in_transaction(settings, work)
     typer.echo(f"Deleted {deleted:,} done tasks unchanged for {older_than_days} days.")
+
+
+@groups["filings"].command("list")
+def filings_list(
+    ticker: Annotated[str, typer.Argument(help="A ticker as people write it: AAPL, brk.b, BRK/B.")],
+    limit: Annotated[int, typer.Option(min=1, max=100, help="How many filings to list.")] = 20,
+    form: Annotated[
+        str | None, typer.Option(help="Only this form, e.g. 8-K or 'SCHEDULE 13D'.")
+    ] = None,
+) -> None:
+    """A company's most recent filings with plain-language event labels.
+
+    Reads the database only; the watcher and `marketdata backfill filings` fill it.
+    """
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> tuple[ResolvedSecurity, list[FilingView]]:
+        security = await resolve_ticker(conn, ticker)
+        return security, await recent_filings(conn, security.cik, form=form, limit=limit)
+
+    try:
+        security, listed = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _filing_lines(security, listed, form):
+        typer.echo(line)
+
+
+def _filing_lines(
+    security: ResolvedSecurity, listed: list[FilingView], form: str | None
+) -> list[str]:
+    name = security.name or "(no name)"
+    what = f"{form} filings" if form else "filings"
+    if not listed:
+        return [
+            f"{name} ({security.ticker}, CIK {security.cik}): no {what} stored yet. The watcher "
+            "and `marketdata backfill filings` load them."
+        ]
+    lines = [f"{name} ({security.ticker}, CIK {security.cik}): the {len(listed)} latest {what}"]
+    for filing in listed:
+        events = "; ".join(
+            event.label + (" [high]" if event.importance == "high" else "")
+            for event in filing.events
+        )
+        lines.append(
+            f"  {filing.filed_at}  {filing.form:<16} {filing.accession_no}  {events}".rstrip()
+        )
+    lines.append("Information from public filings. Not investment advice.")
+    return lines
