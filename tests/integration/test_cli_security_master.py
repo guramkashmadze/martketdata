@@ -16,9 +16,14 @@ from typer.testing import CliRunner
 from marketdata import cli
 from marketdata.config import Settings
 from marketdata.sec import client as sec_client
+from marketdata.sec import urls
 from marketdata.sec.client import SecClient
 
 R1 = "https://www.sec.gov/Archives/edgar/data/1652044/000165204426000071/R1.htm"
+
+
+# What the mock SEC serves; a test may change it between commands.
+ROUTES: dict[str, bytes | int] = {}
 
 
 @pytest.fixture
@@ -27,8 +32,10 @@ def cli_env(
 ) -> Iterator[Path]:
     def from_settings(settings: Settings) -> SecClient:
         assert settings.sec_user_agent == UA
-        return sec_serving(fixture_routes())
+        return sec_serving(ROUTES)
 
+    ROUTES.clear()
+    ROUTES.update(fixture_routes())
     monkeypatch.setattr(sec_client.SecClient, "from_settings", from_settings)
     monkeypatch.chdir(tmp_path)  # no .env here
     (tmp_path / "universe.csv").write_text(TEST_UNIVERSE_CSV + "NOPE,not listed\n")
@@ -61,7 +68,7 @@ def test_ingest_prints_changes_and_the_universe_then_check_reads_it_back(cli_env
     assert "51 exchange rows and 447 fund rows give 495 tickers." in out
     assert "  Skipped 'NONE.' (exchange list, CIK 1347123): not a ticker" in out
     assert "  SPCX is in both lists: kept CIK 1181412 from the exchange list" in out
-    assert "Securities: 495 opened, 0 updated, 0 unchanged." in out
+    assert "Securities: 495 opened, 0 closed, 0 updated, 0 unchanged." in out
     assert "Companies: 32 added, 0 changed." in out
     assert f"Universe ({cli_env / 'universe.csv'}): 11 tickers, 10 companies." in out
     assert "GLD" in out and "SIC 6221 and no 8-K item 2.02" in out
@@ -70,7 +77,7 @@ def test_ingest_prints_changes_and_the_universe_then_check_reads_it_back(cli_env
 
     again = runner.invoke(cli.app, ["ingest", "security-master"])
     assert again.exit_code == 0, again.output
-    assert "Securities: 0 opened, 0 updated, 495 unchanged." in again.stdout
+    assert "Securities: 0 opened, 0 closed, 0 updated, 495 unchanged." in again.stdout
     assert "Companies: 0 added, 0 changed." in again.stdout
 
     checked = runner.invoke(cli.app, ["universe", "check"])
@@ -99,3 +106,22 @@ def test_an_override_needs_an_sec_filing_page(cli_env: Path) -> None:
 
     assert result.exit_code == 2
     assert "GOOGM's source_url is not an SEC filing page" in result.output
+
+
+def test_lists_that_look_cut_short_stop_with_2_unless_forced(cli_env: Path) -> None:
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["ingest", "security-master"]).exit_code == 0
+    ROUTES[urls.COMPANY_TICKERS_MF] = (
+        b'{"fields":["cik","seriesId","classId","symbol"],"data":[[36405,"S1","C1","VOO"]]}'
+    )
+
+    refused = runner.invoke(cli.app, ["ingest", "security-master"])
+    forced = runner.invoke(cli.app, ["ingest", "security-master", "--force"])
+
+    assert refused.exit_code == 2
+    assert "the fund list would end 444 of 445 current tickers" in refused.output
+    assert "Nothing was changed" in refused.output
+    assert forced.exit_code == 0, forced.output
+    # Both runs are on the same day, so the rows opened by the first are deleted, not closed.
+    assert "Securities: 0 opened, 0 closed, 0 updated, 51 unchanged." in forced.stdout
+    assert "  Opened and ended today, so deleted (444): ACQQ (CIK 1174610);" in forced.stdout

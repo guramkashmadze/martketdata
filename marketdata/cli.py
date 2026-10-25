@@ -21,7 +21,7 @@ from marketdata.ingest.security_master import (
     read_data_files,
 )
 from marketdata.log import configure_logging
-from marketdata.normalize.security_master import SecFileError
+from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError, SecurityOverride, UniverseEntry
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
@@ -110,11 +110,17 @@ def _data_files(settings: Settings) -> tuple[list[UniverseEntry], list[SecurityO
 
 
 @groups["ingest"].command("security-master")
-def ingest_security_master() -> None:
+def ingest_security_master(
+    force: Annotated[
+        bool,
+        typer.Option(help="Apply lists that end more tickers than the safety limit allows."),
+    ] = False,
+) -> None:
     """Load every ticker from the SEC lists, and details and class for each universe company.
 
-    Prints the changes and the universe with the class of each company; exits with 1 when a
-    universe company's submissions could not be loaded (what was stored for it stays).
+    Prints the changes and the universe with the class of each company. Exits with 1 when a
+    universe company's submissions could not be loaded (what was stored for it stays), and
+    with 2, changing nothing, when the lists look cut short.
     """
     settings = _settings()
     universe, overrides = _data_files(settings)
@@ -128,10 +134,13 @@ def ingest_security_master() -> None:
         async with sec, create_pool(str(settings.database_url), max_size=2) as pool:
             fetcher = RawFetcher(sec, store, pool.connection)
             loader = SecurityMasterLoader(fetcher, pool.connection)
-            return await loader.load(universe, overrides, as_of=datetime.now(UTC).date())
+            today = datetime.now(UTC).date()
+            return await loader.load(universe, overrides, as_of=today, force=force)
 
     try:
         report = asyncio.run(run())
+    except SnapshotRefused as exc:
+        raise _fail(str(exc), 2) from None
     except (SecError, RawStoreError, SecFileError) as exc:
         raise _fail(str(exc)) from None
     for line in report.lines(str(settings.universe_file)):

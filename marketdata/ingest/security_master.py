@@ -23,6 +23,7 @@ from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.normalize.security_master import (
     FILER_TYPES,
     Classification,
+    ClosedSecurity,
     CompanyDetails,
     FilerType,
     SecFileError,
@@ -30,6 +31,7 @@ from marketdata.normalize.security_master import (
     TickerSnapshot,
     UniverseCompany,
     build_snapshot,
+    check_snapshot,
     classify_filer,
     diff_securities,
     parse_exchange_list,
@@ -38,6 +40,7 @@ from marketdata.normalize.security_master import (
     plan_companies,
 )
 from marketdata.normalize.universe import (
+    ClosedTicker,
     DataFileError,
     SecurityOverride,
     UniverseEntry,
@@ -129,18 +132,23 @@ class LoadReport:
         for override in snapshot.unused_overrides:
             lines.append(f"  Override for {override.ticker} unused: no list has that ticker")
         lines.append(
-            f"Securities: {len(changes.opened):,} opened, {len(changes.updated):,} updated, "
-            f"{changes.unchanged:,} unchanged."
+            f"Securities: {len(changes.opened):,} opened, {len(changes.closed):,} closed, "
+            f"{len(changes.updated):,} updated, {changes.unchanged:,} unchanged."
         )
-        if changes.stale:
-            lines.append(
-                f"  {len(changes.stale):,} current rows no longer match the lists and were "
-                "left as they are."
+        moved = [f"{c.row.ticker} from CIK {c.row.cik} to CIK {c.moved_to}" for c in changes.moved]
+        ended = [f"{c.row.ticker} (CIK {c.row.cik})" for c in changes.closed if c.moved_to is None]
+        lines.extend(_listed("Moved to another CIK", moved))
+        lines.extend(_listed("No longer listed", ended))
+        lines.extend(
+            _listed(
+                "Opened and ended today, so deleted",
+                [f"{row.ticker} (CIK {row.cik})" for row in changes.deleted],
             )
+        )
         lines.append(
             f"Companies: {self.companies_added:,} added, {self.companies_changed:,} changed."
         )
-        lines.extend(_universe_lines(universe_file, self.universe, self.members))
+        lines.extend(_universe_lines(universe_file, self.universe, self.members, changes.moved))
         return lines
 
 
@@ -155,14 +163,18 @@ class SecurityMasterLoader:
         overrides: Sequence[SecurityOverride],
         *,
         as_of: date,
+        force: bool = False,
     ) -> LoadReport:
+        """Load the lists of `as_of`. `force` applies a snapshot that ends more tickers than
+        check_snapshot allows; raises SnapshotRefused otherwise, changing nothing."""
         _, exchange_data = await self._fetcher.fetch_url(urls.COMPANY_TICKERS_EXCHANGE)
         _, fund_data = await self._fetcher.fetch_url(urls.COMPANY_TICKERS_MF)
         snapshot = build_snapshot(
             parse_exchange_list(exchange_data), parse_fund_list(fund_data), overrides
         )
         listed = {ticker: listing.cik for ticker, listing in snapshot.listings.items()}
-        match = match_universe(universe, listed)
+        unlisted = [entry.ticker for entry in universe if entry.ticker not in listed]
+        match = match_universe(universe, listed, await self._history(unlisted, as_of))
 
         members: dict[int, UniverseCompany] = {}
         errors: dict[int, str] = {}
@@ -178,12 +190,17 @@ class SecurityMasterLoader:
 
         async with self._connect() as conn, conn.transaction():
             await securities.lock_for_load(conn)
+            current = await securities.list_current(conn)
+            changes = diff_securities(current, snapshot.listings, as_of)
+            check_snapshot(current, changes, as_of, force=force)
             stored = {company.cik: company for company in await companies.list_all(conn)}
             added, changed = plan_companies(stored, snapshot.companies, members)
-            changes = diff_securities(await securities.list_current(conn), snapshot.listings)
             await companies.upsert(conn, [*added, *changed])
-            await securities.insert(conn, changes.opened, as_of)
+            # Old rows end before new ones open: one current row per ticker.
+            await securities.delete(conn, [row.security_id for row in changes.deleted])
+            await securities.close(conn, [c.row.security_id for c in changes.closed], as_of)
             await securities.update(conn, changes.updated)
+            await securities.insert(conn, changes.opened, as_of)
 
         names = {row.cik: row.name for row in [*added, *changed]}
         report = LoadReport(
@@ -199,6 +216,9 @@ class SecurityMasterLoader:
             "security_master_loaded",
             tickers=len(snapshot.listings),
             opened=len(changes.opened),
+            closed=len(changes.closed),
+            moved=len(changes.moved),
+            deleted=len(changes.deleted),
             updated=len(changes.updated),
             companies_added=len(added),
             companies_changed=len(changed),
@@ -206,6 +226,15 @@ class SecurityMasterLoader:
             failures=len(errors),
         )
         return report
+
+    async def _history(self, tickers: Sequence[str], as_of: date) -> dict[str, ClosedTicker]:
+        """Where universe tickers that no list has went: their latest stored rows. A row still
+        current ends with this load, on `as_of`."""
+        if not tickers:
+            return {}
+        async with self._connect() as conn:
+            rows = await securities.latest(conn, tickers)
+        return {row.ticker: ClosedTicker(row.cik, row.valid_to or as_of) for row in rows}
 
     async def _details(self, cik: int) -> tuple[CompanyDetails | None, str | None]:
         try:
@@ -268,7 +297,8 @@ class UniverseCheck:
 
     def lines(self, universe_file: str) -> list[str]:
         members = []
-        for entry, cik in self.universe.matched:
+        found = [*self.universe.matched, *((e, c.cik) for e, c in self.universe.closed)]
+        for entry, cik in found:
             company = self.stored.get(cik)
             filer_type: FilerType = company.filer_type if company else "unknown"
             members.append(
@@ -293,14 +323,24 @@ async def check_universe(
     conn: AsyncConnection[Any], universe: Sequence[UniverseEntry]
 ) -> UniverseCheck:
     current = await securities.find_current(conn, [entry.ticker for entry in universe])
-    match = match_universe(universe, {row.ticker: row.cik for row in current})
+    listed = {row.ticker: row.cik for row in current}
+    unlisted = [entry.ticker for entry in universe if entry.ticker not in listed]
+    closed = {
+        row.ticker: ClosedTicker(row.cik, row.valid_to)
+        for row in await securities.latest(conn, unlisted)
+        if row.valid_to is not None
+    }
+    match = match_universe(universe, listed, closed)
     stored = {company.cik: company for company in await companies.get_many(conn, match.ciks)}
     flagged = tuple(company.cik for company in await companies.list_in_universe(conn))
     return UniverseCheck(match, stored, flagged)
 
 
 def _universe_lines(
-    universe_file: str, match: UniverseMatch, members: Sequence[MemberReport]
+    universe_file: str,
+    match: UniverseMatch,
+    members: Sequence[MemberReport],
+    moved: Sequence[ClosedSecurity] = (),
 ) -> list[str]:
     count = len(match.matched) + len(match.closed) + len(match.unknown)
     lines = [f"Universe ({universe_file}): {count} tickers, {len(match.ciks)} companies."]
@@ -314,6 +354,18 @@ def _universe_lines(
             lines.append(f"  {'':<12} {'':>10}  submissions not loaded: {member.error}")
     for cik, shared in match.shared.items():
         lines.append(f"  Same company through {', '.join(shared)} (CIK {cik})")
+    for entry, closed in match.closed:
+        lines.append(
+            f"  {entry.ticker} is no longer listed (since {closed.valid_to}); CIK {closed.cik} "
+            f"stays in the universe until {universe_file} changes"
+        )
+    tickers = {entry.ticker for entry, _ in match.matched}
+    for move in moved:
+        if move.row.ticker in tickers:
+            lines.append(
+                f"  {move.row.ticker} moved from CIK {move.row.cik} to CIK {move.moved_to}; the "
+                f"universe follows the ticker: check {universe_file}"
+            )
     unknown = ", ".join(entry.ticker for entry in match.unknown) or "none"
     lines.append(f"  Unknown tickers (in no SEC list): {unknown}")
     counts = _class_counts(member.classification.filer_type for member in members)
@@ -326,3 +378,11 @@ def _universe_lines(
 def _class_counts(filer_types: Iterable[FilerType]) -> dict[FilerType, int]:
     counts = Counter(filer_types)
     return {filer_type: counts.get(filer_type, 0) for filer_type in FILER_TYPES}
+
+
+def _listed(title: str, items: Sequence[str], limit: int = 20) -> list[str]:
+    if not items:
+        return []
+    shown = "; ".join(items[:limit])
+    more = f"; and {len(items) - limit:,} more" if len(items) > limit else ""
+    return [f"  {title} ({len(items):,}): {shown}{more}"]

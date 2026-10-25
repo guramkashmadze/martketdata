@@ -125,6 +125,15 @@
     "size_bytes": 2492,
     "sha256": "aaa1a019b8a1d3ef0e5625a574166688ede99277a21bee987193a0651dadb57f"
   },
+  "tickers/company_tickers_exchange_before.json": {
+    "url": "https://www.sec.gov/files/company_tickers_exchange.json",
+    "fetched_at": "2026-10-25T10:44:26+00:00",
+    "original_size_bytes": 523122,
+    "original_sha256": "f5a8b5c09137999ca3815f91df8b97a3602f24d0818255001e38bc77aae9c472",
+    "trim": "crafted for E2-S4 from tickers/company_tickers_exchange.json, as the list looked before 2026-07-01: XOM on CIK 34088 named EXXON MOBIL CORP (ExxonMobil Holdings Corp took the ticker on 2026-07-01, 8-K12B 0001193125-26-291990); no SpaceX SPCX row (listed in 2026); plus DLST for a made-up TEST DELISTED CO (CIK 9999999999) that the later list no longer has",
+    "size_bytes": 2464,
+    "sha256": "b172d40b3bbf593de5b8de3950336a818e6203c85c6e6ed31d61494f18f4b227"
+  },
   "tickers/company_tickers_mf.json": {
     "url": "https://www.sec.gov/files/company_tickers_mf.json",
     "fetched_at": "2026-10-25T10:44:28+00:00",

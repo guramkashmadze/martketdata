@@ -162,11 +162,12 @@ def load_master(conn: psycopg.AsyncConnection[Any], tmp_path: Path) -> LoadMaste
         universe: str = TEST_UNIVERSE_CSV,
         overrides: Sequence[SecurityOverride] = (),
         as_of: date = AS_OF,
+        force: bool = False,
     ) -> LoadReport:
         async with sec_serving(routes if routes is not None else fixture_routes()) as sec:
             loader = SecurityMasterLoader(
                 RawFetcher(sec, store, connect_to(conn)), connect_to(conn)
             )
-            return await loader.load(parse_universe(universe), overrides, as_of=as_of)
+            return await loader.load(parse_universe(universe), overrides, as_of=as_of, force=force)
 
     return load

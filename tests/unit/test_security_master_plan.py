@@ -137,6 +137,9 @@ def listing(ticker: str, cik: int, exchange: str | None = "NYSE") -> Listing:
     return Listing(ticker, cik, "common", None, exchange, "exchange")
 
 
+AS_OF = date(2026, 10, 25)
+
+
 def test_securities_diff_opens_updates_and_keeps() -> None:
     current = [
         Row(1, 27419, "TGT", "common", None, None, date(2026, 10, 24)),
@@ -148,19 +151,9 @@ def test_securities_diff_opens_updates_and_keeps() -> None:
         "MSFT": listing("MSFT", 789019, "Nasdaq"),
     }
 
-    changes = diff_securities(current, snapshot)
+    changes = diff_securities(current, snapshot, AS_OF)
 
     assert changes.opened == (snapshot["MSFT"],)
     assert [(u.security_id, u.listing.exchange) for u in changes.updated] == [(1, "NYSE")]
     assert changes.unchanged == 1
-    assert changes.stale == ()
-
-
-def test_rows_the_snapshot_lists_elsewhere_or_not_at_all_are_stale() -> None:
-    moved = Row(1, 34088, "XOM", "common", "NYSE", None, date(2026, 6, 30))
-    gone = Row(2, 1, "GONE", "common", "NYSE", None, date(2026, 6, 30))
-
-    changes = diff_securities([moved, gone], {"XOM": listing("XOM", 2115436)})
-
-    assert changes.opened == () and changes.updated == ()
-    assert changes.stale == (moved, gone)
+    assert changes.closed == () and changes.deleted == ()

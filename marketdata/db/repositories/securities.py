@@ -1,7 +1,8 @@
 """The securities table (PLAN.md §7, E2): which CIK lists a ticker, and since when.
 
 A row is current while `valid_to` is null; a partial unique index allows one current row per
-ticker. Rows are never deleted when a ticker goes away: they get a `valid_to` (E2-S4).
+ticker. When a ticker goes away or moves to another CIK its row gets a `valid_to`, so history
+stays; only a row opened and ended on the same day is deleted (E2-S4, D-054).
 """
 
 from collections.abc import Sequence
@@ -45,14 +46,28 @@ _SELECT_CURRENT_BY_TICKERS = f"""
     where valid_to is null and ticker = any(%(tickers)s)
     order by ticker
 """
+# Per ticker, the current row if there is one, else the one closed last.
+_SELECT_LATEST_BY_TICKERS = f"""
+    select distinct on (ticker) {_COLUMNS} from securities
+    where ticker = any(%(tickers)s)
+    order by ticker, valid_to desc nulls first, valid_from desc
+"""
 
 _COPY = "copy securities (cik, ticker, security_type, exchange, share_class, valid_from) from stdin"
 
 _UPDATE = """
     update securities
-    set security_type = %(security_type)s, exchange = %(exchange)s, share_class = %(share_class)s
+    set cik = %(cik)s, security_type = %(security_type)s, exchange = %(exchange)s,
+        share_class = %(share_class)s
     where security_id = %(security_id)s and valid_to is null
 """
+
+_CLOSE = """
+    update securities set valid_to = %(valid_to)s
+    where security_id = any(%(ids)s) and valid_to is null
+"""
+
+_DELETE = "delete from securities where security_id = any(%(ids)s) and valid_to is null"
 
 
 async def lock_for_load(conn: AsyncConnection[Any]) -> None:
@@ -71,6 +86,25 @@ async def find_current(conn: AsyncConnection[Any], tickers: Sequence[str]) -> li
     async with conn.cursor(row_factory=class_row(Security)) as cur:
         await cur.execute(_SELECT_CURRENT_BY_TICKERS, {"tickers": list(tickers)})
         return await cur.fetchall()
+
+
+async def latest(conn: AsyncConnection[Any], tickers: Sequence[str]) -> list[Security]:
+    """For each of these tickers, its current row, or the row closed last (E2-S4)."""
+    async with conn.cursor(row_factory=class_row(Security)) as cur:
+        await cur.execute(_SELECT_LATEST_BY_TICKERS, {"tickers": list(tickers)})
+        return await cur.fetchall()
+
+
+async def close(conn: AsyncConnection[Any], security_ids: Sequence[int], valid_to: date) -> None:
+    """End current rows on `valid_to`: their ticker went away or moved to another CIK."""
+    if security_ids:
+        await conn.execute(_CLOSE, {"ids": list(security_ids), "valid_to": valid_to})
+
+
+async def delete(conn: AsyncConnection[Any], security_ids: Sequence[int]) -> None:
+    """Remove current rows that were opened and ended on the same day (D-054)."""
+    if security_ids:
+        await conn.execute(_DELETE, {"ids": list(security_ids)})
 
 
 async def insert(conn: AsyncConnection[Any], listings: Sequence[Listing], valid_from: date) -> None:
@@ -100,6 +134,7 @@ async def update(conn: AsyncConnection[Any], updates: Sequence[SecurityUpdate]) 
             [
                 {
                     "security_id": change.security_id,
+                    "cik": change.listing.cik,
                     "security_type": change.listing.security_type,
                     "exchange": change.listing.exchange,
                     "share_class": change.listing.share_class,

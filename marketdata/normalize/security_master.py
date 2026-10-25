@@ -454,35 +454,67 @@ class StoredSecurity(Protocol):
 
 @dataclass(frozen=True)
 class SecurityUpdate:
-    """A current row whose type, class or exchange changed; its ticker and CIK did not."""
+    """A current row whose type, class or exchange changed; its ticker and CIK did not, unless
+    the row was opened on the snapshot's own date (a move that day replaces it in place)."""
 
     security_id: int
     listing: Listing
 
 
 @dataclass(frozen=True)
+class ClosedSecurity:
+    row: StoredSecurity
+    moved_to: int | None  # the CIK that lists the ticker now; None when no list has it
+
+
+@dataclass(frozen=True)
 class SecurityChanges:
-    opened: tuple[Listing, ...]  # tickers no current row has
+    """What a snapshot changes in the securities table (E2-S4, D-054)."""
+
+    opened: tuple[Listing, ...]  # valid_from = the snapshot's date
+    closed: tuple[ClosedSecurity, ...]  # valid_to = the snapshot's date
     updated: tuple[SecurityUpdate, ...]
+    deleted: tuple[StoredSecurity, ...]  # opened on the snapshot's date and gone the same day
     unchanged: int
-    stale: tuple[StoredSecurity, ...]  # current rows the snapshot lists elsewhere or not at all
+
+    @property
+    def moved(self) -> tuple[ClosedSecurity, ...]:
+        return tuple(closed for closed in self.closed if closed.moved_to is not None)
+
+
+class SnapshotRefused(Exception):
+    """A snapshot would close too many current rows to be trusted (a truncated download)."""
+
+
+# A snapshot may close at most this share of current rows, but always at least MIN_CLOSES.
+MAX_CLOSE_FRACTION = 0.05
+MIN_CLOSES = 50
 
 
 def diff_securities(
-    current: Sequence[StoredSecurity], snapshot: Mapping[str, Listing]
+    current: Sequence[StoredSecurity], snapshot: Mapping[str, Listing], as_of: date
 ) -> SecurityChanges:
-    """Compare the current rows with a snapshot of the SEC lists."""
+    """Compare the current rows with a snapshot of the SEC lists taken on `as_of`.
+
+    A ticker no list has any more is closed on `as_of`; a ticker another CIK lists now is
+    closed and opened again for that CIK. A row opened on `as_of` itself was never valid for a
+    whole day, so it is deleted or changed in place instead of closed (`valid_to` must be
+    after `valid_from`).
+    """
     by_ticker = {row.ticker: row for row in current}
     opened: list[Listing] = []
+    closed: list[ClosedSecurity] = []
     updated: list[SecurityUpdate] = []
+    deleted: list[StoredSecurity] = []
     unchanged = 0
     for ticker, listing in sorted(snapshot.items()):
         row = by_ticker.get(ticker)
         if row is None:
             opened.append(listing)
-        elif row.cik != listing.cik:
-            continue  # stale: the ticker moved to another CIK
-        elif (row.security_type, row.share_class, row.exchange) != (
+        elif row.cik != listing.cik and row.valid_from < as_of:
+            closed.append(ClosedSecurity(row, moved_to=listing.cik))
+            opened.append(listing)
+        elif row.cik != listing.cik or (row.security_type, row.share_class, row.exchange) != (
             listing.security_type,
             listing.share_class,
             listing.exchange,
@@ -490,10 +522,49 @@ def diff_securities(
             updated.append(SecurityUpdate(row.security_id, listing))
         else:
             unchanged += 1
-    stale = tuple(
-        row for row in current if row.ticker not in snapshot or snapshot[row.ticker].cik != row.cik
-    )
-    return SecurityChanges(tuple(opened), tuple(updated), unchanged, stale)
+    for row in sorted(current, key=lambda row: row.ticker):
+        if row.ticker in snapshot:
+            continue
+        if row.valid_from < as_of:
+            closed.append(ClosedSecurity(row, moved_to=None))
+        else:
+            deleted.append(row)
+    return SecurityChanges(tuple(opened), tuple(closed), tuple(updated), tuple(deleted), unchanged)
+
+
+def check_snapshot(
+    current: Sequence[StoredSecurity],
+    changes: SecurityChanges,
+    as_of: date,
+    *,
+    force: bool = False,
+) -> None:
+    """Refuse a snapshot that is older than the stored rows, or that ends more tickers than
+    real churn does (unless `force`). Raises SnapshotRefused.
+
+    Each list is judged on its own rows (fund-list tickers are the `fund` ones), so a cut-short
+    exchange list can't hide among the fund list's 28,000 rows.
+    """
+    newest = max((row.valid_from for row in current), default=None)
+    if newest is not None and newest > as_of:
+        raise SnapshotRefused(
+            f"the stored tickers are from {newest}, newer than this snapshot of {as_of}; "
+            "nothing was changed"
+        )
+    if force:
+        return
+    gone = [closed.row for closed in changes.closed if closed.moved_to is None]
+    gone += changes.deleted
+    for label, fund in (("exchange list", False), ("fund list", True)):
+        total = sum(1 for row in current if (row.security_type == "fund") == fund)
+        lost = sum(1 for row in gone if (row.security_type == "fund") == fund)
+        limit = max(MIN_CLOSES, int(total * MAX_CLOSE_FRACTION))
+        if lost > limit:
+            raise SnapshotRefused(
+                f"the {label} would end {lost:,} of {total:,} current tickers (the limit is "
+                f"{limit:,}); it may have been cut short. Nothing was changed: fetch again later, "
+                "or pass --force if the list is right"
+            )
 
 
 def _recent_filings(recent: dict[str, Any], cik: int) -> tuple[Filing, ...]:
