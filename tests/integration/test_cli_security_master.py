@@ -6,6 +6,7 @@ the test removes what it wrote.
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
@@ -125,3 +126,43 @@ def test_lists_that_look_cut_short_stop_with_2_unless_forced(cli_env: Path) -> N
     # Both runs are on the same day, so the rows opened by the first are deleted, not closed.
     assert "Securities: 0 opened, 0 closed, 0 updated, 51 unchanged." in forced.stdout
     assert "  Opened and ended today, so deleted (444): ACQQ (CIK 1174610);" in forced.stdout
+
+
+def test_company_show_prints_the_company_behind_a_ticker(cli_env: Path) -> None:
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["ingest", "security-master"]).exit_code == 0
+
+    shown = runner.invoke(cli.app, ["company", "show", "brk.b"])
+
+    assert shown.exit_code == 0, shown.output
+    assert shown.stdout.splitlines()[:7] == [
+        "BERKSHIRE HATHAWAY INC",
+        "  CIK              1067983",
+        "  Class            unknown, not in the covered universe",
+        "  SIC              —",
+        "  Fiscal year end  — (MMDD, as the SEC gives it)",
+        "  Incorporated     —",
+        f"  Ticker           BRK-B (common, class B, NYSE), first seen {datetime.now(UTC).date()}",
+    ]
+    assert "  Other tickers    BRK-A (common, class A, NYSE)" in shown.stdout
+    assert "  Earnings         doesn't apply: Not in the covered universe." in shown.stdout
+    assert shown.stdout.endswith("Information from public filings. Not investment advice.\n")
+
+    googl = runner.invoke(cli.app, ["company", "show", "GOOGL"]).stdout
+    assert "  Class            domestic, in the covered universe" in googl
+    assert "  SIC              7370 Services-Computer Programming, Data Processing, Etc." in googl
+    assert "GOOGM (preferred, Nasdaq)" in googl  # the override in this test's file
+    assert "  Fundamentals     applies: " in googl
+
+
+def test_company_show_explains_tickers_it_cannot_find(cli_env: Path) -> None:
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["ingest", "security-master"]).exit_code == 0
+
+    missing = runner.invoke(cli.app, ["company", "show", "zzzz"])
+    invalid = runner.invoke(cli.app, ["company", "show", "BRK B"])
+
+    assert missing.exit_code == 1
+    assert "No security has the ticker ZZZZ in the SEC's lists" in missing.output
+    assert invalid.exit_code == 2
+    assert "'BRK B' is not a ticker" in invalid.output

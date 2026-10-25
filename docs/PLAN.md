@@ -241,7 +241,7 @@ Adding a dependency: add it to this table in the same session and check its lice
 marketdata/
   config.py              settings (pydantic-settings)
   log.py                 structlog setup (E0)
-  cli.py                 typer CLI: ingest, backfill, extract, normalize, universe, tasks, clients, keys,
+  cli.py                 typer CLI: ingest, backfill, extract, normalize, universe, company, tasks, clients, keys,
                          webhooks, quality, stats, usage, sec (E7b adds: review, templates)
   db/
     pool.py              connection pool
@@ -1212,7 +1212,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E2-S4 Ticker changes.** As the operator, I want ticker changes handled automatically so old tickers don't break silently.
   - AC: the daily run closes rows for tickers that disappeared or moved CIK and opens new ones; tested with two snapshot fixtures.
 - **E2-S5 Capabilities.** As an API integrator, I want a clear answer when a ticker has no fundamentals so my app can say why.
-  - AC: `service.companies.capabilities(cik)` returns which data kinds apply (earnings, fundamentals) with a reason; tested for a domestic company, an ETF and a foreign issuer.
+  - AC: `service.companies.capabilities(cik)` returns which data kinds apply (earnings, fundamentals) with a reason; tested for a domestic company, an ETF and a foreign issuer. (Takes a connection first, `capabilities(conn, cik)`, D-055.)
 
 **Out of scope:** CUSIP/FIGI (E9), ETF holdings (E14).
 **Demo:** `pdm run marketdata company show <TICKER>` prints CIK, name, class, SIC, fiscal year end, tickers and capabilities.

@@ -7,6 +7,7 @@ GROUPS = [
     "sec",
     "ingest",
     "universe",
+    "company",
     "tasks",
     "backfill",
     "extract",

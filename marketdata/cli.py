@@ -25,6 +25,14 @@ from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError, SecurityOverride, UniverseEntry
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
+from marketdata.service.companies import (
+    CompanyProfile,
+    ListedSecurity,
+    ResolvedSecurity,
+    company_profile,
+    resolve_ticker,
+)
+from marketdata.service.errors import InvalidParameter, NotFound
 
 app = typer.Typer(
     help="marketdata: trusted, verified data from SEC filings. Information, not investment advice.",
@@ -36,6 +44,7 @@ _GROUPS = [
     ("sec", "Fetch from the SEC through the rate-limited client.", "E1"),
     ("ingest", "Load the security master and filings into the database.", "E2"),
     ("universe", "Load and grow the covered universe.", "E2"),
+    ("company", "Look up a company: identity, class, tickers and what data applies.", "E2"),
     ("tasks", "List, retry and purge queued tasks.", "E3"),
     ("backfill", "Load history: filings, earnings, facts, prices, insiders, funds.", "E3"),
     ("extract", "Earnings extraction and the hit-rate report.", "E7a"),
@@ -168,3 +177,58 @@ def universe_check() -> None:
         typer.echo(line)
     if check.universe.unknown:
         raise typer.Exit(1)
+
+
+@groups["company"].command("show")
+def company_show(
+    ticker: Annotated[str, typer.Argument(help="A ticker as people write it: AAPL, brk.b, BRK/B.")],
+) -> None:
+    """Show the company behind a ticker: CIK, name, class, SIC, fiscal year end, its tickers and
+    which data applies. Reads the stored security master; calls nothing outside."""
+    settings = _settings()
+
+    async def run() -> tuple[ResolvedSecurity, CompanyProfile]:
+        async with create_pool(str(settings.database_url), max_size=1) as pool:
+            async with pool.connection() as conn:
+                security = await resolve_ticker(conn, ticker)
+                return security, await company_profile(conn, security.cik)
+
+    try:
+        security, profile = asyncio.run(run())
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _profile_lines(security, profile):
+        typer.echo(line)
+
+
+def _profile_lines(security: ResolvedSecurity, profile: CompanyProfile) -> list[str]:
+    def describe(listed: ListedSecurity) -> str:
+        parts: list[str] = [listed.security_type]
+        if listed.share_class:
+            parts.append(f"class {listed.share_class}")
+        if listed.exchange:
+            parts.append(listed.exchange)
+        return f"{listed.ticker} ({', '.join(parts)})"
+
+    own = next(listed for listed in profile.securities if listed.ticker == security.ticker)
+    others = [describe(listed) for listed in profile.securities if listed is not own]
+    shown = ", ".join(others[:10]) + (f" and {len(others) - 10} more" if len(others) > 10 else "")
+    universe = "in the covered universe" if profile.in_universe else "not in the covered universe"
+    sic = " ".join(part for part in (profile.sic_code, profile.sic_description) if part)
+    lines = [
+        profile.name or "(no name: the company is listed only in the SEC fund list)",
+        f"  {'CIK':<16} {profile.cik}",
+        f"  {'Class':<16} {profile.filer_type}, {universe}",
+        f"  {'SIC':<16} {sic or '—'}",
+        f"  {'Fiscal year end':<16} {profile.fiscal_year_end or '—'} (MMDD, as the SEC gives it)",
+        f"  {'Incorporated':<16} {profile.state_of_inc or '—'}",
+        f"  {'Ticker':<16} {describe(own)}, first seen {own.listed_since}",
+        f"  {'Other tickers':<16} {shown or 'none'}",
+    ]
+    for capability in profile.capabilities.kinds:
+        verdict = "applies" if capability.applies else "doesn't apply"
+        lines.append(f"  {capability.kind.capitalize():<16} {verdict}: {capability.reason}")
+    lines.append("Information from public filings. Not investment advice.")
+    return lines
