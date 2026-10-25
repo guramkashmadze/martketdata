@@ -6,12 +6,17 @@ a retry (an exception) or TaskRefused, so ingest/ never depends on the queue.
 
 from datetime import UTC, datetime
 
+import structlog
+
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.security_master import SecurityMasterLoader, read_data_files
+from marketdata.ingest.watcher import FilingsWatcher, watch_summary
 from marketdata.normalize.security_master import SnapshotRefused
 from marketdata.normalize.universe import DataFileError
-from marketdata.tasks.kinds import SECURITY_MASTER
+from marketdata.tasks.kinds import FILINGS_WATCH, SECURITY_MASTER
 from marketdata.tasks.registry import Registry, TaskContext, TaskRefused
+
+log = structlog.get_logger(__name__)
 
 
 class SecurityMasterIncomplete(Exception):
@@ -46,8 +51,23 @@ async def load_security_master(context: TaskContext, task: Task) -> None:
         )
 
 
+async def watch_filings(context: TaskContext, task: Task) -> None:
+    """One company's filings watch (E3-S4), every 10 minutes from the scheduler."""
+    cik = _cik(task)
+    report = await FilingsWatcher(context.fetcher, context.connect, context.kinds).watch(cik)
+    log.debug("filings_watched", **watch_summary(report))
+
+
+def _cik(task: Task) -> int:
+    cik = task.payload.get("cik")
+    if isinstance(cik, bool) or not isinstance(cik, int) or cik <= 0:
+        raise TaskRefused(f"the task's payload has no CIK: {task.payload}")
+    return cik
+
+
 def build_registry() -> Registry:
     """Every kind the worker runs. The watcher routes work only to these (PLAN.md §4)."""
     registry = Registry()
     registry.register(SECURITY_MASTER, load_security_master)
+    registry.register(FILINGS_WATCH, watch_filings)
     return registry

@@ -1,9 +1,12 @@
 """Save an SEC response under tests/fixtures/sec/ for offline tests (E1-S5).
 
     pdm run python scripts/fetch_fixture.py <url> <name> [--trim]
+    pdm run python scripts/fetch_fixture.py --from-raw <raw key> <name> [--trim]
 
 The request goes through the SEC client (User-Agent, rate limit, retries), so this script
-needs SEC_USER_AGENT. `name` is a path under tests/fixtures/sec/, e.g.
+needs SEC_USER_AGENT. With --from-raw it makes no request: it copies a file already in the raw
+store (E3), with the URL and fetch time its raw_objects row records, so a fixture can be the
+exact response a past run saw. `name` is a path under tests/fixtures/sec/, e.g.
 `companyfacts/AAPL.json`. `--trim` keeps a fixture small (PLAN.md §6):
 
 - companyfacts: only the concepts in the metric catalog (PLAN.md §9.3) and the dei cover
@@ -26,9 +29,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import psycopg
+
 from marketdata.config import SettingsError, load_settings
+from marketdata.db.repositories import raw_objects
 from marketdata.sec import urls
 from marketdata.sec.client import SecClient, SecError
+from marketdata.sec.raw_store import RawStoreError, create_raw_store
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "sec"
@@ -177,36 +184,98 @@ async def fetch(
     async with SecClient.from_settings(settings) as sec:
         response = await sec.get(url)
     fetched_at = datetime.now(UTC)
-    raw = response.content
+    return save(
+        target,
+        name,
+        url,
+        response.content,
+        fetched_at,
+        trimmed=trimmed,
+        keep_recent=keep_recent,
+        since_year=since_year,
+        keep_ciks=keep_ciks,
+    )
+
+
+async def copy_from_raw(
+    key: str,
+    name: str,
+    *,
+    trimmed: bool,
+    keep_recent: int,
+    since_year: int | None,
+    keep_ciks: set[int] | None = None,
+) -> Path:
+    """Save the file at raw `key` as fixture `name`, with its raw_objects URL and fetch time."""
+    target = _target(name)
+    settings = load_settings()
+    raw = await create_raw_store(settings).get(key)
+    async with await psycopg.AsyncConnection.connect(str(settings.database_url)) as conn:
+        row = await raw_objects.get(conn, key)
+    if row is None:
+        raise ValueError(f"no raw_objects row for {key}")
+    if row.sha256 != hashlib.sha256(raw).hexdigest():
+        raise ValueError(f"{key}: the raw store's bytes don't match the raw_objects row")
+    return save(
+        target,
+        name,
+        row.url,
+        raw,
+        row.fetched_at,
+        trimmed=trimmed,
+        keep_recent=keep_recent,
+        since_year=since_year,
+        keep_ciks=keep_ciks,
+        raw_key=key,
+    )
+
+
+def save(
+    target: Path,
+    name: str,
+    url: str,
+    raw: bytes,
+    fetched_at: datetime,
+    *,
+    trimmed: bool,
+    keep_recent: int,
+    since_year: int | None,
+    keep_ciks: set[int] | None,
+    raw_key: str | None = None,
+) -> Path:
     data, rule = (
         trim(url, raw, keep_recent=keep_recent, since_year=since_year, keep_ciks=keep_ciks)
         if trimmed
         else (raw, None)
     )
-
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
-    record(
-        name,
-        {
-            "url": url,
-            "fetched_at": fetched_at.isoformat(timespec="seconds"),
-            "original_size_bytes": len(raw),
-            "original_sha256": hashlib.sha256(raw).hexdigest(),
-            "trim": rule,
-            "size_bytes": len(data),
-            "sha256": hashlib.sha256(data).hexdigest(),
-        },
-    )
+    entry: dict[str, Any] = {
+        "url": url,
+        "fetched_at": fetched_at.astimezone(UTC).isoformat(timespec="seconds"),
+        "original_size_bytes": len(raw),
+        "original_sha256": hashlib.sha256(raw).hexdigest(),
+        "trim": rule,
+        "size_bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+    if raw_key is not None:
+        entry["raw_key"] = raw_key
+    record(name, entry)
     return target
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
-        "url", help="SEC URL, e.g. https://data.sec.gov/submissions/CIK0000320193.json"
+        "url",
+        help="SEC URL, e.g. https://data.sec.gov/submissions/CIK0000320193.json; with --from-raw "
+        "a raw key, e.g. raw/sec/api/submissions/320193/20261025T161850.560938Z.json",
     )
     parser.add_argument("name", help="path under tests/fixtures/sec/, e.g. submissions/AAPL.json")
+    parser.add_argument(
+        "--from-raw", action="store_true", help="copy from the raw store; no SEC request"
+    )
     parser.add_argument("--trim", action="store_true", help="apply the endpoint's trim rule")
     parser.add_argument("--keep-recent", type=int, default=300, help="submissions rows to keep")
     parser.add_argument(
@@ -215,9 +284,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep-ciks", help="ticker lists: comma-separated CIKs whose rows to keep")
     args = parser.parse_args(argv)
     keep_ciks = {int(cik) for cik in args.keep_ciks.split(",")} if args.keep_ciks else None
+    run = copy_from_raw if args.from_raw else fetch
     try:
         target = asyncio.run(
-            fetch(
+            run(
                 args.url,
                 args.name,
                 trimmed=args.trim,
@@ -226,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
                 keep_ciks=keep_ciks,
             )
         )
-    except (SettingsError, SecError, ValueError) as exc:
+    except (SettingsError, SecError, RawStoreError, psycopg.Error, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 2 if isinstance(exc, SettingsError | ValueError) else 1
     print(f"{target.relative_to(ROOT)} ({target.stat().st_size:,} bytes)")

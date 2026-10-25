@@ -5,10 +5,14 @@ it hasn't stored. The order is fixed: the SEC client fetches, the raw store save
 then `raw_objects` records them. If the process dies between the last two steps, the file is
 kept without a row; fetching the same filing document again adds the row (same key, same
 bytes). An API response is stored under a new key each time, so it can be left without a row.
+
+`fetch_if_changed` is for polling (E3, D-059): a response with the same bytes as the version
+last processed is not stored again, and the caller doesn't parse it either.
 """
 
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -42,16 +46,41 @@ class RawFetcher:
         """
         response = await self._sec.get(url)
         fetched_at = fetched_at or datetime.now(UTC)
-        data = response.content
-        digest = sha256(data)
+        await self._keep(url, key, response.content, response.content_type, fetched_at)
+        return response.content
 
-        created = await self._store.put(key, data, response.content_type)
+    async def fetch_url(self, url: str) -> tuple[str, bytes]:
+        """Fetch and store a URL built by sec/urls.py under its standard key."""
+        fetched_at = datetime.now(UTC)
+        key = key_for_url(url, fetched_at)
+        return key, await self.fetch_and_store(url, key, fetched_at=fetched_at)
+
+    async def fetch_if_changed(self, url: str, previous_sha256: str | None) -> "Fetched":
+        """Fetch a URL built by sec/urls.py. If its bytes have `previous_sha256` (the version
+        last processed) nothing is stored; otherwise they are stored under the standard key
+        before they are returned."""
+        response = await self._sec.get(url)
+        fetched_at = datetime.now(UTC)
+        digest = sha256(response.content)
+        if digest == previous_sha256:
+            log.debug("raw_unchanged", url=url, sha256=digest)
+            return Fetched(url, digest, fetched_at, key=None, data=None)
+        key = key_for_url(url, fetched_at)
+        await self._keep(url, key, response.content, response.content_type, fetched_at)
+        return Fetched(url, digest, fetched_at, key=key, data=response.content)
+
+    async def _keep(
+        self, url: str, key: str, data: bytes, content_type: str | None, fetched_at: datetime
+    ) -> None:
+        """Save to the raw store, then record the raw_objects row."""
+        digest = sha256(data)
+        created = await self._store.put(key, data, content_type)
         row = RawObject(
             key=key,
             url=url,
             sha256=digest,
             size_bytes=len(data),
-            content_type=response.content_type,
+            content_type=content_type,
             fetched_at=fetched_at,
         )
         async with self._connect() as conn:
@@ -60,12 +89,16 @@ class RawFetcher:
             raise RawStoreError(
                 f"raw_objects says {key} has sha256 {stored.sha256}, the store holds {digest}"
             )
-
         log.info("raw_stored", key=key, url=url, size_bytes=len(data), new=created)
-        return data
 
-    async def fetch_url(self, url: str) -> tuple[str, bytes]:
-        """Fetch and store a URL built by sec/urls.py under its standard key."""
-        fetched_at = datetime.now(UTC)
-        key = key_for_url(url, fetched_at)
-        return key, await self.fetch_and_store(url, key, fetched_at=fetched_at)
+
+@dataclass(frozen=True)
+class Fetched:
+    """One fetch by `fetch_if_changed`. `key` and `data` are None when the bytes were those of
+    the version last processed, so nothing was stored."""
+
+    url: str
+    sha256: str
+    fetched_at: datetime
+    key: str | None
+    data: bytes | None

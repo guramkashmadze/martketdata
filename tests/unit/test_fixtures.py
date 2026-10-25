@@ -24,8 +24,8 @@ def load(name: str) -> Any:
 def test_every_fixture_is_in_the_manifest() -> None:
     on_disk = {
         p.relative_to(FIXTURES).as_posix()
-        for p in FIXTURES.rglob("*.json")
-        if p.name != "MANIFEST.json"
+        for p in FIXTURES.rglob("*")
+        if p.is_file() and p.name not in ("MANIFEST.json", ".gitkeep")
     }
     assert on_disk == set(MANIFEST)
 

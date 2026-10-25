@@ -9,6 +9,7 @@ from alembic.script import ScriptDirectory
 E0_TABLES = {"tasks", "clients", "api_keys", "api_requests"}
 E1_TABLES = {"raw_objects"}
 E2_TABLES = {"companies", "securities"}
+E3_TABLES = {"filings", "watch_state"}
 
 
 def _tables(url: str) -> set[str]:
@@ -19,11 +20,15 @@ def _tables(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0003(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0003"
+def test_head_is_0004(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0004"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
+    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & E3_TABLES == set()
     assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES
 
     command.downgrade(alembic_config, "-1")
@@ -38,7 +43,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) & E0_TABLES == set()
 
     command.upgrade(alembic_config, "head")
-    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES
+    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:
@@ -53,3 +58,25 @@ async def test_api_key_defaults(conn: psycopg.AsyncConnection[Any]) -> None:
         returning scope, rate_per_min, revoked_at
         """)
     assert await cur.fetchone() == ("api", 120, None)
+
+
+async def test_filings_are_keyed_by_accession_and_listing_company(
+    conn: psycopg.AsyncConnection[Any],
+) -> None:
+    insert = (
+        "insert into filings (accession_no, cik, form, filed_at) "
+        "values ('0000034088-26-000093', %s, '10-Q', '2026-08-03')"
+    )
+    await conn.execute(insert, [34088])
+    await conn.execute(insert, [2115436])  # a joint filing, listed under both registrants
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        await conn.execute(insert, [34088])
+
+
+async def test_filing_accession_numbers_are_checked(conn: psycopg.AsyncConnection[Any]) -> None:
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(
+            "insert into filings (accession_no, cik, form, filed_at) "
+            "values ('000003408826000093', 34088, '10-Q', '2026-08-03')"
+        )
