@@ -36,9 +36,17 @@ pdm run marketdata sec get <url>      # fetch through the SEC client, keep the r
 pdm run marketdata ingest security-master   # load tickers and the universe from the SEC (data/universe.csv)
 pdm run marketdata universe check     # check data/universe.csv against the stored security master
 pdm run marketdata company show <TICKER>   # CIK, name, class, SIC, fiscal year end, tickers, what data applies
+pdm run marketdata worker             # run queued tasks; the one process that calls the SEC
+pdm run marketdata scheduler          # enqueue the filings watch (every 10 minutes) and the daily security master
+pdm run marketdata backfill filings --years 5   # queue five years of filing history for the worker
+pdm run marketdata tasks list         # tasks by kind and status, with errors
+pdm run marketdata filings list <TICKER>   # a company's filings with plain-language event labels
 pdm run python scripts/fetch_fixture.py <url> <name> [--trim]   # save a test fixture
+pdm run python scripts/fetch_fixture.py --from-raw <raw key> <name>   # a fixture from the raw store, no request
 pdm add <package>                     # new dependency; also list it in docs/PLAN.md §5 with its license
 ```
+
+Only one process calls the SEC at a time: while the worker runs, `sec get` and `ingest security-master` refuse to start and say who holds the SEC slot (PLAN.md D-062).
 
 Integration tests use `TEST_DATABASE_URL`. Its database name must end in `_test`, because the tests drop and recreate its schema. They fail rather than skip when PostgreSQL is down.
 

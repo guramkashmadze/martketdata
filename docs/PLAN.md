@@ -71,7 +71,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E0 | Foundation | 1 | — | Done | 2026-10-24. PDM, black, isort and flake8 instead of uv and ruff (D-041); PostgreSQL 18 (D-040). Lint gate and 25 tests green on PostgreSQL 18 (Docker and local), and the first CI run on main is green ([run 40113361253](https://github.com/guramkashmadze/martketdata/actions/runs/40113361253), commit `a384273`) |
 | E1 | SEC client and raw store | 2 | E0 | Done | 2026-10-24. httpx2 replaces httpx (D-042); `SEC_USER_AGENT` is required only by processes that call the SEC (D-043); rate limiter with a burst of one (D-044); migration `0002` (`raw_objects`). Fixtures for AAPL, GOOGL and TGT, 2.6 MB in total (D-048). Lint gate and 216 tests green on local PostgreSQL 18; the live demo stored 14 files through `marketdata sec get`. 12 edge cases logged. CI on main is green ([run 40181002170](https://github.com/guramkashmadze/martketdata/actions/runs/40181002170), commit `3b0d6b7`), after a CLI help test was fixed for GitHub's forced colour output (§16) |
 | E2 | Security master and universe | 3 | E1, OD-3 | Done | 2026-10-25. Starter universe of 39 tickers checked against the SEC's files (D-050, resolves OD-3), extended to 74 on request (D-056); ticker rules and `data/security_overrides.csv` (D-051); filer classes, including the SIC 6221 rule for commodity ETFs (D-052); EDGAR names and migration `0003` (D-053); ticker history with a safety limit (D-054); layout and service conventions (D-055). Lint gate and 383 tests green on local PostgreSQL 18. The live load stored 39,036 securities and 9,183 companies; a second live load changed nothing. With D-056 the universe is 60 domestic filers, 9 foreign private issuers and 5 funds. 22 edge cases logged. CI on main is green ([run 40204940570](https://github.com/guramkashmadze/martketdata/actions/runs/40204940570), commit `b247eeb`) |
-| E3 | Task queue and filings watcher | 4 | E2 | Not started | Includes 13D/13G labels |
+| E3 | Task queue and filings watcher | 4 | E2 | Done | 2026-10-26. Queue in PostgreSQL with forced re-runs, backoff and fencing (D-058); `marketdata worker`, `scheduler` (APScheduler 3.11, D-065), `backfill filings`, `filings list` and `tasks list|retry|purge-done`; one process calls the SEC at a time (D-062). Migration `0004`: `filings` keyed by accession and listing company, with the listing's file number (D-060), and `watch_state`, so unchanged submissions are neither stored nor parsed (D-059). `accepted_at` comes from submissions, checked per file after the SEC served Apple's file with every time shifted (D-057). 13D/13G codes verified and labelled on the subject's listing only (D-061); §9.6 gains eight 8-K items (D-064); routing starts after a company's first watch (D-063). Lint gate and 491 tests green on local PostgreSQL 18. Live run on the dev database, 2026-10-25 21:15–21:31 UTC: `backfill filings --years 5`, then scheduler and worker for 15 minutes. The backfill and the day's security-master load (no changes) took 52 seconds: 74 submissions files and 56 older pages gave 187,005 filings of the 74 universe companies (JPMorgan 102,256), all with acceptance times. Watch rounds at 21:15 and 21:25 found every file unchanged and stored nothing. 354 SEC requests in all, no failed task and nothing logged above info; both processes stopped cleanly on SIGTERM. `filings list FUBO --form 'SCHEDULE 13D'` shows Disney's 13D with the activist label; Disney's own listing has none. 8 edge cases logged. Not pushed yet |
 | E7a | Earnings release extraction and verification (rule-based) | 5 | E3 | Not started | No LLM (D-014) |
 | E7c | Live run and track record | 6 | E7a, OD-1 | Not started | Starts the track record during the Q3 2026 season |
 | E4a | XBRL facts and reported metrics | 7 | E3 | Not started | Includes the universe growth rule (D-035) |
@@ -183,16 +183,16 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 
 | Form or trigger | Tasks enqueued | From |
 | --- | --- | --- |
-| 10-K, 10-Q, 10-K/A, 10-Q/A | `facts_refresh` (key: cik) | E4a |
-| 8-K or 8-K/A with item 2.02 | `earnings_extract` (key: accession_no) | E7a |
+| 10-K, 10-Q, 10-K/A, 10-Q/A (and transition reports) of a domestic filer | `facts_refresh` (key: cik) | E4a |
+| 8-K or 8-K/A with item 2.02 from a domestic filer | `earnings_extract` (key: accession_no) | E7a |
 | Other 8-K | none (items are stored on the `filings` row) | E3 |
-| SC 13D, SC 13G and their structured successors | none (form-level event labels, §9.6) | E3 |
-| 4, 4/A | `form4_parse` (key: accession_no) | E8 |
+| SC 13D, SC 13G and their structured successors (`SCHEDULE 13D` …, D-061) | none (form-level event labels on the subject company's listing, §9.6) | E3 |
+| 4, 4/A on the issuer's listing (no file number, D-063) | `form4_parse` (key: accession_no) | E8 |
 | 13F-HR, 13F-HR/A from a curated manager | `f13_parse` (key: accession_no) | E9 |
 | Scheduler, after the US close | `prices_eod` (key: trade date) | E10 |
 | (internal) | `webhook_deliver` (key: `event_id:dest_id`) | E5b |
 
-Only tasks whose handler is registered are enqueued, so early epics don't fill the queue with work nobody can do yet.
+Only tasks whose handler is registered are enqueued, so early epics don't fill the queue with work nobody can do yet. A company's first watch stores its filings and routes nothing, and the older pages a backfill reads never route: history goes through each epic's backfill (D-063).
 
 ---
 
@@ -220,7 +220,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Webhook signing | stdlib `hmac` / `hashlib`; secrets encrypted at rest with `cryptography` (Fernet) | Apache-2.0 / BSD (E5b) |
 | API | FastAPI + uvicorn | MIT, BSD-3 |
 | MCP | Official `mcp` Python SDK, Streamable HTTP, mounted in the FastAPI app | |
-| Scheduler | APScheduler | |
+| Scheduler | APScheduler 3.11 (D-065) | MIT; pulls in tzlocal (MIT). Only `tasks/scheduler.py` uses it; it ships no type hints, so mypy skips its imports. 4.0 is still an alpha |
 | Object storage | boto3 against the S3 API; local-folder adapter for dev | Cloudflare R2 or Backblaze B2 in production. Apache-2.0 (with botocore, s3transfer; jmespath and urllib3 MIT; python-dateutil Apache-2.0/BSD). Write-once details in D-046 |
 | Logging | structlog (JSON in live and prod, pretty in dev) | MIT/Apache-2.0. Standard-library loggers (uvicorn, alembic, psycopg) share its formatter; logs go to stderr |
 | Error tracking | sentry-sdk | Live VM and production |
@@ -406,20 +406,30 @@ create table securities (
 create unique index securities_current_ticker on securities (ticker) where valid_to is null;
 create index securities_by_cik on securities (cik);
 
--- E3
+-- E3 (migration 0004; D-060: one row per filing and listing company, with the listing's file number)
 create table filings (
-  accession_no      text primary key,
-  cik               bigint not null,          -- filer as listed in submissions (issuer or manager)
+  accession_no      text not null,
+  cik               bigint not null,          -- the company whose submissions list it (issuer, filer or manager)
   form              text not null,
   filed_at          date not null,
-  accepted_at       timestamptz,
+  accepted_at       timestamptz,              -- null when the listing's times failed the check (D-057)
   period_of_report  date,
-  items_8k          text[],                   -- e.g. '{2.02,9.01}'
+  items_8k          text[],                   -- e.g. '{2.02,9.01}'; null for forms other than 8-K
   primary_doc       text,
   is_xbrl           boolean,
-  discovered_at     timestamptz not null default now()
+  file_number       text,                     -- this listing's; '005-…' marks the subject of a 13D/13G (D-061)
+  discovered_at     timestamptz not null default now(),
+  primary key (accession_no, cik)
 );
 create index filings_by_cik on filings (cik, filed_at desc);
+
+create table watch_state (                    -- D-059: the last submissions file each company's watch processed
+  cik         bigint primary key,
+  sha256      text not null,
+  raw_key     text not null references raw_objects(key),
+  checked_at  timestamptz not null,           -- the last poll
+  changed_at  timestamptz not null            -- the last poll that found new bytes
+);
 
 -- E7a
 create table documents (
@@ -750,7 +760,8 @@ create table drafts (
 
 - 8-K earnings releases are usually Exhibit 99.1, sometimes 99 or 99.2. Some companies split the income statement across tables or put it in a later exhibit. (E7a)
 - Press release tables: units stated in a caption or header ("in millions, except per share data"), negatives in parentheses, dashes for zero or nil, `$` and `%` in separate cells, footnote markers in labels, quarter and year-to-date columns side by side. (E7a)
-- Schedules 13D and 13G: structured filings since January 2025; the form codes may differ from the old `SC 13D` / `SC 13G` (e.g. `SCHEDULE 13D`). Also check whether an issuer's submissions JSON lists them when the company is the subject rather than the filer. (E3)
+- Schedules 13D and 13G: verified in E3 (D-061). Old codes `SC 13D`, `SC 13D/A`, `SC 13G`, `SC 13G/A` until December 2024; `SCHEDULE 13D`, `SCHEDULE 13D/A`, `SCHEDULE 13G`, `SCHEDULE 13G/A` since. The subject company's submissions list them (with a `005-` file number), and so do the filer's (with none).
+- `acceptanceDateTime` in submissions is UTC, but the SEC once served a whole file with every time shifted by the Eastern offset a second time (Apple, 2026-10-24). The watcher checks each file and stores no times from a file that fails (D-057). (E3)
 - Form 4: `primaryDocument` in submissions often points at a rendered path like `xslF345X05/form4.xml`. The raw XML is usually the same filename without the `xsl…/` folder. (E8)
 - 13F: the information table is a separate XML document in the filing; find it through the filing index (type `INFORMATION TABLE`). (E9)
 - `dei:EntityPublicFloat` is reported once a year on the 10-K cover page, measured at the end of the second fiscal quarter; some filers omit it or report it oddly. The universe growth rule (D-035) must handle missing and stale values. (E4a)
@@ -852,19 +863,27 @@ Checks write flag codes into `quality_flags` and are returned by the API. **A fl
 | 1.01 | Signed a major agreement | normal |
 | 1.02 | Ended a major agreement | normal |
 | 1.03 | Bankruptcy or receivership | high |
+| 1.04 | Mine safety shutdown order or pattern of violations | normal |
 | 1.05 | Material cybersecurity incident | high |
 | 2.01 | Completed an acquisition or sale of assets | high |
 | 2.02 | Quarterly or annual results | high |
 | 2.03 | Took on a major financial obligation | normal |
+| 2.04 | An event made a financial obligation due sooner or larger | high |
 | 2.05 | Restructuring or exit costs | normal |
 | 2.06 | Material impairment | high |
 | 3.01 | Delisting notice or listing-rule issue | high |
 | 3.02 | Unregistered sale of shares | normal |
+| 3.03 | Changed the rights of shareholders | normal |
 | 4.01 | Changed auditor | normal |
 | 4.02 | Past financial statements can no longer be relied on | high |
+| 5.01 | Change in control of the company | high |
 | 5.02 | Director or executive change | normal |
 | 5.03 | Changed bylaws or fiscal year | normal |
+| 5.04 | Temporary halt on trading in employee benefit plans | normal |
+| 5.05 | Changed or waived its code of ethics | normal |
+| 5.06 | Changed its shell company status | normal |
 | 5.07 | Shareholder vote results | normal |
+| 5.08 | Set the deadline for shareholder director nominations | normal |
 | 7.01 | Regulation FD disclosure | normal |
 | 8.01 | Other events | normal |
 | 9.01 | Financial statements and exhibits | hidden (attachment-only) |
@@ -872,6 +891,8 @@ Checks write flag codes into `quality_flags` and are returned by the API. **A fl
 | Schedule 13D amendment | An investor seeking influence changed its stake | normal |
 | Schedule 13G | A passive investor holds more than 5% | normal |
 | Schedule 13G amendment | A passive 5% holder changed its stake | hidden (too frequent) |
+
+Items 1.04, 2.04, 3.03, 5.01, 5.04, 5.05, 5.06 and 5.08 were added in E3 (D-064); any other 8-K item is returned as "8-K item <code>" (normal), never dropped. Schedule 13D and 13G rows cover both form codes (`SC 13D`, `SCHEDULE 13D` …) and are shown only on the listing of the company the filing is about, whose file number starts with `005-`; the filer's own listing gets no label (D-061). Labels live in `normalize/filing_events.py`.
 
 ### 9.7 Insider trades (Form 4)
 
@@ -1099,6 +1120,7 @@ Example `earnings/latest` response body (`data` part):
 | `SEC_MAX_RPS` | `8` | E1. At most 8 (guardrail 6) |
 | `UNIVERSE_FILE` | `data/universe.csv` | E2 |
 | `SECURITY_OVERRIDES_FILE` | `data/security_overrides.csv` | E2 (D-051) |
+| `WORKER_CONCURRENCY` | `4` | E3. Tasks the worker runs at once (1–32); they share one SEC rate limit |
 | `EXTRACTION_OVERRIDES_FILE` | `data/extraction_overrides.yaml` | E7a |
 | `ALERT_EMAIL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | — | E7c |
 | `SENTRY_DSN` | — | E7c |
@@ -1223,7 +1245,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Depends on:** E2.
 
 - **E3-S1 Postgres task queue.** As a developer, I want a simple, reliable queue in the database we already have so we don't run extra infrastructure.
-  - AC: `enqueue(kind, key, payload)` deduplicates on `(kind, key)`; re-enqueueing a `done` task requires an explicit `force=True`.
+  - AC: `enqueue(kind, key, payload)` deduplicates on `(kind, key)`; re-enqueueing a `done` task requires an explicit `force=True`. (Force also queues a `dead` task again; D-058.)
   - AC: `claim()` uses `FOR UPDATE SKIP LOCKED`, sets `locked_until`; tasks whose lock expired are reclaimable.
   - AC: `fail()` reschedules with backoff; after 5 attempts status becomes `dead`. Task kinds may set their own attempt limit and backoff (webhook delivery uses 3, §9.11).
   - AC: a concurrency test with two claimers shows no task is processed twice.
@@ -1236,12 +1258,12 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E3-S4 Filings watcher.** As a user, I want new company events to show up quickly so the information is current.
   - AC: migration creates `filings` (§7).
   - AC: for each universe CIK (and, from E9, each curated manager CIK) the watcher reads submissions JSON, inserts unseen accessions with `items_8k` parsed, and enqueues routed tasks per §4 (only for registered kinds).
-  - AC: first run on a fixture inserts that company's recent filings; a second run inserts 0; a fixture with one new filing enqueues exactly the expected task.
+  - AC: first run on a fixture inserts that company's recent filings; a second run inserts 0; a fixture with one new filing enqueues exactly the expected task. (A first run routes nothing; D-063.)
 - **E3-S5 Filing history backfill.** As the operator, I want five years of filing history so the feed isn't empty on day one.
-  - AC: `pdm run marketdata backfill filings --years 5` follows `filings.files` pages.
+  - AC: `pdm run marketdata backfill filings --years 5` follows `filings.files` pages. (The command queues one task per universe company and the worker reads the pages; D-063.)
 - **E3-S6 Event labels.** As a user, I want 8-K filings and 5% stakes described in plain words so I understand what happened.
   - AC: §9.6 table in code; `service.filings` returns `events: [{item_or_form, label, importance}]` per filing; hidden items are not returned.
-  - AC: the actual Schedule 13D/13G form codes and whether issuer submissions list them are verified and recorded in §15; a fixture with a 13D filing yields the activist label.
+  - AC: the actual Schedule 13D/13G form codes and whether issuer submissions list them are verified and recorded in §15; a fixture with a 13D filing yields the activist label. (Recorded as D-061.)
 
 **Out of scope:** handlers for earnings, facts, Form 4, 13F (later epics).
 **Demo:** run scheduler and worker for 15 minutes; `pdm run marketdata filings list <TICKER> --limit 10` shows filings with event labels.
@@ -1665,6 +1687,15 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-054 | 2026-10-25 | Ticker history (§9.2, E2-S4): a load compares the current rows with the snapshot taken on its date (`as_of`). A ticker no list has any more is closed (`valid_to = as_of`); a ticker another CIK lists now is closed and opened again for that CIK; `valid_from` is the date of the first snapshot that showed the pair (the first load gives every row that day). A row opened on `as_of` itself changes in place or is deleted, since `valid_to` must be after `valid_from`. A load refuses, changing nothing, a snapshot older than the stored rows, and one that would end more than 5% of either list's current tickers (at least 50) unless run with `--force`. Companies are never deleted. A universe ticker that no list has keeps its company in the universe, found through its latest stored row, with a warning; a universe ticker that moves is followed to its new CIK, with a warning | Closed rows keep what a ticker meant on any past day, which later epics need for old filings. A cut-short list from the SEC would otherwise end thousands of tickers and reopen them the next day with new dates; unparseable and empty lists are already refused. Judging each list on its own rows stops a cut-short exchange list (10,400 rows) hiding under the fund list's 28,600. Following a moved ticker is right for a reorganisation (XOM's holding company in 2026) and wrong for a reused one (FB now belongs to a ProShares series), so the operator is told to check the file |
 | D-055 | 2026-10-25 | Code layout and conventions from E2: pure security-master code in `normalize/tickers.py`, `normalize/universe.py` and `normalize/security_master.py`, with fetching and writing in `ingest/security_master.py`; domain exceptions (`InvalidParameter`, `NotFound` so far) in `service/errors.py`; service functions take an open `AsyncConnection` as their first argument, e.g. `resolve_ticker(conn, text)`. Tests of service functions that read PostgreSQL are integration tests on rows seeded by a security-master load from fixtures; the pure rules beneath them have unit tests | `normalize/` is the package for pure transformations (§6), and the ticker and filer rules are shared by ingest and the service layer. A connection argument lets the API, MCP server and web UI share one pool and lets tests run inside a rolled-back transaction. E2-S3's acceptance criteria name unit tests; the lookup itself needs the database, so its cases (case, separators, two share classes, a closed ticker, an ETF, a foreign issuer) are integration tests in `tests/integration/test_resolve_ticker.py` |
 | D-056 | 2026-10-25 | The universe grows from 39 to 74 tickers with 35 companies Guram asked for: AMD, TEAM, AUR, BBAI, CRWV, DKNG, FIG, FUBO, GEVO, HUMA, IBM, INDI, IONQ, KLAR, MRVL, MELI, MBOT, MU, MP, NBIS, SPYI, NFLX, NU, SMR, QNT, RIVN, RBLX, CRM, SKHY, SOFI, SONY, TTWO, TMQ, U and VST. Each was checked against the SEC's files as D-050's list was; seven more he asked for were already in it (GOOGL, AMZN, INTC, MSFT, NVDA, SHOP, UNH). After the live load the classes are 60 domestic filers, 9 foreign private issuers and 5 funds. AUROW (Aurora's warrants) joins `data/security_overrides.csv`. D-050's checks stand, and growth by public float (D-035) still comes with E4a-S5 | Coverage of companies the operator follows, for demos and discovery. The cost grows with it: E3 polls 74 submissions files every 10 minutes (about 440 requests an hour, far under the limit), and E7a's four-quarter backfill grows from about 120 to about 240 releases of domestic filers before the live run. The new companies also bring edge cases: listings in 2025 and 2026 (FIG, KLAR, QNT, SKHY), small caps reporting in thousands, FuboTV's changed fiscal year and Nasdaq's warrant spelling (EDGE_CASES.md) |
+| D-057 | 2026-10-25 | `filings.accepted_at` comes from submissions `acceptanceDateTime` (UTC), checked per file (`normalize/filings.py`): a file is not trusted if any acceptance time is more than 5 minutes after it was fetched, or if more than max(3, 5%) of its filings since 2005 (leaving out filings the SEC makes itself, accession numbers 99999999…) were accepted outside 06:00–22:15 Eastern. An untrusted file's listings are stored with a null time, filled by the next file that passes; a stored time never changes, and a later file that disagrees is logged (`accepted_at_differs`). E7a takes an earnings release's own `accepted_at` from the filing index page it fetches anyway and compares. Resolves the E1 follow-up | The four accessions agree with their index pages in every fetch since 2026-10-25. E1's "+8 h" was one bad copy: on 2026-10-24 the SEC served Apple's whole submissions JSON, and its page 001, with every time late by the Eastern offset (4 h in summer, 5 in winter), and corrected it the next day without changing another byte. That file had 653 of its 994 filings outside EDGAR's hours; the other 288 stored files (95 companies) had at most 1. Index pages for every filing would cost about 600,000 requests for a five-year backfill (JPMorgan alone 130,000) |
+| D-058 | 2026-10-25 | Task queue rules (E3-S1, S2): a task is unique by (kind, key); enqueueing returns the existing task while it is queued, running or waiting to retry, and a done or dead task runs again only with `force=True` (new payload, fresh attempt count). Keys: `filings_watch` and `filings_backfill` by CIK, enqueued with force; `security_master` by date, without force, so a refused load stays dead and the next day's is a new task. Default retries: 5 attempts, waiting 1, 5, 15 and 60 minutes; kinds may set their own. A claim locks a task for 5 minutes and the worker renews the lock every minute; the attempt count fences a worker whose lock ran out. A handler raises `TaskRefused` when retrying can't help: the task is dead at once and logged as an error (`task_dead`). SIGTERM stops claiming and waits up to 60 seconds; attempts still running go back to the queue without counting. Resolves the E0 follow-up on re-runs | Stable keys keep periodic work to one row per company or day and stop it from piling up when the worker is slow. Waits that grow to an hour ride out an SEC outage without hammering it. Fencing makes a slow worker's late result harmless, and every handler is an idempotent upsert anyway |
+| D-059 | 2026-10-25 | The watcher stores a submissions response only when its bytes differ from the file it processed last (`watch_state`, migration 0004); an unchanged file is neither stored nor parsed, and only its check time is recorded. Narrows D-047 ("every response is stored") for polling | Polling the 74 universe companies every 10 minutes fetches 15.1 MB a poll: storing every response would be 2.2 GB a day, about 790 GB a year. Storing changed files only is about 53 GB a year (20,284 versions: one per 10-minute window with an acceptance in the year to 2026-10-24), 50 GB of it JPMorgan (10,756 versions of 4.66 MB). Gzip at rest would make it 5.6 GB, and conditional requests would save bandwidth (§16) |
+| D-060 | 2026-10-25 | `filings` (§7) is keyed by (accession_no, cik): one row per filing and listing company, with the listing's `file_number` (migration 0004). `cik` is the company whose submissions list the filing. Resolves the E2 follow-up | 29 accessions in the universe's recent filings (37 after the five-year backfill) are listed under two universe companies, e.g. Disney's 13D on FuboTV, Berkshire's 13G on Apple, Amazon's filings on Rivian, NVIDIA's on CoreWeave. XOM's 10-Q 0000034088-26-000093 is one filing by two co-registrants. Listings of one filing differ only in act, file number and film number, and the file number tells a 13D's subject from its filer (D-061) |
+| D-061 | 2026-10-25 | Schedule 13D and 13G (E3-S6): universe submissions use `SC 13D`, `SC 13D/A`, `SC 13G`, `SC 13G/A` (to 2024-12-16) and `SCHEDULE 13D`, `SCHEDULE 13D/A`, `SCHEDULE 13G`, `SCHEDULE 13G/A` (13G/A from 2024-07-08, 13D from 2024-12-18); both sets are labelled. An issuer's submissions list the 13D and 13G filed about it, and the filer's list them too. The subject company's listing has act 34 and a `005-` file number, the filer's has neither (1,969 and 597 listings, no exception), so the §9.6 labels are returned only for a listing whose file number starts with `005-` | The labels describe the filing from the side of the company whose shares were bought; on the filer's page ("An investor crossed 5%…" on Disney's page, about Disney's own stake in FuboTV) they would be wrong. Checked on the stored submissions of all 74 universe companies, 2026-10-25 |
+| D-062 | 2026-10-25 | One process calls the SEC at a time: the worker, `marketdata sec get` and `marketdata ingest security-master` hold a PostgreSQL advisory lock (the SEC slot) while they run, and a second refuses to start and names the holder. `scripts/fetch_fixture.py` has no database, so it stays a rule (don't run it beside the worker); its new `--from-raw` option copies a stored response without any request. Resolves the E1-S1 follow-up | The rate limit is a token bucket per process (D-044), so two processes would together exceed 8 requests a second, and a 403 block on an earnings night would cost the track record. A lock on the existing database needs no shared limiter; advisory locks belong to one database, so the tests never block the dev database |
+| D-063 | 2026-10-25 | Routing and history (E3-S4, S5; §4): a company's first watch stores its recent filings and routes nothing; history goes through each epic's backfill. Later new filings route `facts_refresh` for the 10-K and 10-Q family (with transition reports) and `earnings_extract` for an 8-K or 8-K/A with item 2.02, both for domestic filers only (§9.1); `form4_parse` for 4 and 4/A only on the issuer's listing (no file number); `f13_parse` only for curated managers (E9). Filings are inserted and their tasks enqueued in one transaction, under a lock per company. `marketdata backfill filings --years N` queues one task per universe company with its start date; the worker watches the company, then reads the older pages back to that date, and pages never route | Without a first-watch baseline, the first poll would enqueue every earnings 8-K in each company's recent window (Apple's goes back to 2015). Forms 3, 4 and 5 are the reverse of 13D/13G: issuer listings have no file number (29,694), a reporting owner's has the issuer's (282; Berkshire 159), so the issuer's listing is the one to parse. The backfill runs in the worker so the SEC is called from one process (D-062) |
+| D-064 | 2026-10-25 | §9.6 gains the eight 8-K items it lacked: 1.04 mine safety, 2.04 an obligation made due sooner or larger (high), 3.03 changed rights of shareholders, 5.01 change in control (high), 5.04 trading halt in benefit plans, 5.05 code of ethics, 5.06 shell company status, 5.08 deadline for director nominations. Any other item is returned as "8-K item <code>" (normal), never dropped | They occur in universe filings: 3.03 in 43, 5.01 in 15 (FuboTV's change in control on 2025-10-30), 5.08 in 8, 5.06 in 6, 5.04 in 4, 5.05 in 3, 1.04 and 2.04 once each. Dropping them would hide a change in control |
+| D-065 | 2026-10-25 | Scheduler (E3-S3): APScheduler 3.11.3 (MIT; pulls in tzlocal 5.4.5, MIT) in `tasks/scheduler.py` only, with a mypy override because it ships no type hints. The scheduler process only enqueues: `filings_watch` for each universe company every 10 minutes and at start, and `security_master` daily at 06:00 UTC, or at start when started later that day. The `security_master` task wraps E2's load: a refused snapshot (D-054) or a broken universe file is `TaskRefused`; a company whose submissions failed makes the task retry | §5 already named APScheduler; 3.11.3 came out on 2026-06-28 and 4.0 is still an alpha (4.0.0a6, 2025). Enqueueing at start means a restarted scheduler doesn't wait 10 minutes or skip the day's load |
 
 ---
 
@@ -1721,6 +1752,18 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-25 | E2 live run | The first live `marketdata ingest security-master` failed on its first SEC request after the client's five attempts (about 23 s). Its message was lost because that run's stderr was discarded; the next run, an hour later, worked. Transient SEC failures happen: E3's queue retries tasks, and E7c's alerts should cover a security-master load that keeps failing | E3, E7c |
 | 2026-10-25 | E2 live run | Likely cause of that failure: on a later live load the first request to www.sec.gov timed out on connect (`sec_retry … error='ConnectTimeout'`) and the retry a second later worked. E3 and E7c should expect connect timeouts on the first request of a run | E3, E7c |
 | 2026-10-25 | E2 (D-056) | FuboTV moved its fiscal year end to September after a change in control in 2025: its latest 10-K covers 2024, followed only by 10-Qs. E4a's period logic must handle a changed fiscal year end and its transition period | E4a |
+| 2026-10-25 | E3 | Done: how a finished task runs again (E0 follow-up): `force=True` queues a done or dead task again (D-058) | — |
+| 2026-10-25 | E3 | Done: the source of `filings.accepted_at` (E1 follow-up): submissions `acceptanceDateTime`, checked per file (D-057) | — |
+| 2026-10-25 | E3 | Done: one process calls the SEC at a time (E1-S1 follow-up): the SEC slot lock (D-062) | — |
+| 2026-10-25 | E3 | Done: polling volume (E2-S2 follow-up): unchanged submissions files are neither stored nor parsed (D-059); one accession under two CIKs (E2-S4 follow-up): `filings` is keyed by (accession_no, cik) (D-060); transient SEC failures (E2 live run): the queue retries tasks (D-058) | — |
+| 2026-10-25 | E3-S4 (D-057) | E7a should take `earnings_releases.accepted_at` from the filing index page's Eastern "Accepted" time (converted with zoneinfo), compare it with `filings.accepted_at`, and log a mismatch as an edge case | E7a |
+| 2026-10-25 | E3 (D-059) | Raw store growth: submissions alone are about 53 GB a year (JPMorgan 50 GB). Compress stored API responses (gzip: about 5.6 GB a year), or put the live run's raw store on R2/B2 from the start | E7c, E11 |
+| 2026-10-25 | E3 (D-059) | Conditional requests (If-Modified-Since or ETag) would cut polling traffic, about 2.2 GB a day uncompressed; `SecClient` would need request and response headers, and data.sec.gov's 304 support must be checked first | E11 |
+| 2026-10-25 | E3-S1 | The queue is first in, first out: a large backfill queued before an earnings 8-K delays it. Add a priority (live work before backfills) before E7a's backfill and the live run share the queue | E7a, E7c |
+| 2026-10-25 | E3-S2 | The worker logs one httpx2 INFO line per SEC request (444 an hour from watches alone): lower the `httpx2` logger (see the E1 follow-up) | E7c |
+| 2026-10-25 | E3-S6 (D-061) | A company's own stake filings (Disney's 13D on FuboTV, Berkshire's 13G on Apple) have no label on its page: one of their own ("Reported its stake in <company>") needs the subject's name or CIK from the filing's header or `primary_doc.xml` | E5a or later |
+| 2026-10-25 | E3-S4 (D-063) | E8: parse Form 4 from the issuer's listing (no file number); a listing with a file number is the company's own trade in another company's shares | E8 |
+| 2026-10-25 | E3 | The watcher polls only universe CIKs, so a predecessor's CIK (XOM's 34088) isn't watched; covered by the E2-S4 predecessor follow-up | E4a, E7a |
 
 ---
 
