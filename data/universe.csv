@@ -38,3 +38,38 @@ TSM,Foreign private issuer (20-F and 6-K); NYSE ticker TSM and OTC ticker TSMWF 
 TM,Foreign private issuer with a March 31 year end (20-F)
 RY,Canadian bank filing 40-F; October 31 year end; 4423 filings in one year (mostly 424B2)
 BABA,Foreign private issuer (20-F) whose submissions have no fiscalYearEnd; three tickers on its CIK
+AMD,Added on request; semiconductors; 52/53-week year ending the last Saturday of December (fiscalYearEnd 1226)
+TEAM,Added on request; June 30 year end; reports in thousands; formerly Atlassian Corp Plc (until 2022)
+AUR,Added on request; Class A common plus warrants AUROW in Nasdaq's spelling (typed by an override)
+BBAI,Added on request; reports in thousands; warrants BBAI-WT on its CIK
+CRWV,Added on request; reports in thousands
+DKNG,Added on request; reports in thousands
+FIG,Added on request; listed in 2025; reports in thousands
+FUBO,Added on request; year end moved to September after a change in control in 2025; latest 10-K covers 2024
+GEVO,Added on request; small cap reporting in thousands
+HUMA,Added on request; biotech reporting in thousands
+IBM,Added on request; December year end; reports in millions
+INDI,Added on request; semiconductors; reports in thousands
+IONQ,Added on request; reports in thousands
+KLAR,Added on request; foreign private issuer (United Kingdom; 20-F) listed in 2025
+MRVL,Added on request; year ends near January 31 (fiscalYearEnd 0130); millions with one decimal
+MELI,Added on request; files 10-K; reports in millions
+MBOT,Added on request; micro cap reporting in thousands
+MU,Added on request; 52/53-week year ending near August 31 (fiscal 2026 ended 2026-09-03)
+MP,Added on request; reports in thousands
+NBIS,Added on request; foreign private issuer (Netherlands; 20-F) with no fiscalYearEnd; formerly Yandex N.V.
+SPYI,Added on request; ETF of NEOS ETF Trust in the SEC fund list
+NFLX,Added on request; reports in thousands
+NU,Added on request; foreign private issuer (Cayman Islands; 20-F; SIC 6199)
+SMR,Added on request; reports in thousands
+QNT,Added on request; listed in 2026 with one 10-Q and no 10-K yet; reports in thousands
+RIVN,Added on request; December year end; reports in millions
+RBLX,Added on request; reports in thousands
+CRM,Added on request; January 31 year end
+SKHY,Added on request; Korean issuer listed in 2026: only 6-K filings so far (no 20-F yet)
+SOFI,Added on request; SIC 6199 (finance services); reports in thousands
+SONY,Added on request; foreign private issuer with a March 31 year end (20-F)
+TTWO,Added on request; March 31 year end; millions with one decimal
+TMQ,Added on request; British Columbia company filing 10-K and 10-Q; November 30 year end
+U,Added on request; one-letter ticker; reports in thousands
+VST,Added on request; utility (SIC 4911)
