@@ -66,6 +66,26 @@
     "sha256": "e1ec652f4d1894183c086930b2e7fe9e537e1bad0d2409fcd3438ad825599559",
     "raw_key": "raw/sec/1652044/0001652044-26-000071/0001652044-26-000071-index.htm"
   },
+  "filings/320193/0000320193-26-000018/0000320193-26-000018-index.htm": {
+    "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/0000320193-26-000018-index.htm",
+    "fetched_at": "2026-10-24T18:20:40+00:00",
+    "original_size_bytes": 10624,
+    "original_sha256": "e4f5b532e6646015ee8abbfe4b34873124381f7909ed59e49ef5422c0cccf6f8",
+    "trim": null,
+    "size_bytes": 10624,
+    "sha256": "e4f5b532e6646015ee8abbfe4b34873124381f7909ed59e49ef5422c0cccf6f8",
+    "raw_key": "raw/sec/320193/0000320193-26-000018/0000320193-26-000018-index.htm"
+  },
+  "filings/320193/0000320193-26-000018/a8-kex991q3202606272026.htm": {
+    "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/a8-kex991q3202606272026.htm",
+    "fetched_at": "2026-10-24T18:21:43+00:00",
+    "original_size_bytes": 173591,
+    "original_sha256": "c1ec3d99236b453e6ef8a28433cc3995650e29ded4cf920f6432bfa675d73e2a",
+    "trim": null,
+    "size_bytes": 173591,
+    "sha256": "c1ec3d99236b453e6ef8a28433cc3995650e29ded4cf920f6432bfa675d73e2a",
+    "raw_key": "raw/sec/320193/0000320193-26-000018/a8-kex991q3202606272026.htm"
+  },
   "submissions/AAPL-20261025.json": {
     "url": "https://data.sec.gov/submissions/CIK0000320193.json",
     "fetched_at": "2026-10-25T16:18:50+00:00",

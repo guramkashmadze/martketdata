@@ -42,30 +42,31 @@ def test_fixture_matches_its_manifest_entry(name: str) -> None:
         assert entry["sha256"] == entry["original_sha256"]
 
 
-# E1's fixtures (D-048); E3's: index pages, copies from the raw store and 13D examples.
+# E1's fixtures (D-048); E3's: index pages, copies from the raw store and 13D examples; E7a's:
+# earnings filings (index pages and press releases) under filings/{cik}/{accession}/.
 E1_FIXTURES = {
     f"{kind}/{ticker}.json" for kind in ("companyfacts", "submissions") for ticker, *_ in COMPANIES
 }
+E7A_FIXTURES = {name for name in MANIFEST if name.startswith("filings/")}
 E3_FIXTURES = {
     name
     for name, entry in MANIFEST.items()
-    if name.startswith("filing_index/") or "raw_key" in entry
+    if name not in E7A_FIXTURES and (name.startswith("filing_index/") or "raw_key" in entry)
 }
+
+
+def _size(names: set[str]) -> int:
+    return sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name in names)
 
 
 def test_fixture_folder_stays_small() -> None:
     total = sum(p.stat().st_size for p in FIXTURES.rglob("*") if p.is_file())
     assert total < 20 * 1024 * 1024  # PLAN.md §6, all epics together
-    e1 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name in E1_FIXTURES)
-    assert e1 < 3 * 1024 * 1024  # E1's share
-    e3 = sum(entry["size_bytes"] for name, entry in MANIFEST.items() if name in E3_FIXTURES)
-    assert e3 < 1.5 * 1024 * 1024  # E3's share
-    e2 = sum(
-        entry["size_bytes"]
-        for name, entry in MANIFEST.items()
-        if name not in E1_FIXTURES and name not in E3_FIXTURES
-    )
-    assert e2 < 1.5 * 1024 * 1024  # E2's share
+    assert _size(E1_FIXTURES) < 3 * 1024 * 1024  # E1's share
+    assert _size(E3_FIXTURES) < 1.5 * 1024 * 1024  # E3's share
+    assert _size(E7A_FIXTURES) < 12 * 1024 * 1024  # E7a's share
+    e2 = set(MANIFEST) - E1_FIXTURES - E3_FIXTURES - E7A_FIXTURES
+    assert _size(e2) < 1.5 * 1024 * 1024  # E2's share
 
 
 @pytest.mark.parametrize(("ticker", "cik", "fy_end_month"), COMPANIES)

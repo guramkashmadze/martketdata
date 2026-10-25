@@ -203,7 +203,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Language | Python 3.15 | Type hints everywhere (D-001, D-049). Pinned to the minor version (`>=3.15,<3.16`); moving to a newer one is a new decision |
 | Packaging | PDM + `pyproject.toml` (D-041); build backend hatchling | `pdm.lock` committed; in-project `.venv`; Python 3.15 from the system (Homebrew `python@3.15` on macOS). PDM MIT, hatchling MIT |
 | Lint and format | black (format), isort (imports), flake8 with flake8-bugbear, flake8-simplify, pep8-naming, flake8-async, flake8-datetimez (D-041) | `pdm run lint` checks; `pdm run fmt` fixes. Settings in `pyproject.toml` and `.flake8`. All MIT |
-| Types | mypy `--strict`, with the pydantic plugin; `types-boto3[s3]` for boto3 | CI gate. MIT |
+| Types | mypy `--strict`, with the pydantic plugin; `types-boto3[s3]` for boto3; `types-lxml` for lxml (E7a) | CI gate. MIT; types-lxml Apache-2.0 (dev only; pulls cssselect BSD-3, beautifulsoup4 MIT, soupsieve MIT, types-html5lib Apache-2.0) |
 | Tests | pytest, pytest-asyncio; httpx2 for FastAPI's TestClient; moto (in-process S3) for the S3 raw store | No network in unit tests. MIT, Apache-2.0; moto Apache-2.0 (dev only) |
 | CLI | typer | Entry point `marketdata`. MIT |
 | HTTP client | httpx2 (async), D-042 | pydantic's maintained fork of httpx, same API. BSD-3; pulls in httpcore2 (BSD-3) and truststore (MIT: certificates from the OS trust store) |
@@ -213,7 +213,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | DB driver | psycopg 3 + psycopg_pool | Plain SQL in `db/repositories/` (Dapper style). LGPL-3.0, used as an unmodified library: allowed (not AGPL) |
 | Migrations | Alembic, SQL written with `op.execute` | MIT. Pulls in SQLAlchemy (MIT) only as its migration runner; our code uses no ORM |
 | Models and config | Pydantic v2, pydantic-settings | MIT |
-| XML / HTML | lxml; selectolax for HTML-to-text | Press release tables parsed with lxml (E7a) |
+| XML / HTML | lxml 6.1 (E7a, D-066) | Press release tables and text from one lxml parse; selectolax is not used. BSD-3 (bundles libxml2 and libxslt, MIT). Wheels for Python 3.15 on macOS and Linux |
 | HTML pages and templates | Jinja2: proof pages (E5b), web UI (E15), sandboxed client templates (E7b) | BSD-3 |
 | Web UI interactivity | htmx for server-rendered partials, Chart.js for charts; both vendored as static files with pinned versions | Permissive (BSD-family, MIT); verify in E15 (D-034) |
 | Prices | `PriceProvider` interface; first real adapter per OD-4 | E10 (D-031) |

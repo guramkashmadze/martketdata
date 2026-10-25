@@ -10,6 +10,7 @@ dependencies = [
     "boto3>=1.43",           # S3RawStore (R2 or B2 in production)
     "fastapi>=0.115",
     "httpx2>=2.16",          # SEC client; also what Starlette's TestClient uses (D-042)
+    "lxml>=6.1",             # press release tables and text (E7a)
     "psycopg[binary]>=3.2",
     "psycopg-pool>=3.2",
     "pydantic>=2.9",
@@ -38,6 +39,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "types-boto3[s3]>=1.43",  # boto3 types for mypy --strict
+    "types-lxml>=2026.2",     # lxml types for mypy --strict
 ]
 
 [build-system]
