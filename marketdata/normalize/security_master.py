@@ -1,7 +1,9 @@
-"""SEC ticker lists into one snapshot of current tickers (PLAN.md §9.2, D-051).
+"""The security master from SEC files: current tickers, company details and filer classes
+(PLAN.md §9.1-§9.2, D-051 to D-053).
 
-Pure: functions take the bytes of SEC files and return records. ingest/security_master.py
-fetches the files (raw store first) and stores the result.
+Pure: functions take the bytes of SEC files and stored rows, and return records and the
+changes to make. ingest/security_master.py fetches the files (raw store first) and applies
+the changes.
 
 - `company_tickers_exchange.json` lists operating companies, ETFs organised as trusts and
   foreign issuers: cik, name, ticker, exchange.
@@ -14,16 +16,37 @@ SpaceX there and an old fund series in the fund list). Entries that can't be tic
 """
 
 import json
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal
+from datetime import date
+from typing import Any, Literal, Protocol
 
 from marketdata.normalize.tickers import SecurityType, TickerError, canonical_ticker, ticker_type
 from marketdata.normalize.universe import SecurityOverride
 
 ListSource = Literal["exchange", "fund"]
+FilerType = Literal["domestic", "foreign_private_issuer", "fund", "other", "unknown"]
+FILER_TYPES: tuple[FilerType, ...] = (
+    "domestic",
+    "foreign_private_issuer",
+    "fund",
+    "other",
+    "unknown",
+)
 EXCHANGE_FIELDS = ("cik", "name", "ticker", "exchange")
 FUND_FIELDS = ("cik", "seriesId", "classId", "symbol")
+
+# Periodic reports, which decide a filer's class (D-052).
+DOMESTIC_FORMS = frozenset(
+    {"10-K", "10-K/A", "10-Q", "10-Q/A", "10-KT", "10-KT/A", "10-QT", "10-QT/A"}
+)
+FPI_FORMS = frozenset({"20-F", "20-F/A", "40-F", "40-F/A"})
+FUND_FORMS = frozenset({"N-CSR", "N-CSR/A", "N-CSRS", "N-CSRS/A", "NPORT-P", "NPORT-P/A"})
+# "Commodity Contracts Brokers & Dealers": exchange-traded commodity trusts and pools (GLD,
+# IBIT, USO) file 10-K and 10-Q under it, but never report results under 8-K item 2.02.
+COMMODITY_POOL_SIC = "6221"
+_MMDD = re.compile(r"^(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$")
 
 
 class SecFileError(ValueError):
@@ -217,3 +240,290 @@ def _table(data: bytes, fields: tuple[str, ...], name: str) -> list[tuple[int, d
 
 def _is_cik(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+@dataclass(frozen=True)
+class Filing:
+    form: str
+    filed: date
+    items: tuple[str, ...]  # 8-K items, e.g. ("2.02", "9.01")
+
+
+@dataclass(frozen=True)
+class CompanyDetails:
+    """What a company's submissions JSON says about it."""
+
+    cik: int
+    name: str
+    sic_code: str | None
+    sic_description: str | None
+    fiscal_year_end: str | None  # 'MMDD' as the SEC gives it; not the latest reported year end
+    state_of_inc: str | None
+    filings: tuple[Filing, ...]  # filings.recent, newest first: at least a year of filings
+
+
+def parse_submissions(data: bytes) -> CompanyDetails:
+    """Company details and recent filings; empty strings become None (MNST's state, a fund's
+    SIC)."""
+    try:
+        document = json.loads(data)
+    except ValueError as exc:
+        raise SecFileError(f"submissions JSON is not JSON: {exc}") from None
+    if not isinstance(document, dict):
+        raise SecFileError("submissions JSON: expected an object")
+    cik, name = document.get("cik"), document.get("name")
+    if not (isinstance(cik, str) and cik.isdigit() and int(cik) > 0) or not (
+        isinstance(name, str) and name.strip()
+    ):
+        raise SecFileError(f"submissions JSON has no usable cik and name: {cik!r}, {name!r}")
+    filings = document.get("filings")
+    recent = filings.get("recent") if isinstance(filings, dict) else None
+    if not isinstance(recent, dict):
+        raise SecFileError(f"submissions JSON for CIK {int(cik)} has no filings.recent")
+    return CompanyDetails(
+        cik=int(cik),
+        name=name.strip(),
+        sic_code=_text(document.get("sic")),
+        sic_description=_text(document.get("sicDescription")),
+        fiscal_year_end=_mmdd(document.get("fiscalYearEnd")),
+        state_of_inc=_text(document.get("stateOfIncorporation")),
+        filings=_recent_filings(recent, int(cik)),
+    )
+
+
+@dataclass(frozen=True)
+class Classification:
+    filer_type: FilerType
+    reason: str  # the evidence, e.g. "10-Q filed 2026-07-31"
+
+
+def classify_filer(details: CompanyDetails | None, *, in_fund_list: bool) -> Classification:
+    """§9.1 and D-052: the fund list, then the newest periodic report in the recent filings."""
+    if in_fund_list:
+        return Classification("fund", "listed in company_tickers_mf.json")
+    if details is None:
+        return Classification("unknown", "submissions not loaded")
+    periodic = next(
+        (f for f in details.filings if f.form in DOMESTIC_FORMS | FPI_FORMS | FUND_FORMS), None
+    )
+    if periodic is not None:
+        filed = f"{periodic.form} filed {periodic.filed.isoformat()}"
+        if periodic.form in FPI_FORMS:
+            return Classification("foreign_private_issuer", filed)
+        if periodic.form in FUND_FORMS:
+            return Classification("fund", filed)
+        if details.sic_code == COMMODITY_POOL_SIC and not _reports_results(details):
+            return Classification(
+                "fund",
+                f"{filed}; SIC {COMMODITY_POOL_SIC} and no 8-K item 2.02: an exchange-traded "
+                "commodity trust or pool",
+            )
+        return Classification("domestic", filed)
+    six_k = next((f for f in details.filings if f.form in ("6-K", "6-K/A")), None)
+    if six_k is not None:
+        return Classification("foreign_private_issuer", f"{six_k.form} filed {six_k.filed}")
+    return Classification(
+        "other", "no 10-K, 10-Q, 20-F, 40-F, 6-K, N-CSR or N-PORT in its recent filings"
+    )
+
+
+def _reports_results(details: CompanyDetails) -> bool:
+    return any(f.form in ("8-K", "8-K/A") and "2.02" in f.items for f in details.filings)
+
+
+class StoredCompany(Protocol):
+    """A companies row as the repository returns it."""
+
+    @property
+    def cik(self) -> int: ...
+    @property
+    def name(self) -> str | None: ...
+    @property
+    def sic_code(self) -> str | None: ...
+    @property
+    def sic_description(self) -> str | None: ...
+    @property
+    def fiscal_year_end(self) -> str | None: ...
+    @property
+    def state_of_inc(self) -> str | None: ...
+    @property
+    def filer_type(self) -> FilerType: ...
+    @property
+    def in_universe(self) -> bool: ...
+
+
+@dataclass(frozen=True)
+class CompanyRow:
+    """A companies row as a load writes it (updated_at is the database's)."""
+
+    cik: int
+    name: str | None
+    sic_code: str | None
+    sic_description: str | None
+    fiscal_year_end: str | None
+    state_of_inc: str | None
+    filer_type: FilerType
+    in_universe: bool
+
+
+@dataclass(frozen=True)
+class UniverseCompany:
+    cik: int
+    details: CompanyDetails | None  # None when its submissions could not be loaded
+    classification: Classification
+
+
+def plan_companies(
+    stored: Mapping[int, StoredCompany],
+    listed: Mapping[int, ListedCompany],
+    universe: Mapping[int, UniverseCompany],
+) -> tuple[list[CompanyRow], list[CompanyRow]]:
+    """The companies rows to add and to change, so that an unchanged input writes nothing.
+
+    Universe companies take name, details and class from their submissions (D-052, D-053);
+    if those could not be loaded, what is stored stays. Other companies take the exchange
+    list's name; their details and class stay as stored, except that the fund list makes a
+    company a fund. A company that is no longer listed anywhere is kept, out of the universe.
+    """
+    added: list[CompanyRow] = []
+    changed: list[CompanyRow] = []
+    for cik in sorted(set(stored) | set(listed) | set(universe)):
+        current = stored.get(cik)
+        base = (
+            CompanyRow(cik, None, None, None, None, None, "unknown", False)
+            if current is None
+            else CompanyRow(
+                cik,
+                current.name,
+                current.sic_code,
+                current.sic_description,
+                current.fiscal_year_end,
+                current.state_of_inc,
+                current.filer_type,
+                current.in_universe,
+            )
+        )
+        row = replace(base, in_universe=cik in universe)
+        listing = listed.get(cik)
+        member = universe.get(cik)
+        if member is not None and member.details is not None:
+            details = member.details
+            row = replace(
+                row,
+                name=details.name,
+                sic_code=details.sic_code,
+                sic_description=details.sic_description,
+                fiscal_year_end=details.fiscal_year_end,
+                state_of_inc=details.state_of_inc,
+            )
+        elif (
+            listing is not None
+            and listing.name is not None
+            and (member is None or row.name is None)
+        ):
+            row = replace(row, name=listing.name)
+        if member is not None and member.classification.filer_type != "unknown":
+            row = replace(row, filer_type=member.classification.filer_type)
+        elif listing is not None and listing.in_fund_list:
+            row = replace(row, filer_type="fund")
+        if current is None:
+            added.append(row)
+        elif row != base:
+            changed.append(row)
+    return added, changed
+
+
+class StoredSecurity(Protocol):
+    """A current securities row as the repository returns it."""
+
+    @property
+    def security_id(self) -> int: ...
+    @property
+    def cik(self) -> int: ...
+    @property
+    def ticker(self) -> str: ...
+    @property
+    def security_type(self) -> SecurityType: ...
+    @property
+    def exchange(self) -> str | None: ...
+    @property
+    def share_class(self) -> str | None: ...
+    @property
+    def valid_from(self) -> date: ...
+
+
+@dataclass(frozen=True)
+class SecurityUpdate:
+    """A current row whose type, class or exchange changed; its ticker and CIK did not."""
+
+    security_id: int
+    listing: Listing
+
+
+@dataclass(frozen=True)
+class SecurityChanges:
+    opened: tuple[Listing, ...]  # tickers no current row has
+    updated: tuple[SecurityUpdate, ...]
+    unchanged: int
+    stale: tuple[StoredSecurity, ...]  # current rows the snapshot lists elsewhere or not at all
+
+
+def diff_securities(
+    current: Sequence[StoredSecurity], snapshot: Mapping[str, Listing]
+) -> SecurityChanges:
+    """Compare the current rows with a snapshot of the SEC lists."""
+    by_ticker = {row.ticker: row for row in current}
+    opened: list[Listing] = []
+    updated: list[SecurityUpdate] = []
+    unchanged = 0
+    for ticker, listing in sorted(snapshot.items()):
+        row = by_ticker.get(ticker)
+        if row is None:
+            opened.append(listing)
+        elif row.cik != listing.cik:
+            continue  # stale: the ticker moved to another CIK
+        elif (row.security_type, row.share_class, row.exchange) != (
+            listing.security_type,
+            listing.share_class,
+            listing.exchange,
+        ):
+            updated.append(SecurityUpdate(row.security_id, listing))
+        else:
+            unchanged += 1
+    stale = tuple(
+        row for row in current if row.ticker not in snapshot or snapshot[row.ticker].cik != row.cik
+    )
+    return SecurityChanges(tuple(opened), tuple(updated), unchanged, stale)
+
+
+def _recent_filings(recent: dict[str, Any], cik: int) -> tuple[Filing, ...]:
+    forms, dates = recent.get("form"), recent.get("filingDate")
+    items = recent.get("items")
+    if not isinstance(forms, list) or not isinstance(dates, list) or len(forms) != len(dates):
+        raise SecFileError(f"submissions JSON for CIK {cik}: form and filingDate don't align")
+    if not isinstance(items, list) or len(items) != len(forms):
+        items = [""] * len(forms)
+    filings = []
+    for form, filed, item in zip(forms, dates, items, strict=True):
+        try:
+            filed_on = date.fromisoformat(filed)
+        except TypeError, ValueError:
+            raise SecFileError(
+                f"submissions JSON for CIK {cik}: bad filingDate {filed!r}"
+            ) from None
+        codes = (
+            tuple(code.strip() for code in item.split(",") if code.strip())
+            if isinstance(item, str)
+            else ()
+        )
+        filings.append(Filing(str(form), filed_on, codes))
+    # The SEC lists the newest first; sorting makes that a guarantee.
+    return tuple(sorted(filings, key=lambda filing: filing.filed, reverse=True))
+
+
+def _text(value: object) -> str | None:
+    return (value.strip() or None) if isinstance(value, str) else None
+
+
+def _mmdd(value: object) -> str | None:
+    return value if isinstance(value, str) and _MMDD.match(value) else None

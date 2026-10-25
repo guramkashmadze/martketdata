@@ -8,6 +8,7 @@ from alembic.script import ScriptDirectory
 
 E0_TABLES = {"tasks", "clients", "api_keys", "api_requests"}
 E1_TABLES = {"raw_objects"}
+E2_TABLES = {"companies", "securities"}
 
 
 def _tables(url: str) -> set[str]:
@@ -18,11 +19,15 @@ def _tables(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0002(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0002"
+def test_head_is_0003(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0003"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
+    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & E2_TABLES == set()
     assert _tables(migrated_database) >= E0_TABLES | E1_TABLES
 
     command.downgrade(alembic_config, "-1")
@@ -33,7 +38,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) & E0_TABLES == set()
 
     command.upgrade(alembic_config, "head")
-    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES
+    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:

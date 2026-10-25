@@ -374,13 +374,13 @@ create table raw_objects (
   fetched_at    timestamptz not null default now()
 );
 
--- E2
+-- E2 (migration 0003; D-053: name may be null, value checks, one current row per ticker)
 create table companies (
   cik              bigint primary key,
-  name             text not null,
+  name             text,                      -- EDGAR's name; null = listed only in company_tickers_mf.json
   sic_code         text,
   sic_description  text,
-  fiscal_year_end  text,                      -- 'MMDD' as the SEC gives it
+  fiscal_year_end  text,                      -- 'MMDD' as the SEC gives it (checked for shape)
   state_of_inc     text,
   filer_type       text not null default 'unknown'
                    check (filer_type in ('domestic','foreign_private_issuer','fund','other','unknown')),
@@ -391,7 +391,7 @@ create table companies (
 create table securities (
   security_id    bigserial primary key,
   cik            bigint not null references companies(cik),
-  ticker         text not null,               -- as the SEC lists it, e.g. 'BRK-B'
+  ticker         text not null,               -- as the SEC lists it, e.g. 'BRK-B' (canonical, D-051)
   security_type  text not null default 'common'
                  check (security_type in ('common','preferred','fund','adr','other')),
   exchange       text,
@@ -400,8 +400,11 @@ create table securities (
   figi           text,
   valid_from     date not null,
   valid_to       date,                        -- null = current
-  unique (ticker, valid_from)
+  unique (ticker, valid_from),
+  check (valid_to is null or valid_to > valid_from)
 );
+create unique index securities_current_ticker on securities (ticker) where valid_to is null;
+create index securities_by_cik on securities (cik);
 
 -- E3
 create table filings (
@@ -760,7 +763,7 @@ create table drafts (
 
 - `data/universe.csv` with columns `ticker,note`, maintained by hand (D-050, which resolved OD-3). The starter list is 31 domestic filers chosen for variety (at least a bank, an insurer, a REIT, a January year-end retailer, a September year-end company and a company that reports in thousands), plus 4 ETFs and 4 foreign private issuers. One ticker per company is enough; the company's other tickers load with it. The file is checked before anything is fetched: header, canonical tickers, no duplicates, a note on every row.
 - **Growth (D-035):** after E4a, `marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` and writes a candidate list for review. Index membership lists are not used, to avoid depending on index providers' data.
-- Each ticker is classified on load (D-018): `domestic` (files 10-K/10-Q), `foreign_private_issuer` (files 20-F, 6-K or 40-F), `fund` (listed in the SEC fund ticker file, or files N-PORT/N-CSR), `other`. Nothing is rejected; the loader prints a count per class.
+- Each universe company is classified on load (D-018, D-052): `fund` if listed in the SEC fund ticker file; otherwise the newest periodic report in its submissions' `filings.recent` decides: 10-K or 10-Q (and amendments, transition reports) `domestic`, 20-F or 40-F `foreign_private_issuer`, N-CSR, N-CSRS or NPORT-P `fund`. A 10-K filer with SIC 6221 (commodity contracts) and no 8-K item 2.02 is an exchange-traded commodity trust or pool: `fund`. With no periodic report, a 6-K makes it `foreign_private_issuer`, else `other`. Nothing is rejected; the loader prints the class and its evidence for each universe company and a count per class. Companies outside the universe are not fetched, so they stay `unknown` unless the fund list makes them `fund`.
 - In the MVP, earnings facts and fundamentals are produced for `domestic` companies only. Other classes resolve and return a clear reason, e.g. "fund: fundamentals not applicable".
 
 ### 9.2 Security master
@@ -1657,6 +1660,8 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-049 | 2026-10-25 | Python 3.15 (3.15.1 on this date), the latest release, for development, CI and deployments: `requires-python = ">=3.15,<3.16"`, `.python-version` 3.15, and black and mypy target 3.15. Moving to a newer Python is a new decision here. Supersedes the version in D-001 (Python stays the language) | Guram wants the latest release. 3.12 has had security fixes only since 2025-04-02; 3.15 (released 2026-10-09) gets bug fixes until 2028-10 and security fixes until 2031-10. Checked before switching: every locked package installs on 3.15 at the same version (85 packages unchanged); every compiled package has a native 3.15 build except PyYAML (compiled from source, dev-only for now) and black (runs as plain Python); `pdm run lint` and all 215 tests pass; GitHub's runners have 3.15.1 |
 | D-050 | 2026-10-25 | OD-3 resolved: the starter universe is the 39 tickers in `data/universe.csv` (31 domestic filers, 4 ETFs, 4 foreign private issuers), each with a one-line note saying why it is there. Every ticker, CIK, class and fiscal year end was checked against the SEC's own files fetched through the SEC client on 2026-10-25: both ticker lists, the submissions JSON of each company, and NetIncomeLoss values (companyconcept) for which companies report in thousands. One row per company: its other tickers load with it. The loader checks the file before fetching anything (header `ticker,note`, canonical tickers, no duplicates, a note on every row) and reports every problem with its line number | §9.1's required kinds are covered: bank JPM; insurer TRV (also BRK-B and UNH); REIT O; January year-end retailers TGT, WMT and LULU; September year ends AAPL, V and DIS; reports in thousands O, LULU, ACN and DECK. The other picks bring edge cases found in the data: XOM's ticker moved to a new CIK, Costco's 12- and 16-week quarters, J&J's 0103 year end, Shopify's move from 40-F to 10-K, SpaceX's SPCX collision, GLD's 10-K filings, BABA's missing fiscal year end, JPM's 26,404 filings a year (EDGE_CASES.md) |
 | D-051 | 2026-10-25 | Ticker rules for the security master (§9.2): (1) canonical spelling: upper case, `.` and `/` become `-`, surrounding parentheses are dropped; stored tickers and lookups both use it, and every exchange-list ticker is already in that form; (2) entries that still aren't tickers (`NONE.`, an empty fund symbol) are skipped and reported; (3) the security type comes from the suffix: `-P` or `-P<letter>` preferred, `-WT`, `-WT<letter>`, `-UN`, `-RI` and `-WI` other, any other one-letter suffix a share class of common stock (`share_class` holds the letter), any other suffix other, no suffix common; fund-list entries are `fund`; `adr` is never inferred; (4) `data/security_overrides.csv` (`ticker,security_type,source_url`; setting `SECURITY_OVERRIDES_FILE`) corrects tickers the rules get wrong, each with the SEC page that shows the type; an override for a ticker no list has is reported; (5) a ticker listed in both lists under different CIKs keeps the exchange list's entry and the other is reported; the same CIK in both lists gives one `fund` security | The SEC lists carry no security type, and plain tickers are not always common stock: the 10-Q cover pages show GOOGM and GOOGN are depositary shares of Alphabet's mandatory convertible preferred and AMJB and VYLD are JPMorgan ETNs. Hand-kept overrides with a source keep the four known universe cases right without guessing; reading cover-page XBRL automatically is a follow-up (§16). For SPCX the exchange list is the current one: SpaceX listed in 2026, while the fund list still has an old series |
+| D-052 | 2026-10-25 | Filer classes (§9.1) are decided by: (1) the SEC fund list; (2) otherwise the newest periodic report in `filings.recent`: the 10-K and 10-Q family (with /A, 10-KT, 10-QT) domestic, 20-F and 40-F (with /A) foreign private issuer, N-CSR, N-CSRS and NPORT-P (with /A) fund; (3) a domestic-form filer with SIC 6221 and no 8-K item 2.02 in its recent filings is a fund; (4) with no periodic report, a 6-K gives foreign private issuer, else other. Only universe companies are classified (each needs its submissions JSON); others stay `unknown` unless the fund list makes them `fund`. Older submissions pages are never read for this | Taking the newest report handles filers that switch: Shopify moved from 40-F and 6-K to 10-K in 2025. `filings.recent` always holds at least a year, so an active filer's annual and quarterly reports are in it (JPMorgan: 26,404 filings in that year). Rule (3) comes from the data: GLD, IAU, IBIT, ProShares Trust II and USO file 10-K and 10-Q with SIC 6221 and never report results, while the operating companies checked (COIN, MSTR, StoneX) have other SIC codes and file item 2.02. Classifying every listed company would need about 8,000 submissions files a day, or the bulk file and a streaming fetch (§16) |
+| D-053 | 2026-10-25 | Company names and the E2 schema (§7): `companies.name` is the EDGAR name, from submissions JSON for universe companies and from the exchange list for the rest, and may be null for registrants listed only in `company_tickers_mf.json`. companyfacts' `entityName` is not used. Migration `0003` also checks the shape of `fiscal_year_end` (`MMDD`) and `ticker` (canonical, D-051), requires `valid_to > valid_from`, and allows one current row per ticker (partial unique index). A load writes only rows that changed, so `updated_at` moves only with a value | Resolves the E1 name-source follow-up. The exchange list and submissions agree for all 48 companies compared (`TARGET CORP`); only companyfacts says `Target Corporation`, and E2 doesn't load companyfacts. The fund list has no names, and fetching the submissions of all 1,159 fund registrants daily to fill them isn't worth it: null says honestly that the name isn't loaded. A display name from `dei:EntityRegistrantName` can come with E4a |
 
 ---
 
@@ -1701,6 +1706,9 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-25 | D-049 | A new Python comes out every October. Decide each year whether to move (a §15 entry), after checking that the locked packages publish builds for it | Each October |
 | 2026-10-25 | E2-S1 | Done: GOOGM and GOOGN (Alphabet's extra tickers from the E1 follow-up) are depositary shares of its 6.25% Series A and B mandatory convertible preferred; `data/security_overrides.csv` types them `preferred` (D-051) | — |
 | 2026-10-25 | E2-S1 | Security types from the cover page: every 10-K and 10-Q tags its registered securities (`dei:Security12bTitle`, `dei:TradingSymbol`, `dei:SecurityExchangeName`), which would type every listed security of a universe company without overrides. companyfacts omits these dimensional facts, so this needs the filing's XBRL instance. The cover page also writes JPM's preferreds as `JPM PR D` while the ticker list says `JPM-PD` | E4a or E9 |
+| 2026-10-25 | E2-S2 | Done: company name source. `companies.name` is the EDGAR name from submissions and the exchange list (D-053) | — |
+| 2026-10-25 | E2-S2 | Classify every listed company, not only the universe: today the other ~9,100 companies stay `unknown` unless the fund list makes them `fund` (D-052). Needs the nightly bulk `submissions.zip` and a streaming fetch (see the E1-S3 follow-up) | Later |
+| 2026-10-25 | E2-S2 | JPMorgan's submissions JSON is 4.66 MB (26,404 filings in one year) and Royal Bank of Canada's 0.76 MB. E3's watcher polls each universe company every 10 minutes and stores every response (D-047), about 670 MB a day for JPMorgan alone: consider conditional requests or skipping identical bytes | E3 |
 
 ---
 

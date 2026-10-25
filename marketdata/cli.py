@@ -5,6 +5,7 @@ fills in its group. Commands load settings themselves, so `--help` works without
 """
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Annotated
 
 import typer
@@ -12,7 +13,16 @@ import typer
 from marketdata.config import Settings, SettingsError, load_settings
 from marketdata.db.pool import create_pool
 from marketdata.ingest.fetch import RawFetcher
+from marketdata.ingest.security_master import (
+    LoadReport,
+    SecurityMasterLoader,
+    UniverseCheck,
+    check_universe,
+    read_data_files,
+)
 from marketdata.log import configure_logging
+from marketdata.normalize.security_master import SecFileError
+from marketdata.normalize.universe import DataFileError, SecurityOverride, UniverseEntry
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
 
@@ -90,3 +100,62 @@ def sec_get(
         raise _fail(str(exc), 2) from None
     except (SecError, RawStoreError) as exc:
         raise _fail(str(exc)) from None
+
+
+def _data_files(settings: Settings) -> tuple[list[UniverseEntry], list[SecurityOverride]]:
+    try:
+        return read_data_files(settings.universe_file, settings.security_overrides_file)
+    except DataFileError as exc:
+        raise _fail(str(exc), 2) from None
+
+
+@groups["ingest"].command("security-master")
+def ingest_security_master() -> None:
+    """Load every ticker from the SEC lists, and details and class for each universe company.
+
+    Prints the changes and the universe with the class of each company; exits with 1 when a
+    universe company's submissions could not be loaded (what was stored for it stays).
+    """
+    settings = _settings()
+    universe, overrides = _data_files(settings)
+    try:
+        sec = SecClient.from_settings(settings)
+        store = create_raw_store(settings)
+    except SettingsError as exc:
+        raise _fail(str(exc), 2) from None
+
+    async def run() -> LoadReport:
+        async with sec, create_pool(str(settings.database_url), max_size=2) as pool:
+            fetcher = RawFetcher(sec, store, pool.connection)
+            loader = SecurityMasterLoader(fetcher, pool.connection)
+            return await loader.load(universe, overrides, as_of=datetime.now(UTC).date())
+
+    try:
+        report = asyncio.run(run())
+    except (SecError, RawStoreError, SecFileError) as exc:
+        raise _fail(str(exc)) from None
+    for line in report.lines(str(settings.universe_file)):
+        typer.echo(line)
+    if report.failures:
+        raise typer.Exit(1)
+
+
+@groups["universe"].command("check")
+def universe_check() -> None:
+    """Check the universe file against the stored security master, without calling the SEC.
+
+    Exits with 1 when a ticker is in no SEC list as of the last load.
+    """
+    settings = _settings()
+    universe, _ = _data_files(settings)
+
+    async def run() -> UniverseCheck:
+        async with create_pool(str(settings.database_url), max_size=1) as pool:
+            async with pool.connection() as conn:
+                return await check_universe(conn, universe)
+
+    check = asyncio.run(run())
+    for line in check.lines(str(settings.universe_file)):
+        typer.echo(line)
+    if check.universe.unknown:
+        raise typer.Exit(1)

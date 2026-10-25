@@ -5,16 +5,26 @@ with Alembic. The database is created if it is missing. When PostgreSQL is unrea
 tests fail rather than skip, so a green run means they ran.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
 from psycopg import sql
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.ingest.security_master import LoadReport, SecurityMasterLoader
+from marketdata.normalize.universe import SecurityOverride, parse_universe
+from marketdata.sec import urls
+from marketdata.sec.client import SecClient, TokenBucket
+from marketdata.sec.raw_store import LocalRawStore
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -83,3 +93,80 @@ async def conn(migrated_database: str) -> AsyncIterator[psycopg.AsyncConnection[
     async with await psycopg.AsyncConnection.connect(migrated_database) as connection:
         yield connection
         await connection.rollback()
+
+
+# --- E2: a fake SEC serving the committed fixtures, and a load through the test's connection.
+
+UA = "marketdata-test ops@example.com"
+SEC_FIXTURES = ROOT / "tests" / "fixtures" / "sec"
+# Tickers of the test universe, with the CIK whose submissions fixture they need.
+TEST_UNIVERSE = {
+    "AAPL": 320193,
+    "GOOGL": 1652044,
+    "TGT": 27419,
+    "SHOP": 1594805,
+    "SPCX": 1181412,
+    "GLD": 1222333,
+    "SPY": 884394,
+    "VOO": 36405,
+    "TSM": 1046179,
+    "BABA": 1577552,
+}
+TEST_UNIVERSE_CSV = "ticker,note\n" + "".join(f"{ticker},test\n" for ticker in TEST_UNIVERSE)
+AS_OF = date(2026, 10, 25)
+
+
+def fixture_routes() -> dict[str, bytes | int]:
+    """SEC URL to the bytes a fixture holds; tests may replace an entry with a status code."""
+    routes: dict[str, bytes | int] = {
+        urls.COMPANY_TICKERS_EXCHANGE: (
+            SEC_FIXTURES / "tickers/company_tickers_exchange.json"
+        ).read_bytes(),
+        urls.COMPANY_TICKERS_MF: (SEC_FIXTURES / "tickers/company_tickers_mf.json").read_bytes(),
+    }
+    for ticker, cik in TEST_UNIVERSE.items():
+        routes[urls.submissions(cik)] = (SEC_FIXTURES / f"submissions/{ticker}.json").read_bytes()
+    return routes
+
+
+def sec_serving(routes: Mapping[str, bytes | int]) -> SecClient:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        body = routes.get(str(request.url), 404)
+        if isinstance(body, int):
+            return httpx2.Response(body)
+        return httpx2.Response(200, content=body, headers={"Content-Type": "application/json"})
+
+    return SecClient(UA, bucket=TokenBucket(1e6), transport=httpx2.MockTransport(handler))
+
+
+def connect_to(conn: psycopg.AsyncConnection[Any]) -> Connect:
+    """Hand out the test's connection; the test rolls its transaction back afterwards."""
+
+    @asynccontextmanager
+    async def connect() -> AsyncIterator[psycopg.AsyncConnection[Any]]:
+        yield conn
+
+    return connect
+
+
+LoadMaster = Callable[..., Awaitable[LoadReport]]
+
+
+@pytest.fixture
+def load_master(conn: psycopg.AsyncConnection[Any], tmp_path: Path) -> LoadMaster:
+    """Run a security-master load against fixtures, inside the test's transaction."""
+    store = LocalRawStore(tmp_path / "raw")
+
+    async def load(
+        routes: Mapping[str, bytes | int] | None = None,
+        universe: str = TEST_UNIVERSE_CSV,
+        overrides: Sequence[SecurityOverride] = (),
+        as_of: date = AS_OF,
+    ) -> LoadReport:
+        async with sec_serving(routes if routes is not None else fixture_routes()) as sec:
+            loader = SecurityMasterLoader(
+                RawFetcher(sec, store, connect_to(conn)), connect_to(conn)
+            )
+            return await loader.load(parse_universe(universe), overrides, as_of=as_of)
+
+    return load
