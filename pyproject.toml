@@ -3,7 +3,7 @@ name = "marketdata"
 version = "0.1.0"
 description = "Trusted, verified data from SEC filings: proof on every value, cross-checks, published accuracy, announced changes."
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.15,<3.16"
 dependencies = [
     "alembic>=1.13",
     "boto3>=1.43",           # S3RawStore (R2 or B2 in production)
@@ -55,7 +55,7 @@ lint = { composite = [
 
 [tool.black]
 line-length = 100
-target-version = ["py312"]
+target-version = ["py315"]
 
 [tool.isort]
 profile = "black"
@@ -64,7 +64,7 @@ known_first_party = ["marketdata"]
 skip_gitignore = true
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.15"
 strict = true
 plugins = ["pydantic.mypy"]
 # Revision files start with a digit, which is not a valid module name; they hold only SQL.

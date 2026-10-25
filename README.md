@@ -10,7 +10,7 @@ Information from public filings. Not investment advice.
 
 ## Quickstart
 
-Needs Python 3.12, [PDM](https://pdm-project.org/) (on macOS: `brew install python@3.12 pdm`), and either Docker or a local PostgreSQL 18.
+Needs Python 3.15, [PDM](https://pdm-project.org/) (on macOS: `brew install python@3.15 pdm`), and either Docker or a local PostgreSQL 18.
 
 1. `cp .env.example .env`, and set `SEC_USER_AGENT` to `<app name> <contact email>` (needed only for commands that call the SEC)
 2. Start PostgreSQL: `docker compose up -d postgres` (listens on host port **5433**: set that port in both URLs in `.env`), or use a local server on 5432 with a `marketdata` role (see below).
@@ -43,5 +43,6 @@ Integration tests use `TEST_DATABASE_URL`. Its database name must end in `_test`
 
 - **Port 5432 already in use** when starting Docker Postgres: the compose file already uses host port 5433 for this reason; point `DATABASE_URL` and `TEST_DATABASE_URL` at 5433.
 - **`DATABASE_URL is missing`** on startup: copy `.env.example` to `.env`, or export the variable.
-- **`pdm install` picks the wrong Python**: run `pdm use python3.12`, then `pdm install` again.
+- **`pdm install` picks the wrong Python**: run `pdm use python3.15`, then `pdm install` again.
+- **`.venv` stops working after a Homebrew cleanup**: if python@3.15 was only installed as PDM's dependency, `brew autoremove` can delete it when PDM moves to a newer Python. `brew install python@3.15` keeps it. Then rebuild with `rm -rf .venv && pdm install`.
 - **Why not uv or ruff?** On some managed Macs, endpoint security kills binaries signed by "OpenAI OpCo, LLC" (team ID 2DC432GLL2) as soon as they start (exit code 137, no output), and Astral now signs uv and ruff that way. The project uses PDM, black, isort and flake8 instead (PLAN.md D-041). `codesign -dv <binary>` shows a binary's signer.
