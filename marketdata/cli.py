@@ -5,13 +5,17 @@ fills in its group. Commands load settings themselves, so `--help` works without
 """
 
 import asyncio
-from datetime import UTC, datetime
-from typing import Annotated
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Annotated, Any
 
 import typer
+from psycopg import AsyncConnection
 
 from marketdata.config import Settings, SettingsError, load_settings
 from marketdata.db.pool import create_pool
+from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.security_master import (
     LoadReport,
@@ -33,6 +37,7 @@ from marketdata.service.companies import (
     resolve_ticker,
 )
 from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.tasks import queue
 
 app = typer.Typer(
     help="marketdata: trusted, verified data from SEC filings. Information, not investment advice.",
@@ -75,6 +80,19 @@ def _settings() -> Settings:
         raise _fail(str(exc), 2) from None
     configure_logging(settings.env, settings.log_level)
     return settings
+
+
+def _in_transaction[T](
+    settings: Settings, work: Callable[[AsyncConnection[Any]], Awaitable[T]]
+) -> T:
+    """Run `work` on one connection; its transaction commits when `work` returns."""
+
+    async def run() -> T:
+        async with create_pool(str(settings.database_url), max_size=1) as pool:
+            async with pool.connection() as conn:
+                return await work(conn)
+
+    return asyncio.run(run())
 
 
 @groups["sec"].command("get")
@@ -232,3 +250,136 @@ def _profile_lines(security: ResolvedSecurity, profile: CompanyProfile) -> list[
         lines.append(f"  {capability.kind.capitalize():<16} {verdict}: {capability.reason}")
     lines.append("Information from public filings. Not investment advice.")
     return lines
+
+
+class TaskStatusOption(StrEnum):
+    queued = "queued"
+    running = "running"
+    done = "done"
+    failed = "failed"
+    dead = "dead"
+
+
+@groups["tasks"].command("list")
+def tasks_list(
+    status: Annotated[
+        TaskStatusOption | None, typer.Option(help="Only tasks with this status.")
+    ] = None,
+    kind: Annotated[
+        str | None, typer.Option(help="Only tasks of this kind, e.g. filings_watch.")
+    ] = None,
+    limit: Annotated[int, typer.Option(min=1, max=1000, help="How many tasks to list.")] = 50,
+) -> None:
+    """Count tasks by kind and status, then list the most recently changed ones."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> tuple[list[TaskCount], list[Task]]:
+        counts = await queue.count(conn)
+        listed = await queue.list_tasks(
+            conn, status=status.value if status else None, kind=kind, limit=limit
+        )
+        return counts, listed
+
+    counts, listed = _in_transaction(settings, work)
+    for line in _task_lines(counts, listed):
+        typer.echo(line)
+
+
+def _task_lines(counts: list[TaskCount], listed: list[Task]) -> list[str]:
+    totals = dict.fromkeys(TASK_STATUSES, 0)
+    by_kind: dict[str, dict[str, int]] = {}
+    for row in counts:
+        totals[row.status] += row.count
+        by_kind.setdefault(row.kind, {})[row.status] = row.count
+    summary = ", ".join(f"{status} {total:,}" for status, total in totals.items())
+    lines = [f"Tasks: {sum(totals.values()):,} ({summary})"]
+    for kind, found in sorted(by_kind.items()):
+        parts = [f"{status} {found[status]:,}" for status in TASK_STATUSES if status in found]
+        lines.append(f"  {kind:<20} {', '.join(parts)}")
+    if not listed:
+        lines.append("No tasks match.")
+        return lines
+    lines.append(f"Most recently changed ({len(listed)}):")
+    lines.append(
+        f"  {'ID':>8}  {'KIND':<20} {'KEY':<22} {'STATUS':<8} {'TRIES':>5}  "
+        f"{'CHANGED (UTC)':<19}  NEXT RUN (UTC)"
+    )
+    for task in listed:
+        waiting = task.status in ("queued", "failed")
+        next_run = _utc(task.run_after) if waiting else "—"
+        lines.append(
+            f"  {task.task_id:>8}  {task.kind:<20} {task.key:<22} {task.status:<8} "
+            f"{task.attempts:>5}  {_utc(task.updated_at):<19}  {next_run}"
+        )
+        if task.last_error and task.status in ("failed", "dead"):
+            error = " ".join(task.last_error.split())
+            lines.append(f"  {'':>8}  {error[:160]}{'…' if len(error) > 160 else ''}")
+    return lines
+
+
+def _utc(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
+@groups["tasks"].command("retry")
+def tasks_retry(
+    task_ids: Annotated[
+        list[int] | None, typer.Argument(help="IDs of dead or failed tasks to queue again.")
+    ] = None,
+    dead: Annotated[bool, typer.Option("--dead", help="Queue every dead task again.")] = False,
+    kind: Annotated[str | None, typer.Option(help="With --dead: only tasks of this kind.")] = None,
+) -> None:
+    """Queue dead or failed tasks again now, with a fresh attempt count.
+
+    Done tasks are not retried here: the command that created them runs them again (for example
+    `marketdata backfill filings`).
+    """
+    ids = task_ids or []
+    if bool(ids) == dead or (kind is not None and not dead):
+        raise _fail("Give task IDs, or --dead (optionally with --kind).", 2)
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> tuple[list[Task], list[Task]]:
+        if dead:
+            return await queue.retry_dead(conn, kind=kind), []
+        retried = await queue.retry(conn, ids)
+        done = {task.task_id for task in retried}
+        return retried, await queue.get_many(conn, [i for i in ids if i not in done])
+
+    retried, skipped = _in_transaction(settings, work)
+    if retried:
+        typer.echo(f"Queued again ({len(retried)}):")
+        for task in retried:
+            typer.echo(f"  {task.task_id} {task.kind} {task.key}")
+    else:
+        typer.echo("Nothing to retry.")
+    found = {task.task_id for task in skipped}
+    for task in skipped:
+        typer.echo(
+            f"  Not retried: {task.task_id} is {task.status}; only dead or failed tasks are."
+        )
+    missing = [i for i in ids if i not in found and i not in {t.task_id for t in retried}]
+    for task_id in missing:
+        typer.echo(f"  Not retried: no task {task_id}.")
+    if skipped or missing:
+        raise typer.Exit(1)
+
+
+@groups["tasks"].command("purge-done")
+def tasks_purge_done(
+    older_than_days: Annotated[
+        int, typer.Option(min=0, help="Keep done tasks that changed within this many days.")
+    ] = 7,
+) -> None:
+    """Delete done tasks that haven't changed for N days.
+
+    Queued, running, failed and dead tasks are never deleted. Periodic tasks (a company's
+    watch, the daily security-master load) are reused, so they stay while they run.
+    """
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> int:
+        return await queue.purge_done(conn, timedelta(days=older_than_days))
+
+    deleted = _in_transaction(settings, work)
+    typer.echo(f"Deleted {deleted:,} done tasks unchanged for {older_than_days} days.")
