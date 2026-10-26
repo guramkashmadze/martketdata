@@ -9,11 +9,23 @@ from datetime import UTC, date, datetime
 import structlog
 
 from marketdata.db.repositories.tasks import Task
-from marketdata.ingest.security_master import SecurityMasterLoader, read_data_files
+from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest
+from marketdata.ingest.security_master import (
+    SecurityMasterLoader,
+    read_data_files,
+    read_predecessors,
+)
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
+from marketdata.normalize.filings import EARNINGS_EXTRACT
 from marketdata.normalize.security_master import SnapshotRefused
 from marketdata.normalize.universe import DataFileError
-from marketdata.tasks.kinds import FILINGS_BACKFILL, FILINGS_WATCH, SECURITY_MASTER
+from marketdata.sec import urls
+from marketdata.tasks.kinds import (
+    EARNINGS_BACKFILL,
+    FILINGS_BACKFILL,
+    FILINGS_WATCH,
+    SECURITY_MASTER,
+)
 from marketdata.tasks.registry import Registry, TaskContext, TaskRefused
 
 log = structlog.get_logger(__name__)
@@ -37,11 +49,12 @@ async def load_security_master(context: TaskContext, task: Task) -> None:
         universe, overrides = read_data_files(
             settings.universe_file, settings.security_overrides_file
         )
+        links = read_predecessors(settings.predecessors_file)
     except DataFileError as exc:
         raise TaskRefused(str(exc)) from exc
     loader = SecurityMasterLoader(context.fetcher, context.connect)
     try:
-        report = await loader.load(universe, overrides, as_of=datetime.now(UTC).date())
+        report = await loader.load(universe, overrides, as_of=datetime.now(UTC).date(), links=links)
     except SnapshotRefused as exc:
         raise TaskRefused(str(exc)) from exc
     if report.failures:
@@ -64,6 +77,40 @@ async def backfill_filings(context: TaskContext, task: Task) -> None:
     watcher = FilingsWatcher(context.fetcher, context.connect, context.kinds)
     report = await watcher.backfill(cik, since)
     log.debug("filings_backfill_done", cik=cik, pages=len(report.pages), inserted=report.inserted)
+
+
+async def extract_earnings(context: TaskContext, task: Task) -> None:
+    """One earnings release (E7a), routed from a new 8-K with item 2.02 or queued by the
+    earnings backfill: its index page and press release exhibits, stored."""
+    cik, accession_no = _cik(task), _accession(task)
+    release = await EarningsIngest(context.fetcher, context.connect).fetch(cik, accession_no)
+    log.info(
+        "earnings_documents_stored",
+        cik=cik,
+        accession_no=accession_no,
+        exhibits=[exhibit.document.doc_name for exhibit in release.exhibits],
+        fetched=release.fetched,
+    )
+
+
+async def backfill_earnings(context: TaskContext, task: Task) -> None:
+    """One company's earnings releases back to the payload's `since` date (E7a-S5): queues an
+    earnings_extract task for each, after loading its predecessors' filings."""
+    cik, since = _cik(task), _since(task)
+    backfill = EarningsBackfill(context.fetcher, context.connect, context.kinds)
+    await backfill.run(cik, since, force=task.payload.get("force") is True)
+
+
+def _accession(task: Task) -> str:
+    accession = task.payload.get("accession_no")
+    try:
+        return urls.accession_no(accession) if isinstance(accession, str) else _no_accession(task)
+    except ValueError:
+        return _no_accession(task)
+
+
+def _no_accession(task: Task) -> str:
+    raise TaskRefused(f"the task's payload has no accession number: {task.payload}")
 
 
 def _since(task: Task) -> date:
@@ -91,4 +138,6 @@ def build_registry() -> Registry:
     registry.register(SECURITY_MASTER, load_security_master)
     registry.register(FILINGS_WATCH, watch_filings)
     registry.register(FILINGS_BACKFILL, backfill_filings)
+    registry.register(EARNINGS_EXTRACT, extract_earnings)
+    registry.register(EARNINGS_BACKFILL, backfill_earnings)
     return registry

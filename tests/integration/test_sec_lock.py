@@ -43,6 +43,7 @@ def test_cli_commands_that_call_the_sec_refuse_while_the_slot_is_held(
     monkeypatch.setenv("RAW_STORE_PATH", str(tmp_path / "raw"))
     monkeypatch.setenv("UNIVERSE_FILE", str(ROOT / "data" / "universe.csv"))
     monkeypatch.setenv("SECURITY_OVERRIDES_FILE", str(ROOT / "data" / "security_overrides.csv"))
+    monkeypatch.setenv("PREDECESSORS_FILE", str(ROOT / "data" / "predecessors.csv"))
     url = "https://data.sec.gov/submissions/CIK0000320193.json"
 
     with psycopg.connect(

@@ -1,6 +1,7 @@
 """E1-S5: the committed SEC fixtures are present, unchanged since they were fetched, small,
 and cover a September, a December and a January fiscal year end."""
 
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -40,6 +41,10 @@ def test_fixture_matches_its_manifest_entry(name: str) -> None:
     assert urls.parse(entry["url"]) is not None
     if entry["trim"] is None:
         assert entry["sha256"] == entry["original_sha256"]
+    if name.endswith(".gz"):  # every byte of the original, compressed (E7a)
+        original = gzip.decompress(data)
+        assert hashlib.sha256(original).hexdigest() == entry["original_sha256"]
+        assert len(original) == entry["original_size_bytes"]
 
 
 # E1's fixtures (D-048); E3's: index pages, copies from the raw store and 13D examples; E7a's:

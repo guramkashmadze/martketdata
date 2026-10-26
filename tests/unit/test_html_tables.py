@@ -1,6 +1,7 @@
 """E7a-S2: HTML tables become grids (spans, `$` and `%` cells, parentheses, dashes, footnote
 markers), and a document's text keeps its tables as markdown rows."""
 
+import gzip
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from marketdata.extract.html_tables import (
 )
 
 FILINGS = Path(__file__).resolve().parents[1] / "fixtures" / "sec" / "filings"
-APPLE_RELEASE = FILINGS / "320193" / "0000320193-26-000018" / "a8-kex991q3202606272026.htm"
+APPLE_RELEASE = FILINGS / "320193" / "0000320193-26-000018" / "a8-kex991q3202606272026.htm.gz"
 
 
 def _table(body: str, before: str = "") -> Table:
@@ -29,7 +30,9 @@ def _row(table: Table, label: str) -> Row:
 
 
 def _apple() -> ParsedDocument:
-    return parse_document(APPLE_RELEASE.name, APPLE_RELEASE.read_bytes())
+    return parse_document(
+        "a8-kex991q3202606272026.htm", gzip.decompress(APPLE_RELEASE.read_bytes())
+    )
 
 
 def test_colspans_place_values_in_printed_columns() -> None:
@@ -226,3 +229,37 @@ def test_every_table_row_is_a_line_of_the_text() -> None:
     assert len(rows) == 114
     assert all(row.line in lines for row in rows)
     assert "| Proceeds from issuance of term debt, net | — | 4,481 |" in lines
+
+
+def test_edgars_sgml_wrapper_is_not_part_of_the_document() -> None:
+    document = parse_document(
+        "ex99.htm",
+        b"<DOCUMENT>\n<TYPE>EX-99.1\n<SEQUENCE>2\n<FILENAME>ex99.htm\n<DESCRIPTION>EX-99.1\n"
+        b"<TEXT>\n<html><body><p>Acme reports results</p></body></html>\n</TEXT>\n</DOCUMENT>\n",
+    )
+
+    assert document.text == "Acme reports results"
+
+
+def test_headings_land_over_the_columns_whose_values_they_cover_most() -> None:
+    # One generator pads the second quarter column's cells (physical columns 6-10) into the
+    # span of the next heading (QNT 0001628280-26-055699).
+    table = _table("""
+        <tr><td colspan="3"></td><td colspan="6">Three Months Ended</td>
+            <td colspan="9">Six Months Ended</td></tr>
+        <tr><td colspan="3">Revenue</td><td colspan="2">8</td><td></td><td colspan="5">2</td>
+            <td></td><td colspan="2">13</td><td></td><td colspan="5">21</td></tr>
+    """)
+
+    assert table.rows[0].cells == (
+        "Three Months Ended",
+        "Three Months Ended",
+        "Six Months Ended",
+        "Six Months Ended",
+    )
+
+
+def test_pictures_are_counted() -> None:
+    document = parse_html(b'<html><body><img src="p1.jpg"/><img src="p2.jpg"/></body></html>')
+
+    assert (document.tables, document.images) == ((), 2)

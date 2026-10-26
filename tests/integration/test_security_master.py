@@ -1,5 +1,6 @@
 """E2-S2: `SecurityMasterLoader` fills companies and securities from the SEC lists and each
-universe company's submissions; a second load with the same files changes nothing.
+universe company's submissions; a second load with the same files changes nothing. E7a-S1: it
+loads predecessors of universe companies too, out of the universe, with their links (D-068).
 
 The SEC is a mock serving the committed fixtures (conftest.py); every write happens in the
 test's transaction, which is rolled back afterwards.
@@ -9,10 +10,11 @@ from typing import Any
 
 import psycopg
 import pytest
-from conftest import TEST_UNIVERSE, LoadMaster, fixture_routes
+from conftest import SEC_FIXTURES, TEST_UNIVERSE, TEST_UNIVERSE_CSV, LoadMaster, fixture_routes
 
-from marketdata.db.repositories import companies, securities
-from marketdata.normalize.universe import SecurityOverride
+from marketdata.db.repositories import companies, predecessors, securities
+from marketdata.db.repositories.predecessors import CompanyPredecessor
+from marketdata.normalize.universe import Predecessor, SecurityOverride
 from marketdata.sec import urls
 
 R1 = "https://www.sec.gov/Archives/edgar/data/1652044/000165204426000071/R1.htm"
@@ -183,3 +185,80 @@ async def test_one_current_row_per_ticker(
         await conn.execute(
             "insert into securities (cik, ticker, valid_from) values (27419, 'AAPL', '2026-10-26')"
         )
+
+
+XOM, EXXON = 2115436, 34088
+XOM_8K12B = (
+    "https://www.sec.gov/Archives/edgar/data/2115436/000119312526291990/"
+    "0001193125-26-291990-index.htm"
+)
+XOM_LINK = Predecessor(2, XOM, EXXON, XOM_8K12B, "successor issuer since 2026-07-01")
+
+
+def _with_xom() -> dict[str, bytes | int]:
+    routes = fixture_routes()
+    routes[urls.submissions(XOM)] = (SEC_FIXTURES / "submissions/XOM.json").read_bytes()
+    routes[urls.submissions(EXXON)] = (
+        SEC_FIXTURES / "submissions/XOM-predecessor-34088.json"
+    ).read_bytes()
+    return routes
+
+
+async def test_predecessors_are_loaded_out_of_the_universe_with_their_links(
+    conn: psycopg.AsyncConnection[Any], load_master: LoadMaster
+) -> None:
+    universe = TEST_UNIVERSE_CSV + "XOM,test\n"
+
+    report = await load_master(_with_xom(), universe=universe, links=[XOM_LINK])
+
+    exxon = await companies.get(conn, EXXON)
+    assert exxon is not None
+    assert (exxon.name, exxon.filer_type, exxon.in_universe) == (
+        "EXXON MOBIL CORP",
+        "domestic",
+        False,
+    )
+    assert await predecessors.list_all(conn) == [
+        CompanyPredecessor(cik=XOM, predecessor_cik=EXXON, source_url=XOM_8K12B, note=XOM_LINK.note)
+    ]
+    [link] = report.predecessors
+    assert (link.cik, link.predecessor.cik, link.linked) == (XOM, EXXON, True)
+    assert link.predecessor.classification.reason == "10-Q filed 2026-08-03"
+    assert "  2115436 <- 34088      domestic               EXXON MOBIL CORP: 10-Q filed " in (
+        "\n".join(report.lines("universe.csv"))
+    )
+
+    before = await rows(conn, "companies")
+    again = await load_master(_with_xom(), universe=universe, links=[XOM_LINK])
+    assert (again.companies_added, again.companies_changed) == (0, 0)
+    assert await rows(conn, "companies") == before
+
+    await load_master(_with_xom(), universe=universe, links=[])  # the file dropped the link
+    assert await predecessors.list_all(conn) == []
+    assert await companies.get(conn, EXXON) is not None  # companies are never deleted
+
+
+async def test_a_predecessor_whose_submissions_failed_is_reported_and_kept_unknown(
+    conn: psycopg.AsyncConnection[Any], load_master: LoadMaster
+) -> None:
+    routes = _with_xom()
+    routes[urls.submissions(EXXON)] = 404
+
+    report = await load_master(routes, universe=TEST_UNIVERSE_CSV + "XOM,test\n", links=[XOM_LINK])
+
+    assert [member.cik for member in report.failures] == [EXXON]
+    exxon = await companies.get(conn, EXXON)
+    assert exxon is not None and (exxon.name, exxon.filer_type) == (None, "unknown")
+    assert [link.linked for link in report.predecessors] == [True]  # the file says so
+
+
+async def test_a_link_to_a_company_no_list_has_is_not_stored(
+    conn: psycopg.AsyncConnection[Any], load_master: LoadMaster
+) -> None:
+    link = Predecessor(2, 9_999_999_999, EXXON, XOM_8K12B, "a CIK nobody lists")
+
+    report = await load_master(_with_xom(), links=[link])
+
+    assert [link.linked for link in report.predecessors] == [False]
+    assert await predecessors.list_all(conn) == []
+    assert "not linked: the company is not stored yet" in "\n".join(report.lines("u.csv"))

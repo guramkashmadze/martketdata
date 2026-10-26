@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # E3. Tasks the worker runs at once; they share the process's one SEC rate limit (D-007).
     worker_concurrency: int = Field(default=4, ge=1, le=32)
 
+    # E7a. Earlier registrants holding a company's history (D-068), and the per-company pins
+    # for the earnings rules (PLAN.md §9.9, D-075).
+    predecessors_file: Path = Path("data/predecessors.csv")
+    extraction_overrides_file: Path = Path("data/extraction_overrides.toml")
+
 
 def load_settings(env_file: str | None = ".env") -> Settings:
     """Load settings, failing fast with one line per missing or invalid variable."""

@@ -43,6 +43,7 @@ def cli_env(
     (tmp_path / "overrides.csv").write_text(
         f"ticker,security_type,source_url\nGOOGM,preferred,{R1}\n"
     )
+    (tmp_path / "predecessors.csv").write_text("cik,predecessor_cik,source_url,note\n")
     for name, value in {
         "DATABASE_URL": migrated_database,
         "SEC_USER_AGENT": UA,
@@ -50,11 +51,13 @@ def cli_env(
         "RAW_STORE_PATH": str(tmp_path / "raw"),
         "UNIVERSE_FILE": str(tmp_path / "universe.csv"),
         "SECURITY_OVERRIDES_FILE": str(tmp_path / "overrides.csv"),
+        "PREDECESSORS_FILE": str(tmp_path / "predecessors.csv"),
     }.items():
         monkeypatch.setenv(name, value)
     yield tmp_path
     with psycopg.connect(migrated_database) as conn:
         conn.execute("delete from securities")
+        conn.execute("delete from company_predecessors")
         conn.execute("delete from companies")
         conn.execute("delete from raw_objects where key like 'raw/sec/api/%'")
 

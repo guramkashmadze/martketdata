@@ -1,5 +1,7 @@
 """Load the security master (E2): every ticker from both SEC lists, and name, details and class
-from each universe company's submissions JSON (PLAN.md §9.1-§9.2).
+from each universe company's submissions JSON (PLAN.md §9.1-§9.2). Predecessors of universe
+companies (data/predecessors.csv, D-068) are loaded the same way, out of the universe, with
+their links.
 
 Every SEC file goes through RawFetcher, so the raw file is stored before it is parsed. All
 fetching comes first; the database then changes in one transaction that holds an advisory
@@ -17,8 +19,9 @@ from typing import Any
 import structlog
 from psycopg import AsyncConnection
 
-from marketdata.db.repositories import companies, securities
+from marketdata.db.repositories import companies, predecessors, securities
 from marketdata.db.repositories.companies import Company
+from marketdata.db.repositories.predecessors import CompanyPredecessor
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.normalize.security_master import (
     FILER_TYPES,
@@ -42,10 +45,12 @@ from marketdata.normalize.security_master import (
 from marketdata.normalize.universe import (
     ClosedTicker,
     DataFileError,
+    Predecessor,
     SecurityOverride,
     UniverseEntry,
     UniverseMatch,
     match_universe,
+    parse_predecessors,
     parse_security_overrides,
     parse_universe,
 )
@@ -75,6 +80,22 @@ def read_data_files(
     return universe, overrides
 
 
+def read_predecessors(path: Path) -> list[Predecessor]:
+    """The predecessor links, checked; each source_url must be an SEC filing page."""
+    links = parse_predecessors(_read(path), str(path))
+    problems = []
+    for link in links:
+        parsed = urls.parse(link.source_url)
+        if parsed is None or parsed.endpoint != "filing":
+            problems.append(
+                f"line {link.line}: CIK {link.predecessor_cik}'s source_url is not an SEC filing "
+                f"page: {link.source_url}"
+            )
+    if problems:
+        raise DataFileError(str(path), problems)
+    return links
+
+
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -94,6 +115,15 @@ class MemberReport:
 
 
 @dataclass(frozen=True)
+class PredecessorReport:
+    """A predecessor after a load: its company's CIK, and its own row as a member."""
+
+    cik: int
+    predecessor: MemberReport
+    linked: bool  # False when its submissions have never loaded, so it has no companies row
+
+
+@dataclass(frozen=True)
 class LoadReport:
     as_of: date
     snapshot: TickerSnapshot
@@ -102,10 +132,12 @@ class LoadReport:
     companies_changed: int
     universe: UniverseMatch
     members: tuple[MemberReport, ...]
+    predecessors: tuple[PredecessorReport, ...] = ()
 
     @property
     def failures(self) -> tuple[MemberReport, ...]:
-        return tuple(member for member in self.members if member.error is not None)
+        loaded = [*self.members, *(link.predecessor for link in self.predecessors)]
+        return tuple(member for member in loaded if member.error is not None)
 
     @property
     def class_counts(self) -> dict[FilerType, int]:
@@ -149,6 +181,7 @@ class LoadReport:
             f"Companies: {self.companies_added:,} added, {self.companies_changed:,} changed."
         )
         lines.extend(_universe_lines(universe_file, self.universe, self.members, changes.moved))
+        lines.extend(_predecessor_lines(self.predecessors))
         return lines
 
 
@@ -163,10 +196,12 @@ class SecurityMasterLoader:
         overrides: Sequence[SecurityOverride],
         *,
         as_of: date,
+        links: Sequence[Predecessor],
         force: bool = False,
     ) -> LoadReport:
-        """Load the lists of `as_of`. `force` applies a snapshot that ends more tickers than
-        check_snapshot allows; raises SnapshotRefused otherwise, changing nothing."""
+        """Load the lists of `as_of`, and the predecessors in `links`: the stored links become
+        exactly these. `force` applies a snapshot that ends more tickers than check_snapshot
+        allows; raises SnapshotRefused otherwise, changing nothing."""
         _, exchange_data = await self._fetcher.fetch_url(urls.COMPANY_TICKERS_EXCHANGE)
         _, fund_data = await self._fetcher.fetch_url(urls.COMPANY_TICKERS_MF)
         snapshot = build_snapshot(
@@ -187,6 +222,19 @@ class SecurityMasterLoader:
             members[cik] = UniverseCompany(
                 cik, details, classify_filer(details, in_fund_list=in_fund_list)
             )
+        earlier: dict[int, UniverseCompany] = {}
+        for link in links:
+            cik = link.predecessor_cik
+            if cik in members or cik in earlier:
+                continue
+            details, error = await self._details(cik)
+            if error is not None:
+                errors[cik] = error
+            listed_company = snapshot.companies.get(cik)
+            in_fund_list = listed_company is not None and listed_company.in_fund_list
+            earlier[cik] = UniverseCompany(
+                cik, details, classify_filer(details, in_fund_list=in_fund_list)
+            )
 
         async with self._connect() as conn, conn.transaction():
             await securities.lock_for_load(conn)
@@ -194,8 +242,20 @@ class SecurityMasterLoader:
             changes = diff_securities(current, snapshot.listings, as_of)
             check_snapshot(current, changes, as_of, force=force)
             stored = {company.cik: company for company in await companies.list_all(conn)}
-            added, changed = plan_companies(stored, snapshot.companies, members)
+            added, changed = plan_companies(stored, snapshot.companies, members, earlier)
             await companies.upsert(conn, [*added, *changed])
+            known = set(stored) | {row.cik for row in added}
+            linked = [
+                CompanyPredecessor(
+                    cik=link.cik,
+                    predecessor_cik=link.predecessor_cik,
+                    source_url=link.source_url,
+                    note=link.note,
+                )
+                for link in links
+                if link.cik in known and link.predecessor_cik in known
+            ]
+            await predecessors.replace_all(conn, linked)
             # Old rows end before new ones open: one current row per ticker.
             await securities.delete(conn, [row.security_id for row in changes.deleted])
             await securities.close(conn, [c.row.security_id for c in changes.closed], as_of)
@@ -211,6 +271,9 @@ class SecurityMasterLoader:
             companies_changed=len(changed),
             universe=match,
             members=_members(match, members, errors, names, stored),
+            predecessors=_predecessors(
+                links, {**members, **earlier}, errors, names, stored, linked
+            ),
         )
         log.info(
             "security_master_loaded",
@@ -269,6 +332,24 @@ def _members(
         reports.append(
             MemberReport(cik, tuple(tickers[cik]), name, member.classification, errors.get(cik))
         )
+    return tuple(reports)
+
+
+def _predecessors(
+    links: Sequence[Predecessor],
+    loaded: Mapping[int, UniverseCompany],
+    errors: Mapping[int, str],
+    written_names: Mapping[int, str | None],
+    stored: Mapping[int, Company],
+    linked: Sequence[CompanyPredecessor],
+) -> tuple[PredecessorReport, ...]:
+    stored_links = {(link.cik, link.predecessor_cik) for link in linked}
+    reports = []
+    for link in links:
+        cik = link.predecessor_cik
+        name = written_names.get(cik, stored[cik].name if cik in stored else None)
+        member = MemberReport(cik, (), name, loaded[cik].classification, errors.get(cik))
+        reports.append(PredecessorReport(link.cik, member, (link.cik, cik) in stored_links))
     return tuple(reports)
 
 
@@ -372,6 +453,23 @@ def _universe_lines(
     lines.append(
         "  Classes: " + ", ".join(f"{filer_type} {count}" for filer_type, count in counts.items())
     )
+    return lines
+
+
+def _predecessor_lines(links: Sequence[PredecessorReport]) -> list[str]:
+    if not links:
+        return []
+    lines = [f"Predecessors: {len(links)}."]
+    for link in links:
+        member = link.predecessor
+        lines.append(
+            f"  {link.cik:>10} <- {member.cik:<10} {member.classification.filer_type:<22} "
+            f"{member.name or '(no name)'}: {member.classification.reason}"
+        )
+        if member.error is not None:
+            lines.append(f"  {'':>10}    {'':<10} submissions not loaded: {member.error}")
+        if not link.linked:
+            lines.append(f"  {'':>10}    {'':<10} not linked: the company is not stored yet")
     return lines
 
 

@@ -6,7 +6,11 @@ same company (GOOG next to GOOGL) come with it. `data/security_overrides.csv`
 (`ticker,security_type,source_url`) corrects the security type of tickers whose spelling
 misleads (see tickers.py), each with the SEC page that shows the right type.
 
-Both files are checked before anything is fetched, and every problem is reported at once with
+`data/predecessors.csv` (`cik,predecessor_cik,source_url,note`) links a company to the
+earlier registrant whose filings hold its history (D-068): ExxonMobil Holdings Corp took XOM's
+ticker on 2026-07-01, and its earlier earnings releases are under Exxon Mobil Corp (34088).
+
+The files are checked before anything is fetched, and every problem is reported at once with
 its line number.
 """
 
@@ -25,6 +29,7 @@ from marketdata.normalize.tickers import (
 
 UNIVERSE_COLUMNS = ("ticker", "note")
 OVERRIDE_COLUMNS = ("ticker", "security_type", "source_url")
+PREDECESSOR_COLUMNS = ("cik", "predecessor_cik", "source_url", "note")
 _SECURITY_TYPES: dict[str, SecurityType] = {name: name for name in SECURITY_TYPES}
 
 
@@ -114,6 +119,57 @@ def parse_security_overrides(
     if problems:
         raise DataFileError(source, problems)
     return overrides
+
+
+@dataclass(frozen=True)
+class Predecessor:
+    """An earlier registrant whose filings are part of a company's history (D-068)."""
+
+    line: int
+    cik: int  # the company now
+    predecessor_cik: int
+    source_url: str  # the SEC filing that shows the succession, e.g. an 8-K12B
+    note: str
+
+
+def parse_predecessors(text: str, source: str = "data/predecessors.csv") -> list[Predecessor]:
+    """The predecessor links; a file with only its header means none. A registrant can be the
+    predecessor of one company only."""
+    problems: list[str] = []
+    links: list[Predecessor] = []
+    first_line: dict[int, int] = {}
+    for line, row in _rows(text, PREDECESSOR_COLUMNS, source, problems):
+        cik, predecessor = _cik(row["cik"]), _cik(row["predecessor_cik"])
+        if cik is None or predecessor is None:
+            problems.append(f"line {line}: cik and predecessor_cik must be CIKs (whole numbers)")
+            continue
+        if cik == predecessor:
+            problems.append(f"line {line}: CIK {cik} can't be its own predecessor")
+            continue
+        if predecessor in first_line:
+            problems.append(
+                f"line {line}: CIK {predecessor} is already a predecessor on line "
+                f"{first_line[predecessor]}"
+            )
+            continue
+        first_line[predecessor] = line
+        if not row["source_url"].startswith("https://"):
+            problems.append(
+                f"line {line}: CIK {predecessor} needs a source_url: the https link to the SEC "
+                "filing that shows the succession"
+            )
+            continue
+        if not row["note"]:
+            problems.append(f"line {line}: CIK {predecessor} has no note; say what happened")
+            continue
+        links.append(Predecessor(line, cik, predecessor, row["source_url"], row["note"]))
+    if problems:
+        raise DataFileError(source, problems)
+    return links
+
+
+def _cik(text: str) -> int | None:
+    return int(text) if text.isdigit() and 0 < int(text) <= 9_999_999_999 else None
 
 
 @dataclass(frozen=True)

@@ -13,8 +13,9 @@ cells. A table becomes a grid in four steps:
 3. The values of the rows that have values are grouped into printed columns: values in
    different rows whose physical spans overlap are in the same column. Rows without values, or
    with only years, take no part: a heading such as "Three Months Ended" spans several columns.
-4. Every row becomes a label and one cell per printed column; a heading is placed in every
-   column it spans.
+4. Every row becomes a label and one cell per printed column. In a heading row, each column
+   takes the heading that overlaps most of the span its values usually have, so "Three Months
+   Ended" lands over both quarter columns even when a generator pads the cells unevenly.
 
 Cells keep their text as printed: parentheses mark negatives and dashes nil, and are read as
 numbers by the extractor and, separately, by verification (D-015). A label keeps its footnote
@@ -26,7 +27,8 @@ reads, so each row's `line` is exactly a line of it.
 """
 
 import re
-from collections.abc import Iterator, Sequence
+from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from lxml import html
@@ -86,6 +88,8 @@ _SUPERSCRIPT_WORDS = frozenset({"st", "nd", "rd", "th", "tm", "®", "©"})
 _SPACE = re.compile(r"[\s   -     　]+")
 _INVISIBLE = re.compile(r"[­​‌‍⁠﻿]")
 _XML_DECLARATION = re.compile(r"^\s*<\?xml[^>]*\?>", re.IGNORECASE)
+_SGML_DOCUMENT = re.compile(r"^\s*<DOCUMENT>", re.IGNORECASE)
+_SGML_TEXT = re.compile(r"<TEXT>\s*", re.IGNORECASE)
 _CURRENCY = re.compile(r"^(?:US|C|A)?[$€£¥]$")
 _OPENING = frozenset({"(", "$(", "($", "$ ("})
 _CLOSING = re.compile(r"^(?:\)|%|\)%|%\)|\)\s*%|pts?\.?|bps)$", re.IGNORECASE)
@@ -135,25 +139,27 @@ class Table:
 class ParsedDocument:
     text: str  # paragraphs as lines, tables as markdown rows
     tables: tuple[Table, ...]  # tables with at least one row, in document order
+    images: int = 0  # <img> elements: pages printed as pictures have no tables to read
 
 
 def parse_document(name: str, data: bytes) -> ParsedDocument:
     """A stored document: HTML by its tables and text, anything else (.txt) as plain text."""
     if name.lower().endswith((".htm", ".html", ".xhtml")):
         return parse_html(data)
-    lines = (_collapse(line) for line in decode(data).splitlines())
+    lines = (_collapse(line) for line in unwrap(decode(data)).splitlines())
     return ParsedDocument(text="\n".join(line for line in lines if line), tables=())
 
 
 def parse_html(data: bytes) -> ParsedDocument:
-    source = _XML_DECLARATION.sub("", decode(data), count=1)
+    source = _XML_DECLARATION.sub("", unwrap(decode(data)), count=1)
     if not source.strip():
         return ParsedDocument(text="", tables=())
     root = html.document_fromstring(source)
     writer = _Writer()
     _walk(root, writer)
     writer.end_line()
-    return ParsedDocument(text="\n".join(writer.lines), tables=tuple(writer.tables))
+    images = len(root.xpath("//img"))
+    return ParsedDocument("\n".join(writer.lines), tuple(writer.tables), images)
 
 
 def decode(data: bytes) -> str:
@@ -163,6 +169,19 @@ def decode(data: bytes) -> str:
         return data.decode("utf-8")
     except UnicodeDecodeError:
         return data.decode("cp1252", errors="replace")
+
+
+def unwrap(source: str) -> str:
+    """The document inside EDGAR's SGML wrapper. The SEC serves filing documents as they sit
+    in the submission: `<DOCUMENT>`, `<TYPE>EX-99.1`, `<SEQUENCE>`, `<FILENAME>`,
+    `<DESCRIPTION>` and the document between `<TEXT>` and `</TEXT>`."""
+    if not _SGML_DOCUMENT.match(source):
+        return source
+    start = _SGML_TEXT.search(source)
+    if start is None:
+        return source
+    end = source.lower().rfind("</text>")
+    return source[start.end() : end if end > start.end() else len(source)]
 
 
 def is_value(text: str) -> bool:
@@ -270,15 +289,12 @@ def _grid(table: HtmlElement) -> tuple[list[Row], int]:
     rows = []
     for items in physical:
         has_values = any(is_value(item.text) and not is_year(item.text) for item in items)
-        label: list[_Item] = []
-        cells: list[list[str]] = [[] for _ in columns]
-        for item in items:
-            if not is_value(item.text) and item.start < columns[0][0]:
-                label.append(item)
-                continue
-            for column in _placement(item, columns, spread=not has_values):
-                cells[column].append(item.text)
-        texts = [" ".join(texts) for texts in cells]
+        label = [
+            item for item in items if not is_value(item.text) and item.start < columns[0].start
+        ]
+        rest = [item for item in items if item not in label]
+        placed = _headings(rest, columns) if not has_values else _values(rest, columns)
+        texts = [" ".join(item.text for item in column) for column in placed]
         label_text = " ".join(item.text for item in label)
         footnotes = tuple(marker for item in label for marker in item.footnotes)
         rows.append(
@@ -349,7 +365,16 @@ def _joined(first: _Item, second: _Item, separator: str) -> _Item:
     )
 
 
-def _columns(physical: list[list[_Item]]) -> list[tuple[int, int]]:
+@dataclass(frozen=True)
+class _Column:
+    """A printed column: the physical span of its values, and the span most of them have."""
+
+    start: int
+    end: int
+    core: tuple[int, int]
+
+
+def _columns(physical: list[list[_Item]]) -> list[_Column]:
     """Printed columns: the overlapping physical spans of values in rows that have values."""
     spans = sorted(
         (item.start, item.end)
@@ -358,31 +383,57 @@ def _columns(physical: list[list[_Item]]) -> list[tuple[int, int]]:
         for item in items
         if is_value(item.text)
     )
-    columns: list[tuple[int, int]] = []
-    for start, end in spans:
-        if columns and start < columns[-1][1]:
-            columns[-1] = (columns[-1][0], max(columns[-1][1], end))
+    groups: list[list[tuple[int, int]]] = []
+    for span in spans:
+        if groups and span[0] < max(end for _, end in groups[-1]):
+            groups[-1].append(span)
         else:
-            columns.append((start, end))
-    return columns
-
-
-def _placement(item: _Item, columns: list[tuple[int, int]], *, spread: bool) -> Iterator[int]:
-    """The printed columns an item sits in. A heading (`spread`) goes in every column it
-    overlaps; a value in the one it overlaps most. An item between columns goes to the
-    nearest."""
-    overlaps = [
-        (min(item.end, end) - max(item.start, start), index)
-        for index, (start, end) in enumerate(columns)
+            groups.append([span])
+    return [
+        _Column(group[0][0], max(end for _, end in group), Counter(group).most_common(1)[0][0])
+        for group in groups
     ]
-    covered = [index for overlap, index in overlaps if overlap > 0]
-    if covered:
-        yield from (covered if spread else [max(overlaps)[1]])
-        return
+
+
+def _values(items: list[_Item], columns: list[_Column]) -> list[list[_Item]]:
+    """A value goes in the column it overlaps most, or the nearest one."""
+    placed: list[list[_Item]] = [[] for _ in columns]
+    for item in items:
+        overlaps = [_overlap(item, (column.start, column.end)) for column in columns]
+        best = max(range(len(columns)), key=lambda index: overlaps[index])
+        if overlaps[best] <= 0:
+            best = _nearest(item, columns)
+        placed[best].append(item)
+    return placed
+
+
+def _headings(items: list[_Item], columns: list[_Column]) -> list[list[_Item]]:
+    """Each column takes the heading of the row that overlaps its values' usual span most
+    ("Three Months Ended" over the two quarter columns); a heading that no column takes goes
+    in the nearest column."""
+    placed: list[list[_Item]] = [[] for _ in columns]
+    taken: set[int] = set()
+    for index, column in enumerate(columns):
+        overlaps = [(_overlap(item, column.core), -position) for position, item in enumerate(items)]
+        if overlaps and max(overlaps)[0] > 0:
+            position = -max(overlaps)[1]
+            placed[index].append(items[position])
+            taken.add(position)
+    for position, item in enumerate(items):
+        if position not in taken:
+            placed[_nearest(item, columns)].append(item)
+    return placed
+
+
+def _overlap(item: _Item, span: tuple[int, int]) -> int:
+    return min(item.end, span[1]) - max(item.start, span[0])
+
+
+def _nearest(item: _Item, columns: list[_Column]) -> int:
     middle = (item.start + item.end) / 2
-    yield min(
+    return min(
         range(len(columns)),
-        key=lambda index: abs((columns[index][0] + columns[index][1]) / 2 - middle),
+        key=lambda index: abs((columns[index].start + columns[index].end) / 2 - middle),
     )
 
 

@@ -1,5 +1,6 @@
 """E2-S1: the universe file and the security overrides file are checked line by line, and
-universe tickers are matched to the companies that list them (PLAN.md §9.1)."""
+universe tickers are matched to the companies that list them (PLAN.md §9.1). E7a-S1: so is the
+predecessors file (D-068)."""
 
 from datetime import date
 
@@ -8,8 +9,10 @@ import pytest
 from marketdata.normalize.universe import (
     ClosedTicker,
     DataFileError,
+    Predecessor,
     UniverseEntry,
     match_universe,
+    parse_predecessors,
     parse_security_overrides,
     parse_universe,
 )
@@ -139,3 +142,45 @@ def test_universe_tickers_match_current_listings_then_history() -> None:
     assert [e.ticker for e in match.unknown] == ["XYZ"]
     assert match.ciks == [320193, 1652044, 34088]
     assert match.shared == {1652044: ["GOOGL", "GOOG"]}
+
+
+XOM_8K12B = (
+    "https://www.sec.gov/Archives/edgar/data/2115436/000119312526291990/"
+    "0001193125-26-291990-index.htm"
+)
+
+
+def test_predecessors_give_both_ciks_a_source_and_a_note() -> None:
+    links = parse_predecessors(
+        f'cik,predecessor_cik,source_url,note\n2115436,34088,{XOM_8K12B},"8-K12B, 2026-07-01"\n'
+    )
+
+    assert links == [Predecessor(2, 2115436, 34088, XOM_8K12B, "8-K12B, 2026-07-01")]
+
+
+def test_predecessors_file_with_only_its_header_means_none() -> None:
+    assert parse_predecessors("cik,predecessor_cik,source_url,note\n") == []
+
+
+def test_predecessor_problems_are_reported() -> None:
+    text = (
+        "cik,predecessor_cik,source_url,note\n"
+        f"2115436,34088,{XOM_8K12B},ok\n"
+        "XOM,34088,https://www.sec.gov/x,ticker instead of a CIK\n"
+        "34088,34088,https://www.sec.gov/x,itself\n"
+        "1,34088,https://www.sec.gov/x,a second successor\n"
+        "1,2,http://www.sec.gov/x,not https\n"
+        "1,3,https://www.sec.gov/x,\n"
+    )
+
+    with pytest.raises(DataFileError) as raised:
+        parse_predecessors(text)
+
+    assert raised.value.problems == (
+        "line 3: cik and predecessor_cik must be CIKs (whole numbers)",
+        "line 4: CIK 34088 can't be its own predecessor",
+        "line 5: CIK 34088 is already a predecessor on line 2",
+        "line 6: CIK 2 needs a source_url: the https link to the SEC filing that shows the "
+        "succession",
+        "line 7: CIK 3 has no note; say what happened",
+    )

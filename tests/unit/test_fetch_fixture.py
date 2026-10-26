@@ -1,7 +1,11 @@
-"""E1-S5: scripts/fetch_fixture.py trims and records fixtures. Synthetic data; no network."""
+"""E1-S5: scripts/fetch_fixture.py trims and records fixtures; E7a: or keeps every byte
+compressed. Synthetic data; no network."""
 
+import gzip
+import hashlib
 import importlib.util
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
@@ -159,6 +163,52 @@ def test_manifest_entries_are_merged_and_sorted(
     manifest = json.loads((tmp_path / "MANIFEST.json").read_text())
     assert list(manifest) == ["companyfacts/AAPL.json", "submissions/TGT.json"]
     assert manifest["submissions/TGT.json"] == {"url": "u3"}
+
+
+def test_gzip_keeps_every_byte_and_records_the_original(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(script, "MANIFEST", tmp_path / "MANIFEST.json")
+    url = "https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/ex991.htm"
+    raw = b"<html><body><table><tr><td>Net sales</td><td>1</td></tr></table></body></html>"
+    target = tmp_path / "ex991.htm.gz"
+
+    script.save(
+        target,
+        "filings/320193/0000320193-26-000018/ex991.htm.gz",
+        url,
+        raw,
+        datetime(2026, 10, 25, tzinfo=UTC),
+        trimmed=False,
+        keep_recent=0,
+        since_year=None,
+        keep_ciks=None,
+        compressed=True,
+    )
+
+    assert gzip.decompress(target.read_bytes()) == raw
+    entry = json.loads((tmp_path / "MANIFEST.json").read_text())[
+        "filings/320193/0000320193-26-000018/ex991.htm.gz"
+    ]
+    assert entry["trim"] == "gzip: every byte, compressed"
+    assert entry["original_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert entry["sha256"] == hashlib.sha256(target.read_bytes()).hexdigest()
+
+
+def test_gzip_needs_a_gz_name_and_no_trim(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="name the fixture"):
+        script.save(
+            tmp_path / "x.htm",
+            "filings/x.htm",
+            "https://www.sec.gov/x",
+            b"x",
+            datetime(2026, 10, 25, tzinfo=UTC),
+            trimmed=False,
+            keep_recent=0,
+            since_year=None,
+            keep_ciks=None,
+            compressed=True,
+        )
 
 
 def test_script_needs_the_user_agent(

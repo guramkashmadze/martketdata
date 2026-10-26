@@ -11,6 +11,7 @@ All work goes through the queue, so the worker is the only process that calls th
 """
 
 import asyncio
+import calendar
 import logging
 import signal
 from datetime import UTC, date, datetime, time, timedelta
@@ -28,7 +29,12 @@ from marketdata.db.repositories import companies
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.fetch import Connect
 from marketdata.tasks import queue
-from marketdata.tasks.kinds import FILINGS_BACKFILL, FILINGS_WATCH, SECURITY_MASTER
+from marketdata.tasks.kinds import (
+    EARNINGS_BACKFILL,
+    FILINGS_BACKFILL,
+    FILINGS_WATCH,
+    SECURITY_MASTER,
+)
 
 WATCH_EVERY = timedelta(minutes=10)
 SECURITY_MASTER_AT = time(6, 0, tzinfo=UTC)
@@ -47,16 +53,51 @@ async def enqueue_watches(conn: AsyncConnection[Any]) -> list[Task]:
 
 async def enqueue_backfills(conn: AsyncConnection[Any], since: date) -> list[Task]:
     """On demand (`marketdata backfill filings`): one filings_backfill per universe company,
-    back to `since`. The worker runs them, so the SEC is called from one process; a finished
-    backfill runs again, one still pending keeps its own start date."""
+    back to `since`, behind live and periodic work (D-067). The worker runs them, so the SEC is
+    called from one process; a finished backfill runs again, one still pending keeps its own
+    start date."""
     universe = await companies.list_in_universe(conn)
     payload = {"since": since.isoformat()}
     return [
         await queue.enqueue(
-            conn, FILINGS_BACKFILL, str(company.cik), {"cik": company.cik, **payload}, force=True
+            conn,
+            FILINGS_BACKFILL,
+            str(company.cik),
+            {"cik": company.cik, **payload},
+            force=True,
+            priority=queue.PRIORITY_BACKFILL,
         )
         for company in universe
     ]
+
+
+async def enqueue_earnings_backfills(
+    conn: AsyncConnection[Any], since: date, *, force: bool = False
+) -> list[Task]:
+    """On demand (`marketdata backfill earnings`): one earnings_backfill per domestic universe
+    company (§9.1), back to `since`, behind live and periodic work (D-067). Each queues the
+    extraction of the company's releases; `force` extracts done ones again."""
+    universe = await companies.list_in_universe(conn)
+    payload = {"since": since.isoformat(), "force": force}
+    return [
+        await queue.enqueue(
+            conn,
+            EARNINGS_BACKFILL,
+            str(company.cik),
+            {"cik": company.cik, **payload},
+            force=True,
+            priority=queue.PRIORITY_BACKFILL,
+        )
+        for company in universe
+        if company.filer_type == "domestic"
+    ]
+
+
+def months_before(day: date, months: int) -> date:
+    """The same day `months` months earlier; a day the month doesn't have becomes its last."""
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    last = calendar.monthrange(year, month + 1)[1]
+    return date(year, month + 1, min(day.day, last))
 
 
 def years_before(day: date, years: int) -> date:

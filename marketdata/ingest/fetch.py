@@ -8,6 +8,9 @@ bytes). An API response is stored under a new key each time, so it can be left w
 
 `fetch_if_changed` is for polling (E3, D-059): a response with the same bytes as the version
 last processed is not stored again, and the caller doesn't parse it either.
+
+`fetch_document` is for filing documents, which never change once filed: one stored before is
+read from the raw store, so re-running an earnings extraction makes no SEC request (D-070).
 """
 
 from collections.abc import Callable
@@ -21,6 +24,7 @@ from psycopg import AsyncConnection
 
 from marketdata.db.repositories import raw_objects
 from marketdata.db.repositories.raw_objects import RawObject
+from marketdata.sec import urls
 from marketdata.sec.client import SecClient
 from marketdata.sec.raw_store import RawStore, RawStoreError, key_for_url, sha256
 
@@ -68,6 +72,20 @@ class RawFetcher:
         key = key_for_url(url, fetched_at)
         await self._keep(url, key, response.content, response.content_type, fetched_at)
         return Fetched(url, digest, fetched_at, key=key, data=response.content)
+
+    async def fetch_document(self, url: str) -> tuple[str, bytes, bool]:
+        """A filing document (a URL built by urls.filing_document or urls.filing_index_page):
+        its raw key, its bytes, and whether it was fetched now (False: read from the raw
+        store, where an earlier fetch keeps it)."""
+        parsed = urls.parse(url)
+        if parsed is None or parsed.endpoint != "filing":
+            raise ValueError(f"{url} is not a filing document")
+        key = key_for_url(url, datetime.now(UTC))  # a filing key doesn't depend on the time
+        async with self._connect() as conn:
+            stored = await raw_objects.get(conn, key)
+        if stored is not None:
+            return key, await self._store.get(key), False
+        return key, await self.fetch_and_store(url, key), True
 
     async def read(self, key: str) -> bytes:
         """A file stored earlier, from the raw store; no SEC request."""

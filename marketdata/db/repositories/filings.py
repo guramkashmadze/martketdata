@@ -81,6 +81,13 @@ _LIST_FOR_COMPANY = f"""
 
 _COUNT_FOR_COMPANY = "select count(*) from filings where cik = %(cik)s"
 
+_WITH_ITEM = f"""
+    select {_COLUMNS} from filings
+    where cik = any(%(ciks)s) and form = any(%(forms)s) and %(item)s = any(items_8k)
+      and filed_at >= %(since)s
+    order by filed_at, accession_no, cik
+"""
+
 
 async def insert_new(conn: AsyncConnection[Any], rows: Sequence[FilingRow]) -> list[str]:
     """Insert listings not stored yet; returns the accession numbers inserted."""
@@ -153,3 +160,18 @@ async def count_for_company(conn: AsyncConnection[Any], cik: int) -> int:
         await cur.execute(_COUNT_FOR_COMPANY, {"cik": cik})
         row = await cur.fetchone()
     return int(row[0]) if row else 0
+
+
+async def with_item(
+    conn: AsyncConnection[Any],
+    ciks: Sequence[int],
+    forms: Sequence[str],
+    item: str,
+    since: date,
+) -> list[Filing]:
+    """Listings of these companies with an 8-K item (e.g. 2.02), filed on or after `since`,
+    oldest first."""
+    params = {"ciks": list(ciks), "forms": list(forms), "item": item, "since": since}
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_WITH_ITEM, params)
+        return await cur.fetchall()

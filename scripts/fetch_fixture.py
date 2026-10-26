@@ -1,7 +1,7 @@
 """Save an SEC response under tests/fixtures/sec/ for offline tests (E1-S5).
 
-    pdm run python scripts/fetch_fixture.py <url> <name> [--trim]
-    pdm run python scripts/fetch_fixture.py --from-raw <raw key> <name> [--trim]
+    pdm run python scripts/fetch_fixture.py <url> <name> [--trim | --gzip]
+    pdm run python scripts/fetch_fixture.py --from-raw <raw key> <name> [--trim | --gzip]
 
 The request goes through the SEC client (User-Agent, rate limit, retries), so this script
 needs SEC_USER_AGENT. With --from-raw it makes no request: it copies a file already in the raw
@@ -14,6 +14,10 @@ exact response a past run saw. `name` is a path under tests/fixtures/sec/, e.g.
 - submissions: only the newest --keep-recent rows of `filings.recent` (every column);
 - company_tickers_exchange and company_tickers_mf: only the rows of the --keep-ciks companies.
 
+`--gzip` keeps every byte instead and compresses them (`name` ends in .gz): press releases are
+proof documents, so they are never trimmed, and compressed they take about a tenth of the
+space (E7a).
+
 Each fixture is recorded in tests/fixtures/sec/MANIFEST.json with its source URL, fetch time,
 the size and sha256 of the original response, the trim applied, and the size and sha256 of
 the file saved. This is the only code outside the SEC client that reaches the network, and
@@ -22,6 +26,7 @@ unit tests never run it.
 
 import argparse
 import asyncio
+import gzip
 import hashlib
 import json
 import sys
@@ -36,6 +41,8 @@ from marketdata.db.repositories import raw_objects
 from marketdata.sec import urls
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
+
+GZIP_RULE = "gzip: every byte, compressed"
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "sec"
@@ -178,6 +185,7 @@ async def fetch(
     keep_recent: int,
     since_year: int | None,
     keep_ciks: set[int] | None = None,
+    compressed: bool = False,
 ) -> Path:
     target = _target(name)
     settings = load_settings()
@@ -194,6 +202,7 @@ async def fetch(
         keep_recent=keep_recent,
         since_year=since_year,
         keep_ciks=keep_ciks,
+        compressed=compressed,
     )
 
 
@@ -205,6 +214,7 @@ async def copy_from_raw(
     keep_recent: int,
     since_year: int | None,
     keep_ciks: set[int] | None = None,
+    compressed: bool = False,
 ) -> Path:
     """Save the file at raw `key` as fixture `name`, with its raw_objects URL and fetch time."""
     target = _target(name)
@@ -227,6 +237,7 @@ async def copy_from_raw(
         since_year=since_year,
         keep_ciks=keep_ciks,
         raw_key=key,
+        compressed=compressed,
     )
 
 
@@ -242,12 +253,18 @@ def save(
     since_year: int | None,
     keep_ciks: set[int] | None,
     raw_key: str | None = None,
+    compressed: bool = False,
 ) -> Path:
-    data, rule = (
-        trim(url, raw, keep_recent=keep_recent, since_year=since_year, keep_ciks=keep_ciks)
-        if trimmed
-        else (raw, None)
-    )
+    if compressed and (trimmed or not name.endswith(".gz")):
+        raise ValueError("--gzip keeps every byte, so not with --trim; name the fixture *.gz")
+    if compressed:
+        data, rule = gzip.compress(raw, mtime=0), GZIP_RULE
+    elif trimmed:
+        data, rule = trim(
+            url, raw, keep_recent=keep_recent, since_year=since_year, keep_ciks=keep_ciks
+        )
+    else:
+        data, rule = raw, None
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     entry: dict[str, Any] = {
@@ -277,6 +294,9 @@ def main(argv: list[str] | None = None) -> int:
         "--from-raw", action="store_true", help="copy from the raw store; no SEC request"
     )
     parser.add_argument("--trim", action="store_true", help="apply the endpoint's trim rule")
+    parser.add_argument(
+        "--gzip", action="store_true", help="keep every byte, compressed (name ends in .gz)"
+    )
     parser.add_argument("--keep-recent", type=int, default=300, help="submissions rows to keep")
     parser.add_argument(
         "--since-year", type=int, help="companyfacts: keep facts filed from this year"
@@ -294,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
                 keep_recent=args.keep_recent,
                 since_year=args.since_year,
                 keep_ciks=keep_ciks,
+                compressed=args.gzip,
             )
         )
     except (SettingsError, SecError, RawStoreError, psycopg.Error, ValueError) as exc:

@@ -1,5 +1,6 @@
 """E3-S5: `marketdata backfill filings --years N` queues one backfill per universe company; the
-worker runs them. The CLI commits, so the test removes what it wrote."""
+worker runs them. E7a: `marketdata backfill earnings --quarters N` queues one earnings backfill
+per domestic universe company. The CLI commits, so the test removes what it wrote."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -10,10 +11,11 @@ import pytest
 from typer.testing import CliRunner
 
 from marketdata import cli
-from marketdata.tasks.kinds import FILINGS_BACKFILL
-from marketdata.tasks.scheduler import years_before
+from marketdata.tasks.kinds import EARNINGS_BACKFILL, FILINGS_BACKFILL
+from marketdata.tasks.scheduler import months_before, years_before
 
 CIKS = (320193, 1652044)
+FUND = 884394  # SPY: in the universe, but earnings apply to domestic filers only (§9.1)
 
 
 @pytest.fixture
@@ -31,8 +33,10 @@ def universe(
             )
     yield migrated_database
     with psycopg.connect(migrated_database, autocommit=True) as conn:
-        conn.execute("delete from tasks where kind = %s", [FILINGS_BACKFILL])
-        conn.execute("delete from companies where cik = any(%s)", [list(CIKS)])
+        conn.execute(
+            "delete from tasks where kind = any(%s)", [[FILINGS_BACKFILL, EARNINGS_BACKFILL]]
+        )
+        conn.execute("delete from companies where cik = any(%s)", [list(CIKS) + [FUND]])
 
 
 def test_one_backfill_per_universe_company(universe: str) -> None:
@@ -51,6 +55,28 @@ def test_one_backfill_per_universe_company(universe: str) -> None:
     assert rows == [
         (str(cik), {"cik": cik, "since": since.isoformat()}) for cik in sorted(CIKS, key=str)
     ]
+
+
+def test_one_earnings_backfill_per_domestic_universe_company(universe: str) -> None:
+    with psycopg.connect(universe, autocommit=True) as conn:
+        conn.execute(
+            "insert into companies (cik, name, filer_type, in_universe) "
+            "values (%s, 'test', 'fund', true)",
+            [FUND],
+        )
+    since = months_before(datetime.now(UTC).date(), 12)
+
+    result = CliRunner().invoke(cli.app, ["backfill", "earnings", "--quarters", "4", "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert f"Queued 2 earnings backfills back to {since} for 2 domestic" in result.stdout
+    with psycopg.connect(universe) as conn:
+        rows = conn.execute(
+            "select key, payload, priority from tasks where kind = %s order by key",
+            [EARNINGS_BACKFILL],
+        ).fetchall()
+    payload = {"since": since.isoformat(), "force": True}
+    assert rows == [(str(cik), {"cik": cik, **payload}, -10) for cik in sorted(CIKS, key=str)]
 
 
 def test_an_empty_universe_is_an_error(

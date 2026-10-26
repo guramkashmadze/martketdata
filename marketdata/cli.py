@@ -24,6 +24,7 @@ from marketdata.ingest.security_master import (
     UniverseCheck,
     check_universe,
     read_data_files,
+    read_predecessors,
 )
 from marketdata.log import configure_logging
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
@@ -199,6 +200,48 @@ def backfill_filings(
     typer.echo("Follow them with `marketdata tasks list --kind filings_backfill`.")
 
 
+@groups["backfill"].command("earnings")
+def backfill_earnings(
+    quarters: Annotated[
+        int,
+        typer.Option(min=1, max=40, help="How many quarters back, three months each."),
+    ] = 4,
+    force: Annotated[
+        bool,
+        typer.Option(help="Extract releases that were extracted before again (new rules)."),
+    ] = False,
+) -> None:
+    """Queue an earnings backfill for each domestic universe company; the worker runs them.
+
+    Each task loads the filings of the company's predecessors, then queues the extraction of
+    every 8-K with item 2.02 filed in the window, behind live work. Exits with 1 when the
+    universe has no domestic company.
+    """
+    settings = _settings()
+    since = task_scheduler.months_before(datetime.now(UTC).date(), quarters * 3)
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        return await task_scheduler.enqueue_earnings_backfills(conn, since, force=force)
+
+    queued = _in_transaction(settings, work)
+    if not queued:
+        raise _fail("No domestic universe companies: run `marketdata ingest security-master`.")
+    start = since.isoformat()
+    mine = [task for task in queued if task.status == "queued" and task.payload["since"] == start]
+    typer.echo(
+        f"Queued {len(mine)} earnings backfills back to {since} for {len(queued)} domestic "
+        "universe companies; the worker runs them."
+    )
+    if len(mine) < len(queued):
+        typer.echo(
+            f"  {len(queued) - len(mine)} were already pending and keep their own start date."
+        )
+    typer.echo(
+        "Follow them with `marketdata tasks list --kind earnings_backfill` and "
+        "`--kind earnings_extract`."
+    )
+
+
 @app.command("scheduler")
 def scheduler() -> None:
     """Enqueue periodic tasks until stopped (SIGTERM or Ctrl-C); the worker runs them.
@@ -224,14 +267,19 @@ def ingest_security_master(
         typer.Option(help="Apply lists that end more tickers than the safety limit allows."),
     ] = False,
 ) -> None:
-    """Load every ticker from the SEC lists, and details and class for each universe company.
+    """Load every ticker from the SEC lists, and details and class for each universe company
+    and each predecessor in PREDECESSORS_FILE.
 
     Prints the changes and the universe with the class of each company. Exits with 1 when a
-    universe company's submissions could not be loaded (what was stored for it stays), and
-    with 2, changing nothing, when the lists look cut short.
+    universe company's or predecessor's submissions could not be loaded (what was stored for
+    it stays), and with 2, changing nothing, when the lists look cut short.
     """
     settings = _settings()
     universe, overrides = _data_files(settings)
+    try:
+        links = read_predecessors(settings.predecessors_file)
+    except DataFileError as exc:
+        raise _fail(str(exc), 2) from None
     try:
         sec = SecClient.from_settings(settings)
         store = create_raw_store(settings)
@@ -249,7 +297,7 @@ def ingest_security_master(
             fetcher = RawFetcher(sec, store, pool.connection)
             loader = SecurityMasterLoader(fetcher, pool.connection)
             today = datetime.now(UTC).date()
-            return await loader.load(universe, overrides, as_of=today, force=force)
+            return await loader.load(universe, overrides, as_of=today, links=links, force=force)
 
     try:
         report = asyncio.run(run())

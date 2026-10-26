@@ -10,6 +10,7 @@ E0_TABLES = {"tasks", "clients", "api_keys", "api_requests"}
 E1_TABLES = {"raw_objects"}
 E2_TABLES = {"companies", "securities"}
 E3_TABLES = {"filings", "watch_state"}
+E7A_TABLES = {"documents", "company_predecessors"}
 
 
 def _tables(url: str) -> set[str]:
@@ -20,11 +21,26 @@ def _tables(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0004(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0004"
+def _columns(url: str, table: str) -> set[str]:
+    with psycopg.connect(url) as conn:
+        rows = conn.execute(
+            "select column_name from information_schema.columns where table_name = %s", [table]
+        ).fetchall()
+    return {row[0] for row in rows}
+
+
+def test_head_is_0005(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0005"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
+    every = E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES
+    assert _tables(migrated_database) >= every
+    assert "priority" in _columns(migrated_database, "tasks")
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & E7A_TABLES == set()
+    assert "priority" not in _columns(migrated_database, "tasks")
     assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES
 
     command.downgrade(alembic_config, "-1")
@@ -43,7 +59,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) & E0_TABLES == set()
 
     command.upgrade(alembic_config, "head")
-    assert _tables(migrated_database) >= E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES
+    assert _tables(migrated_database) >= every
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:
@@ -79,4 +95,22 @@ async def test_filing_accession_numbers_are_checked(conn: psycopg.AsyncConnectio
         await conn.execute(
             "insert into filings (accession_no, cik, form, filed_at) "
             "values ('000003408826000093', 34088, '10-Q', '2026-08-03')"
+        )
+
+
+async def test_tasks_get_the_normal_priority_by_default(
+    conn: psycopg.AsyncConnection[Any],
+) -> None:
+    cur = await conn.execute("insert into tasks (kind, key) values ('k', '1') returning priority")
+
+    assert await cur.fetchone() == (0,)
+
+
+async def test_a_company_is_not_its_own_predecessor(conn: psycopg.AsyncConnection[Any]) -> None:
+    await conn.execute("insert into companies (cik) values (34088)")
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(
+            "insert into company_predecessors (cik, predecessor_cik, source_url, note) "
+            "values (34088, 34088, 'https://www.sec.gov/', 'no')"
         )

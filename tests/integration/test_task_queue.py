@@ -84,6 +84,49 @@ async def test_claim_takes_the_oldest_ready_task_of_the_given_kinds(conn: Conn) 
     assert await queue.claim(conn, ["a"], LOCK) is None  # "b" isn't asked for
 
 
+async def test_claim_takes_live_work_before_periodic_work_before_backfills(conn: Conn) -> None:
+    backfill = await queue.enqueue(conn, "k", "backfill", priority=queue.PRIORITY_BACKFILL)
+    periodic = await queue.enqueue(conn, "k", "periodic")
+    live = await queue.enqueue(conn, "k", "live", priority=queue.PRIORITY_LIVE)
+    older_live = await queue.enqueue(conn, "k", "older", priority=queue.PRIORITY_LIVE)
+    await conn.execute(
+        "update tasks set run_after = run_after - interval '1 hour' where task_id = %s",
+        [older_live.task_id],
+    )
+
+    claimed = [await queue.claim(conn, ["k"], LOCK) for _ in range(4)]
+
+    assert [task.key if task else None for task in claimed] == [
+        "older",
+        "live",
+        "periodic",
+        "backfill",
+    ]
+    assert (backfill.priority, periodic.priority, live.priority) == (-10, 0, 10)
+
+
+async def test_a_waiting_task_enqueued_again_at_a_higher_priority_is_raised(conn: Conn) -> None:
+    await queue.enqueue(conn, "earnings_extract", "a", priority=queue.PRIORITY_BACKFILL)
+
+    raised = await queue.enqueue(conn, "earnings_extract", "a", priority=queue.PRIORITY_LIVE)
+    lower = await queue.enqueue(conn, "earnings_extract", "a", priority=queue.PRIORITY_BACKFILL)
+
+    assert (raised.priority, lower.priority) == (queue.PRIORITY_LIVE, queue.PRIORITY_LIVE)
+
+
+async def test_force_queues_a_done_task_again_at_its_new_priority(conn: Conn) -> None:
+    await queue.enqueue(conn, "earnings_extract", "a", priority=queue.PRIORITY_LIVE)
+    claimed = await queue.claim(conn, ["earnings_extract"], LOCK)
+    assert claimed is not None
+    await queue.complete(conn, claimed)
+
+    again = await queue.enqueue(
+        conn, "earnings_extract", "a", force=True, priority=queue.PRIORITY_BACKFILL
+    )
+
+    assert (again.status, again.priority) == ("queued", queue.PRIORITY_BACKFILL)
+
+
 async def test_a_task_due_later_waits(conn: Conn) -> None:
     created = await queue.enqueue(conn, "a", "1")
     await queue.enqueue(conn, "a", "2", run_after=created.run_after + timedelta(minutes=1))

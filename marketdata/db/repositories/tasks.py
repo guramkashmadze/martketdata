@@ -1,7 +1,8 @@
 """The tasks table (PLAN.md §7): the work queue in PostgreSQL (E0-S3, E3-S1).
 
-A task is unique by (kind, key). `claim` gives each ready task to one worker: it takes the oldest
-ready row with FOR UPDATE SKIP LOCKED, marks it running and counts the attempt. The attempt count
+A task is unique by (kind, key). `claim` gives each ready task to one worker: it takes the ready
+row with the highest priority, oldest first, with FOR UPDATE SKIP LOCKED, marks it running and
+counts the attempt (D-067). The attempt count
 also fences the worker holding a task: `complete`, `fail`, `release` and `extend_lock` change the
 row only while it is still running under the attempt they were given, so a worker whose lock ran
 out, and whose task another worker claimed, changes nothing.
@@ -19,6 +20,12 @@ from pydantic import BaseModel, ConfigDict
 TaskStatus = Literal["queued", "running", "done", "failed", "dead"]
 TASK_STATUSES: tuple[TaskStatus, ...] = ("queued", "running", "done", "failed", "dead")
 
+# D-067: workers take the highest priority first. Work routed from a new filing is live; the
+# periodic watches and loads are normal; backfills wait behind both.
+PRIORITY_LIVE = 10
+PRIORITY_NORMAL = 0
+PRIORITY_BACKFILL = -10
+
 
 class Task(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -28,6 +35,7 @@ class Task(BaseModel):
     key: str
     payload: dict[str, Any]
     status: TaskStatus
+    priority: int
     attempts: int
     run_after: datetime
     locked_until: datetime | None
@@ -45,19 +53,21 @@ class TaskCount(BaseModel):
 
 
 _COLUMNS = """
-    task_id, kind, key, payload, status, attempts, run_after, locked_until, last_error,
+    task_id, kind, key, payload, status, priority, attempts, run_after, locked_until, last_error,
     created_at, updated_at
 """
 
 # A new task is queued. An existing one is returned unchanged, unless `force` is set and it has
-# finished (done or dead): then it is queued again with the new payload. A task that is queued,
-# running or waiting to retry is never reset, so a periodic enqueue can't start it twice.
+# finished (done or dead): then it is queued again with the new payload and priority. A task that
+# is queued, running or waiting to retry is never reset, so a periodic enqueue can't start it
+# twice.
 _ENQUEUE = f"""
-    insert into tasks (kind, key, payload, run_after)
-    values (%(kind)s, %(key)s, %(payload)s, coalesce(%(run_after)s, now()))
+    insert into tasks (kind, key, payload, priority, run_after)
+    values (%(kind)s, %(key)s, %(payload)s, %(priority)s, coalesce(%(run_after)s, now()))
     on conflict (kind, key) do update set
       payload = excluded.payload,
       status = 'queued',
+      priority = excluded.priority,
       attempts = 0,
       run_after = excluded.run_after,
       locked_until = null,
@@ -69,12 +79,19 @@ _ENQUEUE = f"""
 
 _SELECT_BY_KEY = f"select {_COLUMNS} from tasks where kind = %(kind)s and key = %(key)s"
 
+# A task still waiting runs sooner when it is enqueued again at a higher priority.
+_RAISE_PRIORITY = f"""
+    update tasks set priority = %(priority)s, updated_at = now()
+    where task_id = %(task_id)s and status in ('queued', 'failed') and priority < %(priority)s
+    returning {_COLUMNS}
+"""
+
 _SELECT_BY_ID = f"select {_COLUMNS} from tasks where task_id = %(task_id)s"
 
 _SELECT_BY_IDS = f"select {_COLUMNS} from tasks where task_id = any(%(ids)s) order by task_id"
 
 # Ready: queued or waiting to retry, and due; or running with a lock that ran out (the worker
-# died). Oldest first.
+# died). Highest priority first, then oldest.
 _CLAIM = f"""
     update tasks set
       status = 'running',
@@ -88,7 +105,7 @@ _CLAIM = f"""
           (status in ('queued', 'failed') and run_after <= now())
           or (status = 'running' and locked_until < now())
         )
-      order by run_after, task_id
+      order by priority desc, run_after, task_id
       for update skip locked
       limit 1
     )
@@ -171,12 +188,15 @@ async def enqueue(
     *,
     run_after: datetime | None = None,
     force: bool = False,
+    priority: int = PRIORITY_NORMAL,
 ) -> Task:
-    """Queue a task, or return the existing (kind, key) task; see _ENQUEUE for `force`."""
+    """Queue a task, or return the existing (kind, key) task; see _ENQUEUE for `force`. An
+    existing task still waiting takes `priority` if that is higher than its own."""
     params = {
         "kind": kind,
         "key": key,
         "payload": Jsonb(dict(payload or {})),
+        "priority": priority,
         "run_after": run_after,
         "force": force,
     }
@@ -188,6 +208,9 @@ async def enqueue(
             # statement's snapshot was taken, it is visible to a new statement.
             await cur.execute(_SELECT_BY_KEY, params)
             task = await cur.fetchone()
+        if task is not None and task.priority < priority:
+            await cur.execute(_RAISE_PRIORITY, {"task_id": task.task_id, "priority": priority})
+            task = await cur.fetchone() or task
     if task is None:
         raise RuntimeError(f"task {kind}:{key} was neither inserted nor found")
     return task

@@ -35,15 +35,21 @@ TODAY = datetime.now(UTC).date()
 
 
 async def _run(
-    conn: Conn, tmp_path: Path, routes: Mapping[str, bytes | int], universe: str = TEST_UNIVERSE_CSV
+    conn: Conn,
+    tmp_path: Path,
+    routes: Mapping[str, bytes | int],
+    universe: str = TEST_UNIVERSE_CSV,
+    predecessors: str = "cik,predecessor_cik,source_url,note\n",
 ) -> None:
     (tmp_path / "universe.csv").write_text(universe)
     (tmp_path / "overrides.csv").write_text("ticker,security_type,source_url\n")
+    (tmp_path / "predecessors.csv").write_text(predecessors)
     settings = Settings(  # type: ignore[call-arg]
         _env_file=None,
         database_url="postgresql://unused@localhost/unused_test",
         universe_file=tmp_path / "universe.csv",
         security_overrides_file=tmp_path / "overrides.csv",
+        predecessors_file=tmp_path / "predecessors.csv",
     )
     task = await queue.enqueue(conn, SECURITY_MASTER, TODAY.isoformat())
     async with sec_serving(routes) as sec:

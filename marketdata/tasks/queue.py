@@ -7,8 +7,10 @@ by (kind, key):
   running or waiting to retry. A finished task (done or dead) runs again only with
   `force=True`, which queues it again with the new payload and a fresh attempt count. Periodic
   tasks (one watch per company, one security-master load per day) are enqueued with force.
-- `claim` gives the oldest ready task of the worker's kinds to one worker (FOR UPDATE SKIP
-  LOCKED) and locks it for a while; a task whose lock ran out (its worker died) is ready again.
+- `claim` gives the ready task of the worker's kinds with the highest priority, oldest first, to
+  one worker (FOR UPDATE SKIP LOCKED) and locks it for a while; a task whose lock ran out (its
+  worker died) is ready again. Work routed from new filings runs before periodic work, and
+  backfills wait behind both (D-067).
 - `fail` retries after the kind's backoff, or marks the task dead after its last attempt or when
   the handler refused it for good.
 """
@@ -22,6 +24,11 @@ from psycopg import AsyncConnection
 
 from marketdata.db.repositories import tasks
 from marketdata.db.repositories.tasks import Task, TaskCount, TaskStatus
+
+# Task priorities (D-067): workers take the highest first.
+PRIORITY_LIVE = tasks.PRIORITY_LIVE  # work routed from a new filing
+PRIORITY_NORMAL = tasks.PRIORITY_NORMAL  # periodic watches and loads
+PRIORITY_BACKFILL = tasks.PRIORITY_BACKFILL  # history
 
 
 @dataclass(frozen=True)
@@ -64,15 +71,20 @@ async def enqueue(
     *,
     run_after: datetime | None = None,
     force: bool = False,
+    priority: int = PRIORITY_NORMAL,
 ) -> Task:
-    """Queue a task once per (kind, key); `force` queues a done or dead task again."""
-    return await tasks.enqueue(conn, kind, key, payload, run_after=run_after, force=force)
+    """Queue a task once per (kind, key); `force` queues a done or dead task again. A task
+    still waiting takes `priority` when it is higher than its own."""
+    return await tasks.enqueue(
+        conn, kind, key, payload, run_after=run_after, force=force, priority=priority
+    )
 
 
 async def claim(
     conn: AsyncConnection[Any], kinds: Sequence[str], lock_for: timedelta
 ) -> Task | None:
-    """The oldest ready task of these kinds, running and locked for `lock_for`; None if none."""
+    """The ready task of these kinds with the highest priority, oldest first, now running and
+    locked for `lock_for`; None if there is none."""
     if not kinds:
         return None
     return await tasks.claim(conn, kinds, lock_for)

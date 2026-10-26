@@ -11,7 +11,11 @@ from marketdata.normalize.security_master import (
     parse_exchange_list,
     parse_fund_list,
 )
-from marketdata.normalize.universe import parse_security_overrides, parse_universe
+from marketdata.normalize.universe import (
+    parse_predecessors,
+    parse_security_overrides,
+    parse_universe,
+)
 from marketdata.sec import urls
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,3 +63,13 @@ def test_overrides_apply_to_the_fixture_lists() -> None:
         assert snapshot.listings[ticker].security_type == "preferred"
     for ticker in ("AMJB", "VYLD"):
         assert snapshot.listings[ticker].security_type == "other"
+
+
+def test_predecessors_point_at_a_filing_of_the_company_now() -> None:
+    links = parse_predecessors((ROOT / "data" / "predecessors.csv").read_text())
+
+    assert [(link.cik, link.predecessor_cik) for link in links] == [(2115436, 34088)]  # XOM
+    for link in links:
+        parsed = urls.parse(link.source_url)
+        assert parsed is not None and parsed.endpoint == "filing"
+        assert parsed.cik == link.cik  # the successor's 8-K12B

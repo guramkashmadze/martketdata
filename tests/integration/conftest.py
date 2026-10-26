@@ -5,6 +5,7 @@ with Alembic. The database is created if it is missing. When PostgreSQL is unrea
 tests fail rather than skip, so a green run means they ran.
 """
 
+import gzip
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import date
@@ -21,7 +22,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.ingest.security_master import LoadReport, SecurityMasterLoader
-from marketdata.normalize.universe import SecurityOverride, parse_universe
+from marketdata.normalize.universe import Predecessor, SecurityOverride, parse_universe
 from marketdata.sec import urls
 from marketdata.sec.client import SecClient, TokenBucket
 from marketdata.sec.raw_store import LocalRawStore
@@ -129,6 +130,20 @@ def fixture_routes() -> dict[str, bytes | int]:
     return routes
 
 
+def filing_routes() -> dict[str, bytes | int]:
+    """E7a: every filing document under fixtures/sec/filings/{cik}/{accession}/, by its SEC
+    URL; gzipped fixtures are served as the original bytes."""
+    routes: dict[str, bytes | int] = {}
+    for path in sorted((SEC_FIXTURES / "filings").glob("*/*/*")):
+        cik, accession = int(path.parent.parent.name), path.parent.name
+        data = path.read_bytes()
+        name = path.name
+        if name.endswith(".gz"):
+            data, name = gzip.decompress(data), name.removesuffix(".gz")
+        routes[urls.filing_document(cik, accession, name)] = data
+    return routes
+
+
 def sec_serving(routes: Mapping[str, bytes | int]) -> SecClient:
     def handler(request: httpx2.Request) -> httpx2.Response:
         body = routes.get(str(request.url), 404)
@@ -163,11 +178,14 @@ def load_master(conn: psycopg.AsyncConnection[Any], tmp_path: Path) -> LoadMaste
         overrides: Sequence[SecurityOverride] = (),
         as_of: date = AS_OF,
         force: bool = False,
+        links: Sequence[Predecessor] = (),
     ) -> LoadReport:
         async with sec_serving(routes if routes is not None else fixture_routes()) as sec:
             loader = SecurityMasterLoader(
                 RawFetcher(sec, store, connect_to(conn)), connect_to(conn)
             )
-            return await loader.load(parse_universe(universe), overrides, as_of=as_of, force=force)
+            return await loader.load(
+                parse_universe(universe), overrides, as_of=as_of, links=links, force=force
+            )
 
     return load

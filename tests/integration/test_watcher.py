@@ -70,6 +70,7 @@ async def test_one_new_filing_enqueues_exactly_its_task(
     assert report.stored.routed == (f"{EARNINGS_EXTRACT} {EARNINGS}",)
     [task] = await queue.list_tasks(conn, kind=EARNINGS_EXTRACT)
     assert (task.key, task.payload) == (EARNINGS, {"cik": AAPL, "accession_no": EARNINGS})
+    assert task.priority == queue.PRIORITY_LIVE  # ahead of backfills (D-067)
 
 
 async def test_a_shifted_file_stores_no_times_and_a_right_one_fills_them(

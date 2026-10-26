@@ -8,7 +8,7 @@ A watch of one company:
 3. checks the file's acceptance times; a file that fails gives no times (D-057);
 4. in one transaction, under a lock per company: inserts the listings not stored yet, fills
    acceptance times stored as missing, enqueues the tasks §4 routes new filings to (only for
-   registered kinds), and records the file processed.
+   registered kinds) as live work, ahead of backfills (D-067), and records the file processed.
 
 A company's first watch only records what is there: history goes through each epic's backfill,
 so the first watch routes nothing.
@@ -167,7 +167,13 @@ class FilingsWatcher:
                         continue
                     for work in route(row, filer_type=filer_type):
                         if work.kind in self._kinds:
-                            await tasks.enqueue(conn, work.kind, work.key, work.payload)
+                            await tasks.enqueue(
+                                conn,
+                                work.kind,
+                                work.key,
+                                work.payload,
+                                priority=tasks.PRIORITY_LIVE,
+                            )
                             routed.append(f"{work.kind} {work.key}")
             if watched:
                 await watch_state.record_change(

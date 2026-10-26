@@ -377,17 +377,20 @@ def plan_companies(
     stored: Mapping[int, StoredCompany],
     listed: Mapping[int, ListedCompany],
     universe: Mapping[int, UniverseCompany],
+    predecessors: Mapping[int, UniverseCompany] | None = None,
 ) -> tuple[list[CompanyRow], list[CompanyRow]]:
     """The companies rows to add and to change, so that an unchanged input writes nothing.
 
     Universe companies take name, details and class from their submissions (D-052, D-053);
-    if those could not be loaded, what is stored stays. Other companies take the exchange
+    if those could not be loaded, what is stored stays. So do predecessors of universe
+    companies (D-068), which stay out of the universe. Other companies take the exchange
     list's name; their details and class stay as stored, except that the fund list makes a
     company a fund. A company that is no longer listed anywhere is kept, out of the universe.
     """
+    loaded = {**(predecessors or {}), **universe}
     added: list[CompanyRow] = []
     changed: list[CompanyRow] = []
-    for cik in sorted(set(stored) | set(listed) | set(universe)):
+    for cik in sorted(set(stored) | set(listed) | set(loaded)):
         current = stored.get(cik)
         base = (
             CompanyRow(cik, None, None, None, None, None, "unknown", False)
@@ -405,7 +408,7 @@ def plan_companies(
         )
         row = replace(base, in_universe=cik in universe)
         listing = listed.get(cik)
-        member = universe.get(cik)
+        member = loaded.get(cik)
         if member is not None and member.details is not None:
             details = member.details
             row = replace(

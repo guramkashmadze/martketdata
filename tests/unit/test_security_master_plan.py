@@ -80,6 +80,21 @@ def test_universe_companies_take_details_and_class_from_submissions() -> None:
     ]
 
 
+def test_predecessors_take_details_and_class_but_stay_out_of_the_universe() -> None:
+    exxon = CompanyDetails(
+        34088, "EXXON MOBIL CORP", "2911", "Petroleum Refining", "1231", "NJ", ()
+    )
+    predecessor = UniverseCompany(34088, exxon, Classification("domestic", "10-Q filed 2026-08-03"))
+
+    added, _ = plan_companies({}, {}, {}, {34088: predecessor})
+
+    assert added == [
+        CompanyRow(
+            34088, "EXXON MOBIL CORP", "2911", "Petroleum Refining", "1231", "NJ", "domestic", False
+        )
+    ]
+
+
 def test_the_same_input_writes_nothing() -> None:
     listed = {27419: ListedCompany(27419, "TARGET CORP", in_fund_list=False)}
 
