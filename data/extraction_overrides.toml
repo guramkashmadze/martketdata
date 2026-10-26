@@ -1,0 +1,10 @@
+# Per-company pins for the earnings rules (PLAN.md §9.9, D-075), read by every earnings task.
+#
+# Each [[override]] names a company (cik) and a slot (revenue, operating_income, net_income,
+# eps_diluted), says why the rules need help (reason) and where it can be checked (source_url,
+# the SEC filing page), and gives one of:
+#   row_label = "…"        take the row with this label (as printed, footnote markers dropped)
+#   table = N              the statement is the exhibit's table N (doc_name = "…" to name it)
+#   not_applicable = "…"   the company's release doesn't present this line, and why
+# accession_no = "…" limits an override to one release. Every override is logged in
+# docs/EDGE_CASES.md and counted in `marketdata extract report`.

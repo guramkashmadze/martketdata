@@ -97,6 +97,7 @@ _CLOSING = re.compile(r"^(?:\)|%|\)%|%\)|\)\s*%|pts?\.?|bps)$", re.IGNORECASE)
 _DECORATION = re.compile(r"[\s$€£¥()%\[\]*]|US\$|(?<![A-Za-z])[xX](?![A-Za-z])")
 _DIGITS = re.compile(r"^[-−–]?(?:\d{1,3}(?:,\d{3})+|\d+)?(?:\.\d+)?$")
 _NIL = re.compile(r"^(?:[$€£¥]\s*)?[-—–‒―−]+\s*%?$")
+_TOKENS = re.compile(r"[^\s$€£¥()%]+")
 _NOT_MEANINGFUL = re.compile(r"^(?:n\s*/\s*m|nm|n\s*/\s*a|nmf|\*+)$", re.IGNORECASE)
 _YEAR = re.compile(r"^(?:19|20)\d{2}$")
 # Footnote markers at the end of a label: (1), (a), (1)(2), *, †, ‡.
@@ -185,11 +186,15 @@ def unwrap(source: str) -> str:
 
 
 def is_value(text: str) -> bool:
-    """A printed value: a number (with `$`, `%`, parentheses), a dash for nil, or "n/m"."""
+    """A printed value: one number (with `$`, `%`, parentheses), a dash for nil, or "n/m".
+    "2025 (1)", a year with a footnote marker, holds two numbers and is not a value."""
     if _NIL.match(text) or _NOT_MEANINGFUL.match(text):
         return True
+    numbers = [token for token in _TOKENS.findall(text) if any(ch.isdigit() for ch in token)]
+    if len(numbers) != 1:
+        return False
     core = _DECORATION.sub("", text)
-    return bool(core) and any(ch.isdigit() for ch in core) and bool(_DIGITS.match(core))
+    return bool(core) and bool(_DIGITS.match(core))
 
 
 def is_year(text: str) -> bool:
@@ -288,11 +293,11 @@ def _grid(table: HtmlElement) -> tuple[list[Row], int]:
         return _unaligned(physical)
     rows = []
     for items in physical:
-        has_values = any(is_value(item.text) and not is_year(item.text) for item in items)
-        label = [
-            item for item in items if not is_value(item.text) and item.start < columns[0].start
-        ]
-        rest = [item for item in items if item not in label]
+        # Whatever sits left of the first printed column is the label, a number too: a page
+        # number a generator left in the label column, a year labelling a row.
+        label = [item for item in items if item.start < columns[0].start]
+        rest = [item for item in items if item.start >= columns[0].start]
+        has_values = any(is_value(item.text) and not is_year(item.text) for item in rest)
         placed = _headings(rest, columns) if not has_values else _values(rest, columns)
         texts = [" ".join(item.text for item in column) for column in placed]
         label_text = " ".join(item.text for item in label)
@@ -375,13 +380,18 @@ class _Column:
 
 
 def _columns(physical: list[list[_Item]]) -> list[_Column]:
-    """Printed columns: the overlapping physical spans of values in rows that have values."""
+    """Printed columns: the overlapping physical spans of values in rows that have values.
+    Values inside the label column (where most rows' first text cell ends) don't count."""
+    label_end = _label_end(physical)
     spans = sorted(
         (item.start, item.end)
         for items in physical
-        if any(is_value(item.text) and not is_year(item.text) for item in items)
+        if any(
+            is_value(item.text) and not is_year(item.text) and item.start >= label_end
+            for item in items
+        )
         for item in items
-        if is_value(item.text)
+        if is_value(item.text) and item.start >= label_end
     )
     groups: list[list[tuple[int, int]]] = []
     for span in spans:
@@ -393,6 +403,17 @@ def _columns(physical: list[list[_Item]]) -> list[_Column]:
         _Column(group[0][0], max(end for _, end in group), Counter(group).most_common(1)[0][0])
         for group in groups
     ]
+
+
+def _label_end(physical: list[list[_Item]]) -> int:
+    """Where the label column ends: the usual end of the first cell of rows that start with
+    text and hold values after it. 0 when rows don't start with labels."""
+    ends = Counter(
+        items[0].end
+        for items in physical
+        if not is_value(items[0].text) and any(is_value(item.text) for item in items[1:])
+    )
+    return ends.most_common(1)[0][0] if ends else 0
 
 
 def _values(items: list[_Item], columns: list[_Column]) -> list[list[_Item]]:

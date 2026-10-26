@@ -57,6 +57,8 @@ class Release:
     # Slots that don't apply to this company, with the reason: a bank's revenue (§9.9) or an
     # override for a line the company doesn't present.
     not_applicable: Mapping[Slot, str] = field(default_factory=dict)
+    filed_at: date | None = None  # from the index page
+    fiscal_year_end: str | None = None  # the company's, 'MMDD' (companies.fiscal_year_end)
 
 
 @dataclass(frozen=True)
@@ -89,7 +91,10 @@ class ExtractionResult:
     extractor: str  # 'rules' (E7a), 'llm' (E12)
     extractor_version: str
     slots: tuple[SlotResult, ...]  # one per slot, in SLOTS order
-    statement_found: bool  # an exhibit had an income statement table
+    statement_found: bool  # an exhibit had an income statement table with quarter columns
+    # Some table had a revenue, net income or EPS line, quarter columns or not. Without one
+    # the filing is no earnings release (a deliveries report, an announcement): no_statement.
+    income_lines_found: bool = False
     doc_name: str | None = None  # the exhibit the values came from
     table_index: int | None = None
     period_end: date | None = None  # the current quarter column's end date

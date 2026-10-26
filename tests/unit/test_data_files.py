@@ -6,6 +6,10 @@ against the live SEC lists; this test only needs the files themselves.
 
 from pathlib import Path
 
+import pytest
+
+from marketdata.extract.earnings_rules import OverrideError
+from marketdata.ingest.earnings import read_overrides
 from marketdata.normalize.security_master import (
     build_snapshot,
     parse_exchange_list,
@@ -73,3 +77,27 @@ def test_predecessors_point_at_a_filing_of_the_company_now() -> None:
         parsed = urls.parse(link.source_url)
         assert parsed is not None and parsed.endpoint == "filing"
         assert parsed.cik == link.cik  # the successor's 8-K12B
+
+
+def test_the_extraction_overrides_file_parses_and_cites_sec_filings() -> None:
+    overrides = read_overrides(ROOT / "data" / "extraction_overrides.toml")
+
+    for override in overrides:
+        parsed = urls.parse(override.source_url)
+        assert parsed is not None and parsed.endpoint == "filing"
+        assert parsed.cik == override.cik or override.cik in OVERRIDE_PREDECESSORS
+
+
+# Overrides may cite the successor's filings for a predecessor's history (D-068).
+OVERRIDE_PREDECESSORS = {34088}
+
+
+def test_an_override_citing_another_site_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "overrides.toml"
+    path.write_text(
+        '[[override]]\ncik = 1\nslot = "revenue"\nrow_label = "Sales"\nreason = "r"\n'
+        'source_url = "https://example.com/release.htm"\n'
+    )
+
+    with pytest.raises(OverrideError, match="not an SEC filing page"):
+        read_overrides(path)

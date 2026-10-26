@@ -18,11 +18,13 @@ of the company's predecessors first (D-068), then queues an `earnings_extract` t
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 
 import structlog
 
 from marketdata.db.repositories import documents, filings, predecessors, tasks
 from marketdata.db.repositories.documents import Document
+from marketdata.extract.earnings_rules import Override, OverrideError, parse_overrides
 from marketdata.extract.html_tables import parse_document
 from marketdata.extract.interface import ReleaseDocument
 from marketdata.ingest.fetch import Connect, RawFetcher
@@ -33,6 +35,27 @@ from marketdata.normalize.security_master import SecFileError
 from marketdata.sec import urls
 
 log = structlog.get_logger(__name__)
+
+
+def read_overrides(path: Path) -> tuple[Override, ...]:
+    """The extraction overrides file (EXTRACTION_OVERRIDES_FILE), checked: each source_url must
+    be an SEC filing page. OverrideError lists every problem."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise OverrideError(f"{path}: file not found") from None
+    overrides = parse_overrides(text, str(path))
+    problems = []
+    for number, override in enumerate(overrides, start=1):
+        parsed = urls.parse(override.source_url)
+        if parsed is None or parsed.endpoint != "filing":
+            problems.append(
+                f"override {number} (CIK {override.cik}, {override.slot}): source_url is not "
+                f"an SEC filing page: {override.source_url}"
+            )
+    if problems:
+        raise OverrideError(f"{path}:\n" + "\n".join(f"  - {line}" for line in problems))
+    return overrides
 
 
 @dataclass(frozen=True)
