@@ -11,6 +11,7 @@ E1_TABLES = {"raw_objects"}
 E2_TABLES = {"companies", "securities"}
 E3_TABLES = {"filings", "watch_state"}
 E7A_TABLES = {"documents", "company_predecessors"}
+EARNINGS_TABLES = {"earnings_releases", "earnings_facts", "value_changes"}
 
 
 def _tables(url: str) -> set[str]:
@@ -29,14 +30,18 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0005(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0005"
+def test_head_is_0006(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0006"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
-    every = E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES
+    every = E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES | EARNINGS_TABLES
     assert _tables(migrated_database) >= every
     assert "priority" in _columns(migrated_database, "tasks")
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & EARNINGS_TABLES == set()
+    assert _tables(migrated_database) >= E7A_TABLES
 
     command.downgrade(alembic_config, "-1")
     assert _tables(migrated_database) & E7A_TABLES == set()
@@ -113,4 +118,19 @@ async def test_a_company_is_not_its_own_predecessor(conn: psycopg.AsyncConnectio
         await conn.execute(
             "insert into company_predecessors (cik, predecessor_cik, source_url, note) "
             "values (34088, 34088, 'https://www.sec.gov/', 'no')"
+        )
+
+
+async def test_a_fact_that_failed_holds_no_value(conn: psycopg.AsyncConnection[Any]) -> None:
+    await conn.execute("insert into companies (cik) values (320193)")
+    await conn.execute(
+        "insert into earnings_releases (accession_no, cik, status, extractor, extractor_version, "
+        "check_report) values ('0000320193-26-000018', 320193, 'partial', 'rules', '1', '{}')"
+    )
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(
+            "insert into earnings_facts (accession_no, slot, value, unit, method, "
+            "extractor_version, check_status) values ('0000320193-26-000018', 'revenue', 1, "
+            "'USD', 'rule', '1', 'failed')"
         )

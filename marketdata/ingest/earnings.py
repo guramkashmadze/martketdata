@@ -7,6 +7,14 @@ Finding the press release (E7a-S1):
 2. The EX-99 exhibits are fetched in the order §9.9 tries them (EX-99.1, EX-99, EX-99.2 …),
    and each one's text, tables as markdown rows, is stored in `documents`.
 
+Extracting, verifying and storing (E7a-S3, S4):
+
+3. The rule extractor reads the exhibits, with the company's overrides; a bank has no revenue
+   slot (D-072), nor any slot an override marks not applicable.
+4. normalize/earnings.py checks every value against the stored text (verify/) and builds the
+   rows; they are stored in one transaction with a `value_changes` row for each served value a
+   re-run (correction) or an 8-K/A (amendment) changes (D-027, D-077).
+
 Filing documents never change once filed, so a document stored before is read from the raw
 store: re-running a release (new rules, a new override) makes no SEC request (D-070).
 
@@ -22,13 +30,33 @@ from pathlib import Path
 
 import structlog
 
-from marketdata.db.repositories import documents, filings, predecessors, tasks
+from marketdata.db.repositories import (
+    companies,
+    documents,
+    earnings,
+    filings,
+    predecessors,
+    tasks,
+    value_changes,
+)
 from marketdata.db.repositories.documents import Document
-from marketdata.extract.earnings_rules import Override, OverrideError, parse_overrides
+from marketdata.extract.earnings_rules import (
+    Override,
+    OverrideError,
+    RuleExtractor,
+    parse_overrides,
+)
 from marketdata.extract.html_tables import parse_document
-from marketdata.extract.interface import ReleaseDocument
+from marketdata.extract.interface import Release, ReleaseDocument, Slot
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.ingest.watcher import FilingsWatcher
+from marketdata.normalize.changes import (
+    Served,
+    ValueChange,
+    amendment_changes,
+    correction_changes,
+)
+from marketdata.normalize.earnings import ReleaseRecord, assemble, revenue_not_applicable
 from marketdata.normalize.filing_index import FilingIndex, earnings_exhibits, parse_filing_index
 from marketdata.normalize.filings import EARNINGS_EXTRACT, EARNINGS_FORMS
 from marketdata.normalize.security_master import SecFileError
@@ -81,10 +109,112 @@ class FetchedRelease:
         return tuple(exhibit.document for exhibit in self.exhibits)
 
 
+@dataclass(frozen=True)
+class ExtractedRelease:
+    fetched: FetchedRelease
+    record: ReleaseRecord
+    changes: tuple[ValueChange, ...]  # served values this run changed
+
+
 class EarningsIngest:
-    def __init__(self, fetcher: RawFetcher, connect: Connect) -> None:
+    def __init__(
+        self, fetcher: RawFetcher, connect: Connect, overrides: Sequence[Override] = ()
+    ) -> None:
         self._fetcher = fetcher
         self._connect = connect
+        self._overrides = tuple(overrides)
+
+    async def run(self, cik: int, accession_no: str) -> ExtractedRelease:
+        """Fetch, extract, verify and store one release (steps 1-4 above)."""
+        fetched = await self.fetch(cik, accession_no)
+        async with self._connect() as conn:
+            company = await companies.get(conn, cik)
+            group = [cik, *await predecessors.predecessors_of(conn, cik)]
+        fiscal_year_end = company.fiscal_year_end if company else None
+        not_applicable, overridden = self._not_applicable(cik, fetched, company)
+        release = Release(
+            cik,
+            fetched.accession_no,
+            fetched.index.form,
+            fetched.documents,
+            not_applicable,
+            fetched.index.filed_at,
+            fiscal_year_end,
+        )
+        result = RuleExtractor(self._overrides).extract(release)
+        record = assemble(
+            result,
+            {document.doc_name: document.text for document in fetched.documents},
+            accession_no=fetched.accession_no,
+            cik=cik,
+            accepted_at=fetched.index.accepted_at,
+            fiscal_year_end=fiscal_year_end,
+            report={
+                "form": fetched.index.form,
+                "exhibits": [
+                    {"doc_name": exhibit.document.doc_name, "doc_type": exhibit.document.doc_type}
+                    for exhibit in fetched.exhibits
+                ],
+                "skipped_exhibits": list(fetched.skipped),
+                "accepted_at": {
+                    "index_page": fetched.index.accepted_at.isoformat(),
+                    "listed": _iso(fetched.listed_accepted_at),
+                },
+                "not_applicable_overrides": overridden,
+            },
+        )
+        changes = await self._store(record, group, fetched.index.form)
+        log.info(
+            "earnings_release_stored",
+            cik=cik,
+            accession_no=fetched.accession_no,
+            status=record.status,
+            period_end=_iso(record.period_end),
+            slots={fact.slot: fact.check_status for fact in record.facts},
+            changes=len(changes),
+        )
+        return ExtractedRelease(fetched, record, tuple(changes))
+
+    def _not_applicable(
+        self, cik: int, fetched: FetchedRelease, company: companies.Company | None
+    ) -> tuple[dict[Slot, str], list[str]]:
+        reasons: dict[Slot, str] = {}
+        bank = revenue_not_applicable(company.sic_code if company else None)
+        if bank is not None:
+            reasons["revenue"] = bank
+        overridden = []
+        for override in self._overrides:
+            if (
+                override.cik == cik
+                and override.not_applicable is not None
+                and override.accession_no in (None, fetched.accession_no)
+            ):
+                reasons[override.slot] = f"override: {override.not_applicable}"
+                overridden.append(override.describe())
+        return reasons, overridden
+
+    async def _store(
+        self, record: ReleaseRecord, group: Sequence[int], form: str
+    ) -> list[ValueChange]:
+        new = [
+            Served(fact.slot, fact.value, fact.prior_value, fact.extractor_version)
+            for fact in record.facts
+        ]
+        async with self._connect() as conn, conn.transaction():
+            stored = await earnings.served(conn, record.accession_no)
+            changes: list[ValueChange] = []
+            if stored:
+                changes = correction_changes(record.accession_no, stored, new)
+            elif form.endswith("/A") and record.period_end is not None:
+                amended = await earnings.amended_release(
+                    conn, group, record.period_end, record.accession_no
+                )
+                if amended is not None:
+                    original = await earnings.served(conn, amended)
+                    changes = amendment_changes(record.accession_no, amended, original, new)
+            await earnings.store(conn, record)
+            await value_changes.record_fact_changes(conn, record.cik, changes)
+        return changes
 
     async def fetch(self, cik: int, accession_no: str) -> FetchedRelease:
         """Store the index page and EX-99 exhibits of `accession_no` from `cik`'s folder."""
@@ -161,6 +291,10 @@ class EarningsIngest:
         ]
         async with self._connect() as conn:
             await documents.upsert(conn, rows)
+
+
+def _iso(moment: date | datetime | None) -> str | None:
+    return moment.isoformat() if moment is not None else None
 
 
 EARNINGS_ITEM = "2.02"

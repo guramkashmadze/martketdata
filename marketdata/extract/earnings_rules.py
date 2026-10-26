@@ -129,10 +129,15 @@ SHARES_DILUTED = (
     r"weighted[- ]average diluted (?:common )?shares(?: outstanding)?",
     r"average diluted shares(?: outstanding)?",
 )
+# The numerator of diluted EPS when the table prints it: the "diluted" line first (IonQ adjusts
+# it for warrant gains), then the amount to common shareholders (JPMorgan's is after preferred
+# dividends).
 NET_INCOME_TO_COMMON = (
-    r"net (?:income|earnings)(?: \(loss\))? (?:available|applicable|attributable) to common "
-    r"(?:stock|share)holders",
-    r"net (?:income|earnings)(?: \(loss\))? (?:available|applicable) to common (?:equity|stock)",
+    rf"{_SUBJECT} (?:available|applicable|attributable) to common (?:stock|share)holders?"
+    r",? (?:- )?(?:basic and )?diluted",
+    rf"{_SUBJECT} (?:available|applicable|attributable) to common shares,? (?:- )?diluted",
+    rf"{_SUBJECT} (?:available|applicable|attributable) to common (?:stock|share)holders",
+    rf"{_SUBJECT} (?:available|applicable) to common (?:equity|stock)",
 )
 # Never a slot's line, whatever else the label says.
 _EXCLUDED = re.compile(
@@ -284,9 +289,10 @@ class _Located:
 
     row: Row
     label: str  # the label matched against patterns: clean, lower case, totals named
-    section: str  # the label-only row above it, normalised ("earnings per share")
+    section: str  # the label-only rows above it, normalised ("earnings per share > diluted")
     table: Table
     document: ReleaseDocument
+    heading: str = ""  # the nearest label-only row above it, as printed
 
 
 @dataclass(frozen=True)
@@ -450,12 +456,14 @@ def _located(table: Table, document: ReleaseDocument) -> list[_Located]:
     rows one under the other nest ("Earnings per share > Assuming dilution")."""
     located: list[_Located] = []
     sections: list[str] = []
+    heading = ""
     nesting = False
     for row in table.rows:
         label = _normal(row.clean_label)
         if not row.has_values:
             if label and not any(row.cells):
                 sections = [*sections, label] if nesting else [label]
+                heading = row.label
                 nesting = True
             continue
         nesting = False
@@ -465,7 +473,7 @@ def _located(table: Table, document: ReleaseDocument) -> list[_Located]:
             label = f"total {sections[-1]}"
         elif _PER_SHARE_ONLY.match(label) and located:
             label = f"{located[-1].label} {label}"  # "Net income" then "per diluted share"
-        located.append(_Located(row, label, section, table, document))
+        located.append(_Located(row, label, section, table, document, heading))
     return located
 
 
@@ -591,7 +599,7 @@ def _slot(
         return SlotResult(slot, "not_found", unit, METHOD, note="no row matched the slot's labels")
     per_share = unit != USD
     # A row's own scale wins over the table's: "Revenue ($ in thousands)".
-    row_scale = find_scale([found.row.label, found.section.rsplit(" > ", 1)[-1]])
+    row_scale = find_scale([found.row.label, found.heading])
     scale = Decimal(1) if per_share else (row_scale.money or statement.scale.money)
     scale_text = statement.scale.text if row_scale.money is None else row_scale.text
     flags: list[str] = []
@@ -640,7 +648,7 @@ def _figure(
         return None
     # A row's own scale wins: Costco's "Shares used in calculation (000's)" under a table "in
     # millions".
-    row_scale = find_scale([found.row.label, found.section.rsplit(" > ", 1)[-1]]).money
+    row_scale = find_scale([found.row.label, found.heading]).money
     table_scale = statement.scale.shares if unit == SHARES else statement.scale.money
     scale = row_scale or table_scale
     value = parse_number(found.row.cells[current])

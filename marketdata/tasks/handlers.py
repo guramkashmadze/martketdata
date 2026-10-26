@@ -9,7 +9,8 @@ from datetime import UTC, date, datetime
 import structlog
 
 from marketdata.db.repositories.tasks import Task
-from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest
+from marketdata.extract.earnings_rules import OverrideError
+from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
 from marketdata.ingest.security_master import (
     SecurityMasterLoader,
     read_data_files,
@@ -81,16 +82,14 @@ async def backfill_filings(context: TaskContext, task: Task) -> None:
 
 async def extract_earnings(context: TaskContext, task: Task) -> None:
     """One earnings release (E7a), routed from a new 8-K with item 2.02 or queued by the
-    earnings backfill: its index page and press release exhibits, stored."""
+    earnings backfill: its exhibits stored, its values extracted, verified and stored. A broken
+    overrides file refuses the task: retrying can't help until the file is fixed."""
     cik, accession_no = _cik(task), _accession(task)
-    release = await EarningsIngest(context.fetcher, context.connect).fetch(cik, accession_no)
-    log.info(
-        "earnings_documents_stored",
-        cik=cik,
-        accession_no=accession_no,
-        exhibits=[exhibit.document.doc_name for exhibit in release.exhibits],
-        fetched=release.fetched,
-    )
+    try:
+        overrides = read_overrides(context.settings.extraction_overrides_file)
+    except OverrideError as exc:
+        raise TaskRefused(str(exc)) from exc
+    await EarningsIngest(context.fetcher, context.connect, overrides).run(cik, accession_no)
 
 
 async def backfill_earnings(context: TaskContext, task: Task) -> None:
