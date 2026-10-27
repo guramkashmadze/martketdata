@@ -72,7 +72,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E1 | SEC client and raw store | 2 | E0 | Done | 2026-10-24. httpx2 replaces httpx (D-042); `SEC_USER_AGENT` is required only by processes that call the SEC (D-043); rate limiter with a burst of one (D-044); migration `0002` (`raw_objects`). Fixtures for AAPL, GOOGL and TGT, 2.6 MB in total (D-048). Lint gate and 216 tests green on local PostgreSQL 18; the live demo stored 14 files through `marketdata sec get`. 12 edge cases logged. CI on main is green ([run 40181002170](https://github.com/guramkashmadze/martketdata/actions/runs/40181002170), commit `3b0d6b7`), after a CLI help test was fixed for GitHub's forced colour output (§16) |
 | E2 | Security master and universe | 3 | E1, OD-3 | Done | 2026-10-25. Starter universe of 39 tickers checked against the SEC's files (D-050, resolves OD-3), extended to 74 on request (D-056); ticker rules and `data/security_overrides.csv` (D-051); filer classes, including the SIC 6221 rule for commodity ETFs (D-052); EDGAR names and migration `0003` (D-053); ticker history with a safety limit (D-054); layout and service conventions (D-055). Lint gate and 383 tests green on local PostgreSQL 18. The live load stored 39,036 securities and 9,183 companies; a second live load changed nothing. With D-056 the universe is 60 domestic filers, 9 foreign private issuers and 5 funds. 22 edge cases logged. CI on main is green ([run 40204940570](https://github.com/guramkashmadze/martketdata/actions/runs/40204940570), commit `b247eeb`) |
 | E3 | Task queue and filings watcher | 4 | E2 | Done | 2026-10-26. Queue in PostgreSQL with forced re-runs, backoff and fencing (D-058); `marketdata worker`, `scheduler` (APScheduler 3.11, D-065), `backfill filings`, `filings list` and `tasks list|retry|purge-done`; one process calls the SEC at a time (D-062). Migration `0004`: `filings` keyed by accession and listing company, with the listing's file number (D-060), and `watch_state`, so unchanged submissions are neither stored nor parsed (D-059). `accepted_at` comes from submissions, checked per file after the SEC served Apple's file with every time shifted (D-057). 13D/13G codes verified and labelled on the subject's listing only (D-061); §9.6 gains eight 8-K items (D-064); routing starts after a company's first watch (D-063). Lint gate and 491 tests green on local PostgreSQL 18. Live run on the dev database, 2026-10-25 21:15–21:31 UTC: `backfill filings --years 5`, then scheduler and worker for 15 minutes. The backfill and the day's security-master load (no changes) took 52 seconds: 74 submissions files and 56 older pages gave 187,005 filings of the 74 universe companies (JPMorgan 102,256), all with acceptance times. Watch rounds at 21:15 and 21:25 found every file unchanged and stored nothing. 354 SEC requests in all, no failed task and nothing logged above info; both processes stopped cleanly on SIGTERM. `filings list FUBO --form 'SCHEDULE 13D'` shows Disney's 13D with the activist label; Disney's own listing has none. 8 edge cases logged. CI on main is green ([run 40236585444](https://github.com/guramkashmadze/martketdata/actions/runs/40236585444), commit `5ca042a`) |
-| E7a | Earnings release extraction and verification (rule-based) | 5 | E3 | Not started | No LLM (D-014) |
+| E7a | Earnings release extraction and verification (rule-based) | 5 | E3 | Done | 2026-10-27. No LLM (D-014); rules version 2 (D-079). S1: the press release found by exhibit type through the index page and stored once (D-070), with EDGAR's SGML wrapper stripped; task priority (D-067); predecessor CIKs (D-068); migration `0005` (`documents`, `tasks.priority`, `company_predecessors`). S2: the `Extractor` interface and lxml table grids (D-066). S3: `RuleExtractor`: statement tables, quarter columns (D-073), fiscal labels (D-074), scale, labels and TOML overrides (D-075). S4: verification in `verify/` (in the source, scale, sanity with D-076's EPS tolerance); migration `0006` (`earnings_releases` with `no_statement` (D-071), `earnings_facts`, `value_changes`); corrections and amendments (D-077). S5: `backfill earnings --quarters 4`, `extract report` and `earnings show`; 16 overrides; a golden set of 35 releases, all passing (D-078). Run through the worker on the dev database: 242 filings of 60 companies, with no SEC request for documents. Hit rate 81.2% (91.8% without the releases printed as pictures), so OD-10 calls for E12 (D-080); the version-2 run wrote 14 corrections. Lint gate and 912 tests green on local PostgreSQL 18. 40 edge cases logged. Not pushed: waits for Guram's OK |
 | E7c | Live run and track record | 6 | E7a, OD-1 | Not started | Starts the track record during the Q3 2026 season |
 | E4a | XBRL facts and reported metrics | 7 | E3 | Not started | Includes the universe growth rule (D-035) |
 | E4b | Derived metrics, quality checks, cross-checks | 8 | E4a, E7a | Not started | Release-vs-filing cross-check (D-028) |
@@ -85,7 +85,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E9 | 13F fund portfolios | 16 | E5a, E6, E15 | Not started | Milestone M3 |
 | E11 | Operations and production readiness | 17–18 | E15, E9 | Not started | Milestone M4 |
 | E7b | Georgian localization and content controls | on demand | E5a, OD-6, OD-8, OD-9 | Not started | When a client or our UI needs Georgian (D-026) |
-| E12 | LLM fallback extractor and guidance direction | later | E7a report, OD-2, OD-10 | Not started | Only if the hit rate needs it |
+| E12 | LLM fallback extractor and guidance direction | later | E7a report, OD-2 | Not started | Needed: the E7a hit rate is 81.2%, below OD-10's 90% (D-080); first for releases printed as pictures. When to build it is open (§16) |
 | E13 | Georgian company profiles and filing sections | later | E6, E7b, OD-2, a §15 decision on LLM text | Not started | LLM drafts for editors |
 | E14 | ETF holdings (N-PORT) | later | E2, E5a | Not started | |
 
@@ -300,7 +300,7 @@ Sales material and discovery notes stay outside the repository (§17).
 - Parsers and extractors are tested with real SEC files saved in `tests/fixtures/sec/` (use `scripts/fetch_fixture.py`). Keep fixtures small (total under 20 MB; trim large JSON where possible).
 - Integration tests (`tests/integration/`, marker `integration`) run against PostgreSQL at `TEST_DATABASE_URL`. Its database name must end in `_test`: each session drops and recreates the schema with Alembic, and each test runs in a transaction that is rolled back. They fail rather than skip when PostgreSQL is down. `pytest -m "not integration"` runs the unit tests alone.
 - `tests/unit/test_layers.py` enforces the layer rules by reading imports: `verify/` never imports `extract/`, pure modules import nothing that does I/O, interfaces never import `db/repositories/`, and SQL string literals appear only in `db/repositories/` and migrations.
-- Golden tests (`tests/golden/*.yaml`, `tests/golden/earnings/*.yaml`) hold hand-checked values, each with the SEC URL it was checked against. They are the accuracy contract.
+- Golden tests (`tests/golden/*.yaml`, `tests/golden/earnings/*.toml` (D-078)) hold hand-checked values, each with the SEC URL it was checked against. They are the accuracy contract.
 - The four-quarter earnings backfill is the extraction test set; `marketdata extract report` measures the hit rate on it (§9.9).
 - LLM tests (E12/E13 only) use `FakeLLMClient` with recorded responses; no live LLM calls in CI.
 
@@ -329,6 +329,7 @@ create table tasks (
   status       text not null default 'queued'
                check (status in ('queued','running','done','failed','dead')),
   attempts     int not null default 0,
+  priority     int not null default 0,        -- E7a (D-067): 10 live, 0 periodic, -10 backfills
   run_after    timestamptz not null default now(),
   locked_until timestamptz,                   -- reclaim if a worker dies
   last_error   text,
@@ -336,7 +337,7 @@ create table tasks (
   updated_at   timestamptz not null default now(),
   unique (kind, key)
 );
-create index tasks_ready on tasks (status, run_after);
+create index tasks_ready on tasks (status, priority desc, run_after);
 
 create table clients (                        -- an API client: a company, an app, or the operator's own test client
   client_id   bigserial primary key,
@@ -442,6 +443,15 @@ create table documents (
   primary key (accession_no, doc_name)
 );
 
+create table company_predecessors (            -- D-068: history filed under an earlier CIK
+  cik              bigint not null references companies(cik),
+  predecessor_cik  bigint not null references companies(cik),
+  source_url       text not null,              -- the SEC filing that shows the succession
+  note             text not null,
+  primary key (cik, predecessor_cik),
+  check (cik <> predecessor_cik)
+);
+
 create table earnings_releases (
   accession_no       text primary key,
   cik                bigint not null references companies(cik),
@@ -451,7 +461,7 @@ create table earnings_releases (
   fiscal_period      text,                    -- Q1..Q4
   period_end         date,                    -- current-quarter column date from the table header
   period_label       text,                    -- as the company states it
-  status             text not null check (status in ('complete','partial','failed')),
+  status             text not null check (status in ('complete','partial','failed','no_statement')),  -- D-071
   extractor          text not null,           -- 'rules' (E7a), 'llm' (E12)
   extractor_version  text not null,
   check_report       jsonb not null,
@@ -478,7 +488,8 @@ create table earnings_facts (
   cross_check_value      numeric,              -- XBRL value from the later 10-Q/10-K
   cross_check_accession  text,                 -- that filing
   quality_flags      text[] not null default '{}',
-  primary key (accession_no, slot)
+  primary key (accession_no, slot),
+  check (check_status = 'passed' or (value is null and prior_value is null and change_pct is null))
 );
 
 create table value_changes (                  -- D-027: stored values never change silently
@@ -921,7 +932,7 @@ Items 1.04, 2.04, 3.03, 5.01, 5.04, 5.05, 5.06 and 5.08 were added in E3 (D-064)
 ### 9.9 Earnings release extraction (rule-based, E7a)
 
 - **Trigger:** an 8-K with item 2.02 from a `domestic` universe company.
-- **Source document:** the press release exhibit found through the filing index (EX-99.1, else EX-99, EX-99.2 …). Use the exhibit that contains the income statement table. Raw HTML stays in the raw store; text with tables as markdown goes to `documents`.
+- **Source document:** the press release exhibit found through the filing index (EX-99.1, else EX-99, EX-99.2 …). Use the exhibit that contains the income statement table. Raw HTML stays in the raw store; text with tables as markdown goes to `documents`. A stored document is never fetched again (D-070). An exhibit printed as pictures (a JPG per page, its text in a hidden layer) has no table to read: such a release fails rather than counting as one without a statement (D-071).
 - **Slots (M1):** `revenue`, `operating_income`, `net_income`, `eps_diluted` for the current quarter, each with the prior-year quarter from the same table.
 - **Table parsing:** HTML tables become a grid (colspan and rowspan expanded; `$` and `%` cells merged with their numbers; parentheses = negative; dashes = nil; footnote markers stripped from labels).
 - **Table detection:** the income statement table is the first table whose row labels match a revenue pattern and a net income or EPS pattern, and whose header names a quarter period.
@@ -930,18 +941,18 @@ Items 1.04, 2.04, 3.03, 5.01, 5.04, 5.05, 5.06 and 5.08 were added in E3 (D-064)
   - operating income: "Operating income", "Income from operations", "Operating income (loss)"
   - net income: "Net income", "Net income attributable to <company>" (prefer the amount attributable to the company over the amount including noncontrolling interests)
   - diluted EPS: "Diluted", "Diluted earnings per share", "Net income per share — diluted"
-  - banks and insurers: the revenue slot is `not_applicable` (as §9.4 rule 10)
-- **Columns:** take the "three months / quarter / thirteen weeks ended" columns. The current period is the latest date; the prior-year period is the column one year earlier. Never take nine-month, year-to-date or full-year columns for quarterly slots. In Q4 releases with both quarter and full-year columns, take the quarter columns.
-- **Units:** read the scale from the table caption or header ("in millions", "in thousands", "except per share"). Per-share values are not scaled. No scale found → the slot fails with flag `scale_unknown`.
-- **Overrides:** `data/extraction_overrides.yaml` may pin a row label or table index per CIK when the rules fail. Every override is logged in `docs/EDGE_CASES.md` and counted in the hit-rate report.
+  - banks (SIC 6000–6099): the revenue slot is `not_applicable` (D-072); insurers, REITs and lenders keep it
+- **Columns:** take the columns whose heading says three months, a quarter ("Q3", "Third Quarter", "4th Qtr.", "3Q26") or 12 to 17 weeks (D-073). The current period is the latest date; the prior-year period is the column one year earlier. Never take nine-month, year-to-date or full-year columns for quarterly slots. In Q4 releases with both quarter and full-year columns, take the quarter columns.
+- **Units:** read the scale from the table caption or header ("in millions", "in thousands", "except per share"). Per-share values are not scaled. When neither states one, a parenthesised note in the paragraph right above the table may (D-079). No scale found → the slot fails with flag `scale_unknown`.
+- **Overrides:** `data/extraction_overrides.toml` (D-075) may pin a row label or table per CIK when the rules fail, or mark a slot `not_applicable` when the company's releases don't present that line (with what they print instead); each cites the company's SEC filing. Every override is logged in `docs/EDGE_CASES.md` and counted in the hit-rate report.
 - **Change:** `change_pct = (value − prior_value) / |prior_value| × 100`, rounded to one decimal. Null when the prior value is missing or zero, or when the sign changes (flag `sign_change`; `direction` becomes `turned_profit` or `turned_loss`).
 - **Verification (blocking, in `verify/`, independent of the extractor; D-015):**
   1. The printed cell text for each value appears in the stored document text, and the source quote is a substring of it after whitespace normalization.
   2. The stored value equals the parsed cell multiplied by the scale, exactly.
-  3. Sanity: \|change_pct\| ≤ 1000; revenue > 0; when the table shows diluted shares, EPS × diluted shares is within 2% of net income.
-  4. A slot that fails any check is stored with `check_status = failed` and served as null with its reason. Other slots are still served (`status = partial`). All four passed → `complete`.
-- **Hit-rate report:** `marketdata extract report` runs over the four-quarter backfill (about 100 releases for 20–30 tickers) and prints, per slot and per company, passed / failed / not found and how many needed overrides. The result decides OD-10 (whether to build E12).
-- **Golden set:** at least 30 releases hand-checked in `tests/golden/earnings/*.yaml`, each with its SEC URL.
+  3. Sanity: \|change_pct\| ≤ 1000; revenue > 0; when the table shows diluted shares, EPS × diluted shares is within 2% of net income or $0.005 per share, whichever is larger, using net income to common shareholders when printed (D-076).
+  4. A slot that fails any check is stored with `check_status = failed` and served as null with its reason. Other slots are still served (`status = partial`). All that apply passed → `complete`; none passed → `failed`. An 8-K whose exhibits have no income line at all → `no_statement` (D-071), left out of the hit rate.
+- **Hit-rate report:** `marketdata extract report` runs over the four-quarter backfill (242 filings of 60 companies in E7a) and prints, per slot and per company, passed / failed / not found and how many needed overrides. The hit rate is passed slots over the slots that apply in releases with a statement. The result decided OD-10 (D-080).
+- **Golden set:** at least 30 releases hand-checked in `tests/golden/earnings/*.toml` (D-078), each with its SEC URL.
 - **Provenance:** every stored value records `method` and `extractor_version`. Press releases stay in the raw store so a later extractor can re-run over the whole history.
 - **Amendments and re-runs (D-027):** an 8-K/A that amends an earnings release is processed like the original; changed values are logged with reason `amendment`. Re-running with a new `RULES_VERSION` or an added override logs changed values with reason `correction`.
 - **Cross-check (D-028):** each slot starts as `pending` and becomes `matched`, `mismatch` or `not_comparable` when the 10-Q/10-K for the same quarter is loaded (E4b, §9.10).
@@ -1121,7 +1132,8 @@ Example `earnings/latest` response body (`data` part):
 | `UNIVERSE_FILE` | `data/universe.csv` | E2 |
 | `SECURITY_OVERRIDES_FILE` | `data/security_overrides.csv` | E2 (D-051) |
 | `WORKER_CONCURRENCY` | `4` | E3. Tasks the worker runs at once (1–32); they share one SEC rate limit |
-| `EXTRACTION_OVERRIDES_FILE` | `data/extraction_overrides.yaml` | E7a |
+| `PREDECESSORS_FILE` | `data/predecessors.csv` | E7a (D-068) |
+| `EXTRACTION_OVERRIDES_FILE` | `data/extraction_overrides.toml` | E7a (D-075) |
 | `ALERT_EMAIL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | — | E7c |
 | `SENTRY_DSN` | — | E7c |
 | `WEBHOOK_ENCRYPTION_KEY` | — (Fernet key) | E5b |
@@ -1618,7 +1630,6 @@ Resolve each before the epic in "Needed by" starts. When decided, move it to §1
 | OD-7 | Product and repository name | `marketdata` is a placeholder | E0 |
 | OD-8 | Template ownership | The client renders from our data on its side / the client registers templates with us / both (default: both) | E7b (on demand) |
 | OD-9 | Review model for rendered content | Manual approval of every item / auto-approve after N clean items (default: manual) | E7b (on demand) |
-| OD-10 | When to build the LLM fallback | Build E12 if the E7a hit rate is below a threshold (proposed: 90% of slots passed across the test set) | After E7a |
 | OD-11 | Commercial delivery options | API service we run / data license into a client's warehouse / deployment in a client's infrastructure with a maintenance contract / paid UI or MCP plans | After OD-12 |
 | OD-12 | Target market | Banks and brokers with trading apps / fintechs / AI-tool builders / retail investors directly / a mix | After M1 and discovery (§17) |
 | OD-13 | Public UI launch | Stay private for invited testers / go public. Condition: the price license allows public display (or prices are hidden) | Before `UI_MODE=public` |
@@ -1696,6 +1707,21 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-063 | 2026-10-25 | Routing and history (E3-S4, S5; §4): a company's first watch stores its recent filings and routes nothing; history goes through each epic's backfill. Later new filings route `facts_refresh` for the 10-K and 10-Q family (with transition reports) and `earnings_extract` for an 8-K or 8-K/A with item 2.02, both for domestic filers only (§9.1); `form4_parse` for 4 and 4/A only on the issuer's listing (no file number); `f13_parse` only for curated managers (E9). Filings are inserted and their tasks enqueued in one transaction, under a lock per company. `marketdata backfill filings --years N` queues one task per universe company with its start date; the worker watches the company, then reads the older pages back to that date, and pages never route | Without a first-watch baseline, the first poll would enqueue every earnings 8-K in each company's recent window (Apple's goes back to 2015). Forms 3, 4 and 5 are the reverse of 13D/13G: issuer listings have no file number (29,694), a reporting owner's has the issuer's (282; Berkshire 159), so the issuer's listing is the one to parse. The backfill runs in the worker so the SEC is called from one process (D-062) |
 | D-064 | 2026-10-25 | §9.6 gains the eight 8-K items it lacked: 1.04 mine safety, 2.04 an obligation made due sooner or larger (high), 3.03 changed rights of shareholders, 5.01 change in control (high), 5.04 trading halt in benefit plans, 5.05 code of ethics, 5.06 shell company status, 5.08 deadline for director nominations. Any other item is returned as "8-K item <code>" (normal), never dropped | They occur in universe filings: 3.03 in 43, 5.01 in 15 (FuboTV's change in control on 2025-10-30), 5.08 in 8, 5.06 in 6, 5.04 in 4, 5.05 in 3, 1.04 and 2.04 once each. Dropping them would hide a change in control |
 | D-065 | 2026-10-25 | Scheduler (E3-S3): APScheduler 3.11.3 (MIT; pulls in tzlocal 5.4.5, MIT) in `tasks/scheduler.py` only, with a mypy override because it ships no type hints. The scheduler process only enqueues: `filings_watch` for each universe company every 10 minutes and at start, and `security_master` daily at 06:00 UTC, or at start when started later that day. The `security_master` task wraps E2's load: a refused snapshot (D-054) or a broken universe file is `TaskRefused`; a company whose submissions failed makes the task retry | §5 already named APScheduler; 3.11.3 came out on 2026-06-28 and 4.0 is still an alpha (4.0.0a6, 2025). Enqueueing at start means a restarted scheduler doesn't wait 10 minutes or skip the day's load |
+| D-066 | 2026-10-26 | lxml 6.1 parses press releases (E7a-S2, §5): one parse gives the document text and its tables as grids (colspan and rowspan expanded, `$` and `(` merged with the number after them, `)` and `%` with the one before), with `types-lxml` for mypy. EDGAR's SGML wrapper is stripped before parsing | One library for text and tables; BSD-3 with wheels for Python 3.15. selectolax has no table model |
+| D-067 | 2026-10-26 | Task priority (E7a-S1; resolves the §16 E3-S1 follow-up): `tasks.priority` (migration `0005`) is 10 for live work routed from the watcher, 0 for periodic work and −10 for backfills; workers claim the highest priority, then the earliest `run_after`, then the oldest task; queueing a task again keeps the higher priority | A four-quarter backfill (242 releases) must never delay a live earnings 8-K in the season |
+| D-068 | 2026-10-26 | Predecessor CIKs (E7a-S1; resolves the §16 E2-S4 follow-up for earnings): `data/predecessors.csv` (`cik,predecessor_cik,source_url,note`; setting `PREDECESSORS_FILE`) lists companies whose history is filed under an earlier CIK, with the SEC filing that shows the succession (XOM: 2115436 after 34088, 8-K12B 0001193125-26-291990). The security-master load stores the predecessor's company (classified, out of the universe) and `company_predecessors`; the earnings backfill loads the predecessor's filings first; releases stay under the CIK that filed them, and `earnings show` and amendments look across the group | Three of XOM's last four releases are under 34088, which the watcher doesn't poll. Each release keeps the CIK of its filing, so every proof link stays right |
+| D-069 | 2026-10-26 | Earnings backfill (E7a-S5): `marketdata backfill earnings --quarters N` queues one `earnings_backfill` task per domestic universe company for the worker (the only SEC caller, D-062); each queues an `earnings_extract` task, at backfill priority, for every 8-K and 8-K/A with item 2.02 filed in the last 3N months. `--force` runs stored releases again | The shape of the filings backfill (D-063). A forced run is how new rules and overrides reach stored releases |
+| D-070 | 2026-10-26 | Filing documents are fetched once (E7a-S1): an index page or exhibit already in the raw store is read from it | Filed documents don't change. Two forced runs of all 242 releases made no SEC request for documents |
+| D-071 | 2026-10-26 | Release status `no_statement` (E7a-S4, migration `0006`): an 8-K with item 2.02 whose exhibits have no revenue, net income or EPS line at all (Tesla's deliveries reports, an announcement, a filing with no exhibit). An exhibit printed as pictures may hold a statement the rules can't read, so its release is `failed` (E7a-S5). The hit rate leaves `no_statement` filings out, and the report lists them for a check by hand | Item 2.02 doesn't make an earnings release (11 of 242 filings). Counting those as failures would understate the rules; taking unreadable releases for them would overstate the rules |
+| D-072 | 2026-10-26 | Only banks (SIC 6000–6099) lose the revenue slot (§9.9; resolves the §16 E2 follow-up for E7a); insurers, REITs, lenders and holding companies keep it | UnitedHealth (6324), Berkshire (6331), Travelers (6331) and Realty Income (6798) print total revenues; a bank's net revenue isn't comparable. §9.4 rule 10 is E4a's to change |
+| D-073 | 2026-10-26 | Quarter columns (E7a-S3; the §9.9 part of the §16 Costco follow-up): a column is the quarter when its heading says three months, a quarter ("Q3", "Third Quarter", "4th Qtr.", "FQ4-26", "3Q26") or 12 to 17 weeks. The current column has the latest date; the prior-year column is 350 to 380 days earlier or, for headings without a day, the same quarter a year earlier. Change, ratio and percentage columns hold no period. A period end comes from the text ("quarter ended …") only when that date falls in the column's fiscal quarter, at most 130 days before the filing; otherwise it stays null | Costco's 12- and 16-week quarters, Micron's 14-week quarter and headings without a day (JPMorgan, lululemon) are all quarters; a guessed date would be wrong proof |
+| D-074 | 2026-10-26 | Fiscal labels (resolves the §16 E2 J&J follow-up): D-008 holds, except that a fiscal year ending on January 1 to 7 takes the calendar year before; quarters are numbered by the months since the previous year end, rounded | A 52/53-week year that follows the calendar (J&J's 2026 ends 2027-01-03) would be labelled a year late. Years ending late in January keep D-008's label (Target's year to 2026-01-31 is fiscal 2026) |
+| D-075 | 2026-10-26 | Extraction overrides are TOML: `data/extraction_overrides.toml` (setting `EXTRACTION_OVERRIDES_FILE`, read with tomllib). Each `[[override]]` names a CIK and a slot, why, and the company's own SEC filing that shows it (`source_url`), and gives one of `row_label`, `table` (with `doc_name`) or `not_applicable`; `accession_no` limits it to one release. A line a company's releases don't present gets `not_applicable`, saying what they print instead, and the slot is served as not applicable with that reason. The hit-rate report counts the overrides used | No YAML parser at runtime (PyYAML has no 3.15 build; §16 D-049 follow-up); TOML is in the standard library. 16 overrides: eleven companies print no operating income line, Berkshire no revenue or diluted EPS, Shopify and Vistra no EPS |
+| D-076 | 2026-10-26 | The EPS sanity check (§9.9 check 3): diluted EPS × diluted shares within 2% of net income or $0.005 per share, whichever is larger; net income available to common shareholders when the table prints it; the share count read at the table's scale or as printed. A miss fails EPS only | Printed EPS is rounded to the cent (10% at $0.05); JPMorgan's EPS is after preferred dividends; BigBear.ai prints whole share counts under "in thousands" |
+| D-077 | 2026-10-26 | Reasons for earnings value changes (E7a-S4, D-027): `correction` when a release runs again and a served value changes (detail: "rules version 1 to 2", or that the rules are the same and an override, the text rules or the company's details changed); `amendment` when an 8-K/A for the same company (or its predecessor) and quarter changes a value of the stored release, which stays stored (`entity_key.amends` names it). A slot that newly passes or fails is a change too | Clients see why a number moved. The version-2 run wrote 14 corrections (Travelers' Q4 and Berkshire's net income) |
+| D-078 | 2026-10-27 | Golden earnings files are TOML (`tests/golden/earnings/*.toml`, one per company): values as printed with the statement's scale and the exhibit's URL; `differences` lists slots the rules don't serve, each also in §16. `tests/unit/test_golden_earnings.py` runs the rules and checks over the committed fixtures with the production overrides | The overrides' format (D-075); printed values are what a reader checks against the exhibit |
+| D-079 | 2026-10-27 | Rules version 2 (E7a-S5): a bullet is never a table's title line, and when neither the title lines nor the headings state a scale, a parenthesised note in the paragraph right above the table may | Travelers' Q4 highlights sat under a bullet mentioning "adjusted book value"; Berkshire states its scale only in the paragraph above its table. Each change has a crafted test and a golden release |
+| D-080 | 2026-10-27 | OD-10 decided by its proposed rule: the E7a hit rate is 81.2% (698 of the 860 slots that apply passed, in the 231 releases with a statement), below 90%, so the LLM fallback (E12) is needed. Its first target is the releases printed as pictures: 100 of the 162 missed slots (UnitedHealth, Tesla, NuScale, Roblox, MercadoLibre, Aurora, SpaceX's Q2). On releases whose exhibits have tables the rules pass 91.8% (698 of 760). When E12 is built is open (§16); E7c runs on the rules | `marketdata extract report`, 2026-10-27, rules version 2, over the four-quarter backfill of the 60 domestic companies: 242 filings (complete 186, partial 8, failed 37, no statement 11); revenue 83.0%, operating income 78.6%, net income 82.3%, diluted EPS 80.4%; overrides used on 60 slots. The other misses: NextEra's per-segment tables (20), Trilogy Metals' annual-only tables (12), real changes over 1000% (12), two 8-Ks that aren't results releases (8), Q4 releases without a quarterly statement (7), EPS that doesn't match net income (3). Golden set: 35 releases hand-checked, every served value equal |
 
 ---
 
@@ -1764,6 +1790,19 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-25 | E3-S6 (D-061) | A company's own stake filings (Disney's 13D on FuboTV, Berkshire's 13G on Apple) have no label on its page: one of their own ("Reported its stake in <company>") needs the subject's name or CIK from the filing's header or `primary_doc.xml` | E5a or later |
 | 2026-10-25 | E3-S4 (D-063) | E8: parse Form 4 from the issuer's listing (no file number); a listing with a file number is the company's own trade in another company's shares | E8 |
 | 2026-10-25 | E3 | The watcher polls only universe CIKs, so a predecessor's CIK (XOM's 34088) isn't watched; covered by the E2-S4 predecessor follow-up | E4a, E7a |
+| 2026-10-27 | E7a | Done: queue priority (E3-S1 follow-up, D-067); predecessor CIKs for earnings (E2-S4 follow-up, D-068; E4a still needs them for facts); J&J's fiscal label (E2 follow-up, D-074); banks only lose revenue in §9.9 (E2 follow-up, D-072; §9.4 rule 10 is E4a's); Costco's weeks in §9.9's quarter columns (D-073; §9.4's durations are E4a's); no YAML parser needed at runtime (D-049 follow-up, D-075); `earnings_releases.accepted_at` from the index page, compared with the listing: equal for all 242 filings (E3-S4 follow-up) | — |
+| 2026-10-27 | E7a-S4 (§9.9) | The ±1000% sanity rule fails 12 real values, each in the source at the right scale: Micron's fiscal Q3 and Q4 2026 operating income, net income and EPS, Figma's Q3 2025 operating income, net income and EPS, IonQ's Q3 2025 net income and EPS, Gevo's Q3 2025 revenue. Decide whether to keep failing them or to serve them with a flag when every other check passes | Guram, before E7c |
+| 2026-10-27 | E7a-S5 (D-080) | Releases printed as pictures (UnitedHealth, Tesla, NuScale, Roblox, MercadoLibre, Aurora and SpaceX's Q2 2026): 100 of the 162 missed slots. Their text is a hidden layer without table structure: an LLM reading it (with a quote check that works on that layer) or a reader for the layer. Also decide when E12 is built, relative to M1 | E12; Guram |
+| 2026-10-27 | E7a-S3 | NextEra prints one statement table per period with segment columns (FPL, NEER, Corporate and Other, NextEra Energy): its 5 releases fail | E12 or a later rules version |
+| 2026-10-27 | E7a-S5 | No stated period end: J&J's releases, three of lululemon's and Berkshire's say "third quarter" or "second quarter" without the day, so `period_end` and the fiscal labels are null. E4b's cross-check with the 10-Q could take them from the filing | E4b |
+| 2026-10-27 | E7a-S5 | Filings that print no quarterly statement count as failed: Gevo's and Vistra's Q4 releases (full year only, or a summary), Trilogy Metals' (selected annual information), and 8-Ks with item 2.02 that are no results release (FuboTV's shareholder letter, IonQ's acquisition announcement) | E12 |
+| 2026-10-27 | E7a-S5 | A `not_applicable` override covers all of a company's releases: if the company starts printing the line, the slot stays not applicable. Review the overrides with the report each season | E7c |
+| 2026-10-27 | E7a-S5 | Spot-check about ten golden releases by hand against their exhibits (offered at the E7a pre-flight) | Guram |
+| 2026-10-27 | E7a-S1 | None of the 242 filings splits its income statement over two tables; the continuation rule is covered by a crafted test only | E7c (watch) |
+| 2026-10-27 | E7a-S5 | `marketdata extract report` counts every stored release; give it `--since` or per-season numbers once the live run adds releases | E7c |
+| 2026-10-27 | E7a-S5 | Alert the operator when a live release is `failed` or `partial` (status, flags and notes are in its check report) | E7c |
+| 2026-10-27 | E7a | E4a's golden files: TOML like E7a's (D-078) instead of the YAML §12 names | E4a |
+| 2026-10-27 | E7a | E7a's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 
 ---
 
