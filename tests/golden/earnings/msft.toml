@@ -1,0 +1,15 @@
+# Microsoft Corporation: income statements, "(In millions, except per share amounts)".
+cik = 789019
+fiscal_year_end = "0630"
+
+[[release]]
+accession_no = "0001193125-26-323632"
+url = "https://www.sec.gov/Archives/edgar/data/789019/000119312526323632/msft-ex99_1.htm"
+status = "complete"
+period_end = 2026-06-30
+fiscal = "Q4 2026"
+scale = "millions"
+revenue = ["90,007", "76,441"]  # Total revenue
+operating_income = ["40,603", "34,323"]
+net_income = ["35,766", "27,233"]
+eps_diluted = ["4.81", "3.65"]

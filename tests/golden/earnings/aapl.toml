@@ -1,0 +1,51 @@
+# Apple Inc.: condensed consolidated statements of operations, "Three Months Ended" columns.
+cik = 320193
+fiscal_year_end = "0926"
+
+[[release]]
+accession_no = "0000320193-25-000077"
+url = "https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/a8-kex991q4202509272025.htm"
+status = "complete"
+period_end = 2025-09-27
+fiscal = "Q4 2025"
+scale = "millions"
+revenue = ["102,466", "94,930"]  # Total net sales
+operating_income = ["32,427", "29,591"]
+net_income = ["27,466", "14,736"]
+eps_diluted = ["1.85", "0.97"]
+
+[[release]]
+accession_no = "0000320193-26-000005"
+url = "https://www.sec.gov/Archives/edgar/data/320193/000032019326000005/a8-kex991q1202612272025.htm"
+status = "complete"
+period_end = 2025-12-27
+fiscal = "Q1 2026"
+scale = "millions"
+revenue = ["143,756", "124,300"]
+operating_income = ["50,852", "42,832"]
+net_income = ["42,097", "36,330"]
+eps_diluted = ["2.84", "2.40"]
+
+[[release]]
+accession_no = "0000320193-26-000011"
+url = "https://www.sec.gov/Archives/edgar/data/320193/000032019326000011/a8-kex991q2202603282026.htm"
+status = "complete"
+period_end = 2026-03-28
+fiscal = "Q2 2026"
+scale = "millions"
+revenue = ["111,184", "95,359"]
+operating_income = ["35,885", "29,589"]
+net_income = ["29,578", "24,780"]
+eps_diluted = ["2.01", "1.65"]
+
+[[release]]
+accession_no = "0000320193-26-000018"
+url = "https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/a8-kex991q3202606272026.htm"
+status = "complete"
+period_end = 2026-06-27
+fiscal = "Q3 2026"
+scale = "millions"
+revenue = ["109,417", "94,036"]
+operating_income = ["35,695", "28,202"]
+net_income = ["29,789", "23,434"]
+eps_diluted = ["2.02", "1.57"]

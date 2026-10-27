@@ -1,0 +1,16 @@
+# Walmart Inc.: condensed consolidated statements of income, "(Amounts in millions, except per
+# share data)". Net income is the amount attributable to Walmart.
+cik = 104169
+fiscal_year_end = "0131"
+
+[[release]]
+accession_no = "0000104169-26-000145"
+url = "https://www.sec.gov/Archives/edgar/data/104169/000010416926000145/earningsreleasefy27q2.htm"
+status = "complete"
+period_end = 2026-07-31
+fiscal = "Q2 2027"
+scale = "millions"
+revenue = ["187,937", "177,402"]  # Total revenues
+operating_income = ["9,383", "7,286"]
+net_income = ["6,366", "7,026"]
+eps_diluted = ["0.80", "0.88"]

@@ -1,0 +1,17 @@
+# ExxonMobil Holdings Corp (XOM since 2026): the statement of income is in EX-99.2 ("2Q26
+# Investor Relations Data Summary"), "Dollars in millions (unless otherwise noted)". Revenue is
+# "Total revenues and other income"; no operating income line is printed.
+cik = 2115436
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0002115436-26-000006"
+url = "https://www.sec.gov/Archives/edgar/data/2115436/000211543626000006/livef8k2q26992.htm"
+status = "complete"
+period_end = 2026-06-30
+fiscal = "Q2 2026"
+scale = "millions"
+not_applicable = ["operating_income"]
+revenue = ["116,017", "81,506"]
+net_income = ["14,525", "7,082"]  # Net income/(loss) attributable to ExxonMobil
+eps_diluted = ["3.48", "1.64"]  # Earnings per common share - assuming dilution

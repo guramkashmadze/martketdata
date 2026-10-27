@@ -1,0 +1,16 @@
+# International Business Machines: comparative financial results, "$ in millions except per
+# share amounts". Diluted EPS is the TOTAL under "Assuming dilution"; no operating income line.
+cik = 51143
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0000051143-26-000093"
+url = "https://www.sec.gov/Archives/edgar/data/51143/000005114326000093/ibm-20261021xex991.htm"
+status = "complete"
+period_end = 2026-09-30
+fiscal = "Q3 2026"
+scale = "millions"
+not_applicable = ["operating_income"]
+revenue = ["17,103", "16,331"]  # TOTAL REVENUE
+net_income = ["2,190", "1,744"]
+eps_diluted = ["2.30", "1.84"]

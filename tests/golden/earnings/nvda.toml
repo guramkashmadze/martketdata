@@ -1,0 +1,16 @@
+# NVIDIA Corporation: condensed consolidated statements of income, "(In millions, except per
+# share data)".
+cik = 1045810
+fiscal_year_end = "0131"
+
+[[release]]
+accession_no = "0001045810-26-000073"
+url = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000073/q2fy27pr.htm"
+status = "complete"
+period_end = 2026-07-26
+fiscal = "Q2 2027"
+scale = "millions"
+revenue = ["96,221", "46,743"]
+operating_income = ["63,734", "28,440"]
+net_income = ["59,688", "26,422"]
+eps_diluted = ["2.46", "1.08"]

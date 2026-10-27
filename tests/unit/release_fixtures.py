@@ -32,6 +32,9 @@ FISCAL_YEAR_ENDS = {
     789019: "0630",  # Microsoft
     1045810: "0131",  # NVIDIA
     753308: "1231",  # NextEra
+    1067983: "1231",  # Berkshire Hathaway
+    86312: "1231",  # Travelers
+    200406: "0103",  # Johnson & Johnson
 }
 
 
@@ -50,7 +53,9 @@ def fixture_release(
     for exhibit in earnings_exhibits(index):
         parsed = parse_document(exhibit.name, document(cik, accession, exhibit.name))
         documents.append(
-            ReleaseDocument(exhibit.name, exhibit.doc_type, parsed.text, parsed.tables)
+            ReleaseDocument(
+                exhibit.name, exhibit.doc_type, parsed.text, parsed.tables, parsed.images
+            )
         )
     return Release(
         cik,

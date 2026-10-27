@@ -1,0 +1,9 @@
+# NextEra Energy: an 8-K with items 2.02 and 7.01 and no exhibit at all.
+cik = 753308
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0000753308-26-000004"
+url = "https://www.sec.gov/Archives/edgar/data/753308/000075330826000004/0000753308-26-000004-index.htm"
+status = "no_statement"
+period_end = "not stated"

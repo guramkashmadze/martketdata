@@ -169,6 +169,20 @@ def test_a_filing_without_income_lines_has_no_statement(cik: int, accession: str
     assert {slot.outcome for slot in result.slots} == {"not_found"}
 
 
+def test_an_exhibit_printed_as_pictures_may_hold_a_statement() -> None:
+    pages = "".join(f'<p><img src="page{n}.jpg"></p>' for n in range(1, 4))
+    parsed = parse_html(f"<html><body>{pages}</body></html>".encode())
+    document = ReleaseDocument("ex991.htm", "EX-99.1", parsed.text, parsed.tables, parsed.images)
+    release = Release(1, "0000000001-26-000001", "8-K", (document,), {}, date(2026, 7, 28), "1231")
+
+    result = RuleExtractor().extract(release)
+
+    # UnitedHealth, Tesla: the rules can't read it, so the release fails rather than being
+    # taken for one without a statement (EDGE_CASES.md).
+    assert not result.statement_found and result.income_lines_found
+    assert result.notes == ("ex991.htm: no tables, 3 pictures",)
+
+
 # --- Crafted tables -----------------------------------------------------------------------------
 
 HEAD = """<tr><td></td><td>Three Months Ended</td><td>Three Months Ended</td></tr>
@@ -268,6 +282,37 @@ def test_no_scale_fails_the_money_slots_but_not_eps() -> None:
     assert result.slot("revenue").outcome == "failed"
     assert result.slot("revenue").flags == ("scale_unknown",)
     _check(result, "eps_diluted", ("0.50", "0.40"), M)
+
+
+def test_a_bullet_of_highlights_is_not_the_tables_title() -> None:
+    release = _release(
+        HEAD + "<tr><td>Total revenues</td><td>124</td><td>120</td></tr>"
+        "<tr><td>Net income</td><td>25</td><td>21</td></tr>",
+        before="<p>•Strong growth in adjusted book value per share, up 14%.</p>"
+        "<p>Consolidated Highlights</p><p>($ in millions)</p>",
+    )  # Travelers' fourth-quarter release
+
+    _check(RuleExtractor().extract(release), "net_income", (25, 21), M)
+
+
+def test_a_note_in_the_paragraph_above_may_state_the_scale() -> None:
+    paragraph = (
+        "Earnings of Acme Inc. and its consolidated subsidiaries for the second quarter and first"
+        " six months of 2026 and 2025 are summarized below. Earnings are stated on an after-tax"
+        " basis. (Dollar amounts are in millions, except for per share amounts)."
+    )
+    release = _release(
+        HEAD + "<tr><td>Net earnings attributable to Acme shareholders</td><td>25,667</td>"
+        "<td>12,370</td></tr>",
+        before=f"<p>{paragraph}</p>",
+        not_applicable={"revenue": "override: the release presents no revenue line"},
+    )  # Berkshire
+
+    result = RuleExtractor().extract(release)
+
+    _check(result, "net_income", (25_667, 12_370), M)
+    note = "(Dollar amounts are in millions, except for per share amounts)"
+    assert result.slot("net_income").scale_text == note
 
 
 def test_full_year_columns_are_never_taken_for_a_quarter() -> None:

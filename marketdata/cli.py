@@ -38,7 +38,9 @@ from marketdata.service.companies import (
     company_profile,
     resolve_ticker,
 )
+from marketdata.service.earnings import FactView, ReleaseView, latest_release
 from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.service.extraction import ExtractionReport, SlotCounts, extraction_report
 from marketdata.service.filings import FilingView, recent_filings
 from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
@@ -60,6 +62,7 @@ _GROUPS = [
     ("tasks", "List, retry and purge queued tasks.", "E3"),
     ("backfill", "Load history: filings, earnings, facts, prices, insiders, funds.", "E3"),
     ("extract", "Earnings extraction and the hit-rate report.", "E7a"),
+    ("earnings", "A company's latest earnings release, each value with its proof.", "E7a"),
     ("stats", "Freshness and track-record statistics.", "E7c"),
     ("normalize", "Rebuild metrics from stored XBRL facts.", "E4b"),
     ("quality", "Quality checks and the accuracy report.", "E4b"),
@@ -568,4 +571,161 @@ def _filing_lines(
             f"  {filing.filed_at}  {filing.form:<16} {filing.accession_no}  {events}".rstrip()
         )
     lines.append("Information from public filings. Not investment advice.")
+    return lines
+
+
+@groups["extract"].command("report")
+def extract_report() -> None:
+    """The extraction hit-rate report (PLAN.md §9.9): per slot and per company, how many slots
+    passed, failed or were not found, and how many needed an override. It decides OD-10.
+
+    Reads the stored releases as their last run left them; `marketdata backfill earnings
+    --quarters 4 --force` runs them all again.
+    """
+    settings = _settings()
+    report = _in_transaction(settings, extraction_report)
+    for line in _report_lines(report):
+        typer.echo(line)
+
+
+def _report_lines(report: ExtractionReport) -> list[str]:
+    if not report.releases:
+        return ["No earnings releases are stored. `marketdata backfill earnings` loads them."]
+    statuses = ", ".join(
+        f"{status.replace('_', ' ')} {count:,}" for status, count in report.statuses.items()
+    )
+    total = report.total
+    with_statement = report.releases - report.statuses["no_statement"]
+    lines = [
+        f"Earnings releases: {report.releases:,} ({statuses}); "
+        f"rules version {', '.join(report.rules_versions)}",
+        f"Hit rate: {total.passed:,} of the {total.applicable:,} slots that apply passed "
+        f"({_rate(total)}) in the {with_statement:,} releases with a statement",
+        "",
+        f"  {'SLOT':<18}{_COUNT_HEADINGS}",
+    ]
+    for slot, counts in report.slots.items():
+        lines.append(f"  {slot:<18}{_count_cells(counts)}")
+    lines.append(f"  {'all slots':<18}{_count_cells(total)}")
+    if report.failures:
+        failed = ", ".join(f"{flag} {count:,}" for flag, count in report.failures.items())
+        lines += ["", f"Failed slots by flag: {failed}"]
+    lines += ["", f"Overrides used ({len(report.overrides)}), with the releases each was used on:"]
+    for description, count in report.overrides.items():
+        lines.append(f"  {count:>4}  {_cut(description, 110)}")
+    if not report.overrides:
+        lines.append("  none")
+    lines += ["", f"  {'COMPANY':<41}{'RELEASES':>9}{_COUNT_HEADINGS}{'NO STATEMENT':>14}"]
+    for company in report.companies:
+        label = "predecessor" if company.successor_cik else _cut(company.name or "—", 22)
+        name = f"{company.ticker or '—':<7} {company.cik:<8} {label}"
+        lines.append(
+            f"  {name:<41}{company.releases:>9}{_count_cells(company.slots)}"
+            f"{company.no_statement:>14}"
+        )
+    if report.no_statement:
+        lines += [
+            "",
+            f"No statement in {len(report.no_statement)} filings with item 2.02 (check by hand "
+            "that none holds results):",
+        ]
+    for filing in report.no_statement:
+        accepted = _utc(filing.accepted_at)[:10] if filing.accepted_at else "—"
+        lines.append(f"  {filing.ticker or '—':<7} {filing.accession_no}  {accepted}  {filing.url}")
+        if filing.notes:
+            lines.append(f"  {'':<7} {_cut('; '.join(filing.notes), 140)}")
+    return lines
+
+
+_COUNT_HEADINGS = (
+    f"{'PASSED':>8}{'FAILED':>8}{'NOT FOUND':>11}{'N/A':>6}{'OVERRIDES':>11}{'HIT RATE':>10}"
+)
+
+
+def _count_cells(counts: SlotCounts) -> str:
+    return (
+        f"{counts.passed:>8,}{counts.failed:>8,}{counts.not_found:>11,}"
+        f"{counts.not_applicable:>6,}{counts.overridden:>11,}{_rate(counts):>10}"
+    )
+
+
+def _rate(counts: SlotCounts) -> str:
+    return f"{counts.hit_rate}%" if counts.hit_rate is not None else "—"
+
+
+def _cut(text: str, width: int) -> str:
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+@groups["earnings"].command("show")
+def earnings_show(
+    ticker: Annotated[str, typer.Argument(help="A ticker as people write it: AAPL, brk.b, BRK/B.")],
+) -> None:
+    """A company's latest earnings release: each value with the row it was read from, its scale
+    and the checks it passed, or why it has none. Reads the database only."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> tuple[ResolvedSecurity, ReleaseView]:
+        security = await resolve_ticker(conn, ticker)
+        return security, await latest_release(conn, security.cik)
+
+    try:
+        security, release = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _release_lines(security, release):
+        typer.echo(line)
+
+
+def _release_lines(security: ResolvedSecurity, release: ReleaseView) -> list[str]:
+    filer = f", filed by its predecessor CIK {release.cik}" if release.cik != security.cik else ""
+    accepted = f", accepted {_utc(release.accepted_at)} UTC" if release.accepted_at else ""
+    quarter = (
+        f"{release.fiscal_period} fiscal {release.fiscal_year}, ended {release.period_end}"
+        if release.period_end
+        else "the quarter's end date is not stated in the release"
+    )
+    verified = f", verified {_utc(release.verified_at)} UTC" if release.verified_at else ""
+    lines = [
+        f"{security.name or '(no name)'} ({security.ticker}, CIK {security.cik})",
+        f"  {'Release':<10} {release.form or '8-K'} {release.accession_no}{accepted}{filer}",
+        f"  {'Quarter':<10} {quarter}"
+        + (f" (columns: {release.period_label})" if release.period_label else ""),
+        f"  {'Status':<10} {release.status}: {release.extractor} version "
+        f"{release.extractor_version}{verified}",
+        f"  {'Filing':<10} {release.filing_url}",
+        f"  {'Exhibit':<10} {release.document_url or '— (no statement was found)'}",
+    ]
+    for fact in release.facts:
+        lines += _fact_lines(fact)
+    lines.append("Information from public filings. Not investment advice.")
+    return lines
+
+
+def _fact_lines(fact: FactView) -> list[str]:
+    if fact.check_status != "passed" or fact.value is None:
+        status = fact.check_status.replace("_", " ")
+        lines = [f"{fact.slot}: {status}"]
+        lines += [f"  {'why':<10} {reason}" for reason in fact.reasons]
+        if fact.quality_flags:
+            lines.append(f"  {'flags':<10} {', '.join(fact.quality_flags)}")
+        if fact.source_quote:
+            lines.append(f"  {'row':<10} {fact.source_quote}")
+        return lines
+    unit = fact.unit if fact.unit == "USD" else "USD per share"
+    prior = (
+        f", prior-year quarter {fact.prior_value:,} {unit}" if fact.prior_value is not None else ""
+    )
+    moved = f", change {fact.change_pct:+}%" if fact.change_pct is not None else ""
+    lines = [f"{fact.slot}: {fact.value:,} {unit}{prior}{moved}"]
+    if fact.quality_flags:
+        lines.append(f"  {'flags':<10} {', '.join(fact.quality_flags)}")
+    lines += [
+        f"  {'row':<10} {fact.source_quote}",
+        f"  {'scale':<10} {fact.scale_text or '— (per-share values are not scaled)'}",
+        f"  {'checks':<10} {', '.join(fact.checks)} passed; {fact.method} "
+        f"version {fact.extractor_version}",
+    ]
     return lines

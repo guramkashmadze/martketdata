@@ -1,0 +1,17 @@
+# The Travelers Companies: consolidated highlights in EX-99.1, "($ in millions, except for per
+# share amounts, and after-tax, except for premiums and revenues)"; diluted EPS is the "per
+# diluted share" row under net income. An insurer: no operating income line.
+cik = 86312
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0000086312-26-000008"
+url = "https://www.sec.gov/Archives/edgar/data/86312/000008631226000008/a991pressrelease123125.htm"
+status = "complete"
+period_end = 2025-12-31
+fiscal = "Q4 2025"
+scale = "millions"
+not_applicable = ["operating_income"]
+revenue = ["12,432", "12,008"]  # Total revenues
+net_income = ["2,496", "2,082"]
+eps_diluted = ["11.06", "8.96"]

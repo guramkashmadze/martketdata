@@ -1,0 +1,16 @@
+# The Coca-Cola Company: consolidated statements of income, "(In millions except per share
+# data)". Net income is the amount attributable to shareowners of the company.
+cik = 21344
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0001628280-26-049922"
+url = "https://www.sec.gov/Archives/edgar/data/21344/000162828026049922/a2026q2earningsreleaseex-9.htm"
+status = "complete"
+period_end = 2026-07-03
+fiscal = "Q2 2026"
+scale = "millions"
+revenue = ["13,380", "12,535"]  # Net Operating Revenues
+operating_income = ["4,672", "4,280"]
+net_income = ["4,425", "3,810"]
+eps_diluted = ["1.03", "0.88"]

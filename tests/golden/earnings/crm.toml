@@ -1,0 +1,16 @@
+# Salesforce, Inc.: condensed consolidated statements of operations, "(in millions, except per
+# share data)".
+cik = 1108524
+fiscal_year_end = "0131"
+
+[[release]]
+accession_no = "0001108524-26-000187"
+url = "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000187/crm-q2fy27xexhibit991.htm"
+status = "complete"
+period_end = 2026-07-31
+fiscal = "Q2 2027"
+scale = "millions"
+revenue = ["11,345", "10,236"]  # Total revenues
+operating_income = ["2,331", "2,332"]  # Income from operations
+net_income = ["3,526", "1,887"]
+eps_diluted = ["4.29", "1.96"]

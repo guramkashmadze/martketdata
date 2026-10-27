@@ -8,3 +8,115 @@
 #   not_applicable = "…"   the company's release doesn't present this line, and why
 # accession_no = "…" limits an override to one release. Every override is logged in
 # docs/EDGE_CASES.md and counted in `marketdata extract report`.
+
+[[override]]
+cik = 19617
+slot = "operating_income"
+not_applicable = "JPMorgan presents no operating income line (a bank): its release prints net revenue, noninterest expense, provision for credit losses and net income, and its supplement income before income tax expense"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/19617/000162828026065582/a3q26erfexhibit991narrative.htm"
+
+[[override]]
+cik = 34088
+slot = "operating_income"
+not_applicable = "ExxonMobil's statement of income has no operating income line: total revenues and other income less total costs and other deductions give income before income taxes"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/34088/000003408826000065/livef8k1q26991.htm"
+
+[[override]]
+cik = 2115436
+slot = "operating_income"
+not_applicable = "ExxonMobil's statement of income has no operating income line: total revenues and other income less total costs and other deductions give income before income taxes"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/2115436/000211543626000006/livef8k2q26992.htm"
+
+[[override]]
+cik = 1744489
+slot = "operating_income"
+not_applicable = "Disney's statement of income has no operating income line: costs and expenses and other items lead to income before income taxes; operating income is printed by segment, and their total is a non-GAAP measure"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1744489/000174448926000056/fy2026_q3xerxex991.htm"
+
+[[override]]
+cik = 320187
+slot = "operating_income"
+not_applicable = "Nike's statement of income has no operating income line: selling and administrative expense, interest and other (income) expense lead to income before income taxes; EBIT is a non-GAAP measure"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/320187/000032018726000184/q1fy27exhibit991er.htm"
+
+[[override]]
+cik = 200406
+slot = "operating_income"
+not_applicable = "Johnson & Johnson's statement of earnings has no operating income line: costs and expenses, other (income) expense and restructuring lead to earnings before provision for taxes on income"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/200406/000020040626000189/a2026q3exhibit992.htm"
+
+[[override]]
+cik = 51143
+slot = "operating_income"
+not_applicable = "IBM's statement has no operating income line: income from continuing operations before income taxes follows expense and other income"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/51143/000005114326000093/ibm-20261021xex991.htm"
+
+[[override]]
+cik = 315189
+slot = "operating_income"
+not_applicable = "Deere's statement of consolidated income has no operating income line: income of consolidated group before income taxes; operating profit is by segment"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/315189/000110465926098904/de-20260820xex99d1.htm"
+
+[[override]]
+cik = 726728
+slot = "operating_income"
+not_applicable = "Realty Income's statement has no operating income line (a REIT): income before income taxes"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/726728/000072672826000044/o-991q22026.htm"
+
+[[override]]
+cik = 1818874
+slot = "operating_income"
+not_applicable = "SoFi's statement has no operating income line (a bank holding company): income before income taxes"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1818874/000181887426000050/a2026q2earningsrelease.htm"
+
+[[override]]
+cik = 86312
+slot = "operating_income"
+not_applicable = "Travelers presents no operating income line (an insurer): its release prints total revenues and net income, and its financial supplement income before income taxes"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a991pressrelease93026.htm"
+
+[[override]]
+cik = 1067983
+slot = "revenue"
+not_applicable = "Berkshire's earnings release presents net earnings and operating earnings by business, but no revenue line"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1067983/000119312526344495/d159922dex991.htm"
+
+[[override]]
+cik = 1067983
+slot = "operating_income"
+not_applicable = "Berkshire presents no operating income line; its operating earnings are after taxes and exclude investment gains (a non-GAAP measure)"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1067983/000119312526344495/d159922dex991.htm"
+
+[[override]]
+cik = 1067983
+slot = "eps_diluted"
+not_applicable = "Berkshire presents net earnings per average equivalent Class A share, not diluted EPS"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1067983/000119312526344495/d159922dex991.htm"
+
+[[override]]
+cik = 1594805
+slot = "eps_diluted"
+not_applicable = "Shopify's release prints no earnings per share: it says diluted net income per share is in a financial supplement on its website, which is not part of the filing"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1594805/000159480526000046/exhibit991pressreleaseq220.htm"
+
+[[override]]
+cik = 1692819
+slot = "eps_diluted"
+not_applicable = "Vistra's earnings release presents no earnings per share"
+reason = "the line is not presented: not_found would count against the rules"
+source_url = "https://www.sec.gov/Archives/edgar/data/1692819/000169281926000017/vistra-20260630xearningsre.htm"

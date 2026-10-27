@@ -49,6 +49,11 @@ _SELECT_CURRENT_BY_TICKERS = f"""
 _SELECT_CURRENT_BY_CIK = f"""
     select {_COLUMNS} from securities where valid_to is null and cik = %(cik)s order by ticker
 """
+_SELECT_CURRENT_BY_CIKS = f"""
+    select {_COLUMNS} from securities
+    where valid_to is null and cik = any(%(ciks)s)
+    order by cik, ticker
+"""
 # Per ticker, the current row if there is one, else the one closed last.
 _SELECT_LATEST_BY_TICKERS = f"""
     select distinct on (ticker) {_COLUMNS} from securities
@@ -94,6 +99,12 @@ async def find_current(conn: AsyncConnection[Any], tickers: Sequence[str]) -> li
 async def list_current_for_cik(conn: AsyncConnection[Any], cik: int) -> list[Security]:
     async with conn.cursor(row_factory=class_row(Security)) as cur:
         await cur.execute(_SELECT_CURRENT_BY_CIK, {"cik": cik})
+        return await cur.fetchall()
+
+
+async def list_current_for_ciks(conn: AsyncConnection[Any], ciks: Sequence[int]) -> list[Security]:
+    async with conn.cursor(row_factory=class_row(Security)) as cur:
+        await cur.execute(_SELECT_CURRENT_BY_CIKS, {"ciks": list(ciks)})
         return await cur.fetchall()
 
 

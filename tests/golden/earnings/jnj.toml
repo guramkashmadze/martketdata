@@ -1,0 +1,16 @@
+# Johnson & Johnson: condensed consolidated statement of earnings in EX-99.2, "(Unaudited; in
+# Millions Except Per Share Figures)", "THIRD QUARTER" 2026 and 2025 with no day stated. No
+# operating income line: earnings before provision for taxes on income.
+cik = 200406
+fiscal_year_end = "0103"
+
+[[release]]
+accession_no = "0000200406-26-000189"
+url = "https://www.sec.gov/Archives/edgar/data/200406/000020040626000189/a2026q3exhibit992.htm"
+status = "complete"
+period_end = "not stated"
+scale = "millions"
+not_applicable = ["operating_income"]
+revenue = ["25,399", "23,993"]  # Sales to customers
+net_income = ["210", "5,152"]  # Net earnings
+eps_diluted = ["0.09", "2.12"]

@@ -1,0 +1,52 @@
+# Costco Wholesale Corporation: consolidated statements of income, "(dollars in millions, except
+# per share data)": 12-week quarters and a 16-week fourth quarter.
+cik = 909832
+fiscal_year_end = "0830"
+
+[[release]]
+accession_no = "0000909832-25-000164"
+url = "https://www.sec.gov/Archives/edgar/data/909832/000090983225000164/costex9918-k121125.htm"
+status = "complete"
+period_end = 2025-11-23
+fiscal = "Q1 2026"
+scale = "millions"
+revenue = ["67,307", "62,151"]  # Total revenue (net sales and membership fees)
+operating_income = ["2,463", "2,196"]
+net_income = ["2,001", "1,798"]
+eps_diluted = ["4.50", "4.04"]
+
+[[release]]
+accession_no = "0000909832-26-000025"
+url = "https://www.sec.gov/Archives/edgar/data/909832/000090983226000025/costex9918-k3526.htm"
+status = "complete"
+period_end = 2026-02-15
+fiscal = "Q2 2026"
+scale = "millions"
+revenue = ["69,597", "63,723"]
+operating_income = ["2,606", "2,316"]
+net_income = ["2,035", "1,788"]
+eps_diluted = ["4.58", "4.02"]
+
+[[release]]
+accession_no = "0000909832-26-000046"
+url = "https://www.sec.gov/Archives/edgar/data/909832/000090983226000046/costex9918-k52826.htm"
+status = "complete"
+period_end = 2026-05-10
+fiscal = "Q3 2026"
+scale = "millions"
+revenue = ["70,527", "63,205"]
+operating_income = ["2,815", "2,530"]
+net_income = ["2,192", "1,903"]
+eps_diluted = ["4.93", "4.28"]
+
+[[release]]
+accession_no = "0000909832-26-000084"
+url = "https://www.sec.gov/Archives/edgar/data/909832/000090983226000084/costex9918-k92426.htm"
+status = "complete"
+period_end = 2026-08-30
+fiscal = "Q4 2026"
+scale = "millions"
+revenue = ["95,723", "86,156"]
+operating_income = ["3,801", "3,341"]
+net_income = ["2,998", "2,610"]
+eps_diluted = ["6.75", "5.87"]

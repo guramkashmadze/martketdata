@@ -1,0 +1,59 @@
+# Target Corporation: consolidated statements of operations in EX-99, "(millions, except per
+# share data)". D-008 labels the year ending 2026-01-31 fiscal 2026 (Target calls it 2025).
+cik = 27419
+fiscal_year_end = "0201"
+
+[[release]]
+accession_no = "0000027419-25-000123"
+url = "https://www.sec.gov/Archives/edgar/data/27419/000002741925000123/a2025q3ex-99.htm"
+status = "complete"
+period_end = 2025-11-01
+fiscal = "Q3 2026"
+scale = "millions"
+revenue = ["25,270", "25,668"]  # Net sales
+operating_income = ["948", "1,168"]
+net_income = ["689", "854"]  # Net earnings
+eps_diluted = ["1.51", "1.85"]
+
+# An 8-K with item 2.02 that is no earnings release: executive leadership changes.
+[[release]]
+accession_no = "0000027419-26-000009"
+url = "https://www.sec.gov/Archives/edgar/data/27419/000002741926000009/trgtannouncesexecutivelead.htm"
+status = "no_statement"
+period_end = "not stated"
+
+[[release]]
+accession_no = "0000027419-26-000012"
+url = "https://www.sec.gov/Archives/edgar/data/27419/000002741926000012/a2025q4ex-99.htm"
+status = "complete"
+period_end = 2026-01-31
+fiscal = "Q4 2026"
+scale = "millions"
+revenue = ["30,453", "30,915"]
+operating_income = ["1,380", "1,467"]
+net_income = ["1,046", "1,103"]
+eps_diluted = ["2.30", "2.41"]
+
+[[release]]
+accession_no = "0000027419-26-000020"
+url = "https://www.sec.gov/Archives/edgar/data/27419/000002741926000020/a2026q1ex-99.htm"
+status = "complete"
+period_end = 2026-05-02
+fiscal = "Q1 2027"
+scale = "millions"
+revenue = ["25,443", "23,846"]
+operating_income = ["1,135", "1,472"]
+net_income = ["781", "1,036"]
+eps_diluted = ["1.71", "2.27"]
+
+[[release]]
+accession_no = "0000027419-26-000034"
+url = "https://www.sec.gov/Archives/edgar/data/27419/000002741926000034/a2026q2ex-99.htm"
+status = "complete"
+period_end = 2026-08-01
+fiscal = "Q2 2027"
+scale = "millions"
+revenue = ["26,539", "25,211"]
+operating_income = ["2,560", "1,317"]
+net_income = ["1,877", "935"]
+eps_diluted = ["4.11", "2.05"]

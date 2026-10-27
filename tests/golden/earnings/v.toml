@@ -1,0 +1,16 @@
+# Visa Inc.: consolidated statements of operations, "(in millions, except per share data)".
+# Diluted EPS is printed per class of stock; class A is the listed one.
+cik = 1403161
+fiscal_year_end = "0930"
+
+[[release]]
+accession_no = "0001403161-26-000103"
+url = "https://www.sec.gov/Archives/edgar/data/1403161/000140316126000103/q32026earningsrelease.htm"
+status = "complete"
+period_end = 2026-06-30
+fiscal = "Q3 2026"
+scale = "millions"
+revenue = ["11,633", "10,172"]  # Net revenue
+operating_income = ["6,877", "6,177"]
+net_income = ["5,628", "5,272"]
+eps_diluted = ["2.97", "2.69"]  # Diluted earnings per share, class A common stock

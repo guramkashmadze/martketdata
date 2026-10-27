@@ -1,0 +1,50 @@
+# JPMorgan Chase & Co.: "Results for JPM" in the narrative release (EX-99.1), "($ millions,
+# except per share data)", columns: the quarter, the quarter before, the quarter a year
+# earlier. A bank: revenue doesn't apply (D-072); no operating income line is printed.
+cik = 19617
+fiscal_year_end = "1231"
+sic_code = "6021"
+
+[[release]]
+accession_no = "0001628280-26-001902"
+url = "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfexhibit991narrative.htm"
+status = "complete"
+period_end = 2025-12-31
+fiscal = "Q4 2025"
+scale = "millions"
+not_applicable = ["revenue", "operating_income"]
+net_income = ["13,025", "14,005"]
+eps_diluted = ["4.63", "4.81"]
+
+[[release]]
+accession_no = "0001628280-26-024990"
+url = "https://www.sec.gov/Archives/edgar/data/19617/000162828026024990/a1q26erfexhibit991narrative.htm"
+status = "complete"
+period_end = 2026-03-31
+fiscal = "Q1 2026"
+scale = "millions"
+not_applicable = ["revenue", "operating_income"]
+net_income = ["16,494", "14,643"]
+eps_diluted = ["5.94", "5.07"]
+
+[[release]]
+accession_no = "0001628280-26-048078"
+url = "https://www.sec.gov/Archives/edgar/data/19617/000162828026048078/a2q26erfexhibit991narrative.htm"
+status = "complete"
+period_end = 2026-06-30
+fiscal = "Q2 2026"
+scale = "millions"
+not_applicable = ["revenue", "operating_income"]
+net_income = ["21,155", "14,987"]
+eps_diluted = ["7.70", "5.24"]
+
+[[release]]
+accession_no = "0001628280-26-065582"
+url = "https://www.sec.gov/Archives/edgar/data/19617/000162828026065582/a3q26erfexhibit991narrative.htm"
+status = "complete"
+period_end = 2026-09-30
+fiscal = "Q3 2026"
+scale = "millions"
+not_applicable = ["revenue", "operating_income"]
+net_income = ["15,305", "14,393"]
+eps_diluted = ["5.57", "5.07"]

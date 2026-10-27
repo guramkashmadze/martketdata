@@ -1,0 +1,16 @@
+# Shopify Inc.: condensed consolidated statements of operations, "(In US $ millions)". Total
+# revenues is the unlabeled row closing the "Revenues" section; no earnings per share is printed.
+cik = 1594805
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0001594805-26-000046"
+url = "https://www.sec.gov/Archives/edgar/data/1594805/000159480526000046/exhibit991pressreleaseq220.htm"
+status = "complete"
+period_end = 2026-06-30
+fiscal = "Q2 2026"
+scale = "millions"
+not_applicable = ["eps_diluted"]
+revenue = ["3,583", "2,680"]
+operating_income = ["488", "291"]
+net_income = ["1,502", "906"]

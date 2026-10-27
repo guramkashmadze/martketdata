@@ -139,6 +139,20 @@ _LIST = f"""
     limit %(limit)s
 """
 
+# A company's latest results release (its predecessors' too): an 8-K with item 2.02 that holds
+# no statement is left out.
+_LATEST = f"""
+    select {_RELEASE_COLUMNS} from earnings_releases
+    where cik = any(%(ciks)s) and status <> 'no_statement'
+    order by accepted_at desc nulls last, accession_no desc
+    limit 1
+"""
+
+_EVERY_RELEASE = f"""
+    select {_RELEASE_COLUMNS} from earnings_releases order by cik, accepted_at, accession_no
+"""
+_EVERY_FACT = f"select {_FACT_COLUMNS} from earnings_facts order by accession_no, slot"
+
 _ALL_FACTS = f"""
     select {_FACT_COLUMNS} from earnings_facts
     where accession_no = any(%(accessions)s)
@@ -229,4 +243,22 @@ async def list_releases(
 async def facts_of(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list[StoredFact]:
     async with conn.cursor(row_factory=class_row(StoredFact)) as cur:
         await cur.execute(_ALL_FACTS, {"accessions": list(accessions)})
+        return await cur.fetchall()
+
+
+async def latest_release(conn: AsyncConnection[Any], ciks: Sequence[int]) -> StoredRelease | None:
+    async with conn.cursor(row_factory=class_row(StoredRelease)) as cur:
+        await cur.execute(_LATEST, {"ciks": list(ciks)})
+        return await cur.fetchone()
+
+
+async def every_release(conn: AsyncConnection[Any]) -> list[StoredRelease]:
+    async with conn.cursor(row_factory=class_row(StoredRelease)) as cur:
+        await cur.execute(_EVERY_RELEASE)
+        return await cur.fetchall()
+
+
+async def every_fact(conn: AsyncConnection[Any]) -> list[StoredFact]:
+    async with conn.cursor(row_factory=class_row(StoredFact)) as cur:
+        await cur.execute(_EVERY_FACT)
         return await cur.fetchall()

@@ -11,7 +11,7 @@ import psycopg
 from conftest import connect_to, filing_routes, sec_serving
 
 from marketdata.db.repositories import earnings, value_changes
-from marketdata.extract.earnings_rules import Override, parse_overrides
+from marketdata.extract.earnings_rules import RULES_VERSION, Override, parse_overrides
 from marketdata.ingest.earnings import EarningsIngest, ExtractedRelease
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.sec import urls
@@ -59,7 +59,7 @@ async def test_a_release_is_extracted_verified_and_stored(conn: Conn, tmp_path: 
     assert (stored.period_end, stored.doc_name) == (date(2026, 6, 27), EXHIBIT)
     assert stored.accepted_at == datetime(2026, 7, 30, 20, 30, 28, tzinfo=UTC)
     assert stored.verified_at is not None
-    assert (stored.extractor, stored.extractor_version) == ("rules", "1")
+    assert (stored.extractor, stored.extractor_version) == ("rules", RULES_VERSION)
     assert stored.check_report["accepted_at"]["index_page"] == "2026-07-30T20:30:28+00:00"
     facts = {fact.slot: fact for fact in await earnings.facts(conn, RELEASE)}
     assert {slot: fact.check_status for slot, fact in facts.items()} == {

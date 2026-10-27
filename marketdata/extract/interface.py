@@ -44,6 +44,7 @@ class ReleaseDocument:
     doc_type: str  # EX-99.1, EX-99, EX-99.2 …
     text: str  # documents.text
     tables: tuple[Table, ...]
+    images: int = 0  # pictures in it: pages printed as pictures have no tables to read
 
 
 @dataclass(frozen=True)

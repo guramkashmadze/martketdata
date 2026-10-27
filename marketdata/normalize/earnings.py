@@ -22,6 +22,7 @@ from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
 
+from marketdata.extract.earnings_rules import Override
 from marketdata.extract.interface import USD, ExtractionResult, Figure, Slot, SlotResult
 from marketdata.normalize.periods import fiscal_quarter
 from marketdata.verify.number_check import (
@@ -57,6 +58,28 @@ def revenue_not_applicable(sic_code: str | None) -> str | None:
     if sic_code is not None and sic_code.isdigit() and int(sic_code) in BANK_SIC:
         return BANK_REASON
     return None
+
+
+def not_applicable_slots(
+    cik: int, accession_no: str, sic_code: str | None, overrides: Sequence[Override]
+) -> tuple[dict[Slot, str], list[str]]:
+    """The slots that don't apply to a release, each with why: revenue for a bank, and each slot
+    a `not_applicable` override names for the company (and for this release, when it names
+    one). Also the overrides used, as described."""
+    reasons: dict[Slot, str] = {}
+    bank = revenue_not_applicable(sic_code)
+    if bank is not None:
+        reasons["revenue"] = bank
+    used = []
+    for override in overrides:
+        if (
+            override.cik == cik
+            and override.not_applicable is not None
+            and override.accession_no in (None, accession_no)
+        ):
+            reasons[override.slot] = f"override: {override.not_applicable}"
+            used.append(override.describe())
+    return reasons, used
 
 
 @dataclass(frozen=True)

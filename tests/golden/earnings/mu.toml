@@ -1,0 +1,22 @@
+# Micron Technology: consolidated statements of operations, "(In millions, except per share
+# amounts)"; columns "4th Qtr." (14 weeks to 2026-09-03), "3rd Qtr." and the year-earlier
+# "4th Qtr.".
+cik = 723125
+fiscal_year_end = "0902"
+
+[[release]]
+accession_no = "0000723125-26-000018"
+url = "https://www.sec.gov/Archives/edgar/data/723125/000072312526000018/a2026q4ex991-pressrelease.htm"
+status = "partial"
+period_end = 2026-09-03
+fiscal = "Q4 2026"
+scale = "millions"
+revenue = ["54,229", "11,315"]
+operating_income = ["43,751", "3,654"]
+net_income = ["37,701", "3,201"]
+eps_diluted = ["32.87", "2.83"]
+
+[release.differences]
+operating_income = "up 1097% on the year: above the ±1000% sanity limit (§9.9), so not served"
+net_income = "up 1078% on the year: above the ±1000% sanity limit (§9.9), so not served"
+eps_diluted = "up 1061% on the year: above the ±1000% sanity limit (§9.9), so not served"

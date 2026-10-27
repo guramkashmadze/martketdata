@@ -1,0 +1,51 @@
+# lululemon athletica inc.: condensed consolidated statements of operations, "Expressed in
+# thousands, except per share amounts". Its headings name the quarter ("Second Quarter 2026");
+# only the third-quarter 2025 release states the day it ended ("which ended on November 2,
+# 2025").
+cik = 1397187
+fiscal_year_end = "0131"
+
+[[release]]
+accession_no = "0001397187-25-000054"
+url = "https://www.sec.gov/Archives/edgar/data/1397187/000139718725000054/lulu-20251102xex991.htm"
+status = "complete"
+period_end = 2025-11-02
+fiscal = "Q3 2026"
+scale = "thousands"
+revenue = ["2,565,920", "2,396,660"]  # Net revenue
+operating_income = ["435,886", "490,661"]  # Income from operations
+net_income = ["306,835", "351,870"]
+eps_diluted = ["2.59", "2.87"]
+
+[[release]]
+accession_no = "0001397187-26-000019"
+url = "https://www.sec.gov/Archives/edgar/data/1397187/000139718726000019/lulu-20260201xex991.htm"
+status = "complete"
+period_end = "not stated"
+scale = "thousands"
+revenue = ["3,640,801", "3,611,497"]
+operating_income = ["812,290", "1,042,168"]
+net_income = ["586,871", "748,403"]
+eps_diluted = ["5.01", "6.14"]
+
+[[release]]
+accession_no = "0001397187-26-000077"
+url = "https://www.sec.gov/Archives/edgar/data/1397187/000139718726000077/lulu-20260503xex991.htm"
+status = "complete"
+period_end = "not stated"
+scale = "thousands"
+revenue = ["2,471,603", "2,370,660"]
+operating_income = ["276,946", "438,625"]
+net_income = ["195,048", "314,572"]
+eps_diluted = ["1.69", "2.60"]
+
+[[release]]
+accession_no = "0001397187-26-000126"
+url = "https://www.sec.gov/Archives/edgar/data/1397187/000139718726000126/lulu-20260802xex991.htm"
+status = "complete"
+period_end = "not stated"
+scale = "thousands"
+revenue = ["2,415,631", "2,525,219"]
+operating_income = ["453,653", "523,814"]
+net_income = ["329,223", "370,905"]
+eps_diluted = ["2.92", "3.10"]

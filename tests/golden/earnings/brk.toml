@@ -1,0 +1,15 @@
+# Berkshire Hathaway Inc.: the release summarizes after-tax earnings, "(Dollar amounts are in
+# millions, except for per share amounts)" stated in the paragraph above the table. It prints
+# no revenue, no operating income and no diluted EPS (only per average Class A share), and it
+# names the "second quarter" without the day it ended.
+cik = 1067983
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0001193125-26-344495"
+url = "https://www.sec.gov/Archives/edgar/data/1067983/000119312526344495/d159922dex991.htm"
+status = "complete"
+period_end = "not stated"
+scale = "millions"
+not_applicable = ["revenue", "operating_income", "eps_diluted"]
+net_income = ["25,667", "12,370"]  # Net earnings attributable to Berkshire shareholders

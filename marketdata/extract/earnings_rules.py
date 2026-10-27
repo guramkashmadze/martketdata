@@ -15,7 +15,9 @@ Pure. For one release:
    The amount attributable to the company wins over the amount including noncontrolling
    interests.
 3. The values: the printed cells of the current and prior-year columns, times the scale the
-   table states (units.py); per-share values are not scaled. No scale: `scale_unknown`.
+   table states (units.py), or else a note in the paragraph right above it states ("… are
+   summarized below. (Dollar amounts are in millions, except for per share amounts).",
+   Berkshire); per-share values are not scaled. No scale: `scale_unknown`.
 
 Nothing here checks the values; verify/ does that against the stored text (D-015).
 """
@@ -51,7 +53,7 @@ from marketdata.extract.interface import (
 from marketdata.extract.units import Scale, find_scale
 from marketdata.normalize.periods import fiscal_quarter
 
-RULES_VERSION = "1"
+RULES_VERSION = "2"  # 2: bullets are not titles; a paragraph note may state the scale
 METHOD = "rule"
 
 # --- Labels -----------------------------------------------------------------------------------
@@ -166,6 +168,8 @@ _NOT_STATEMENT = re.compile(
 )
 _CONTINUED = re.compile(r"\bcontinued\b|\(cont", re.IGNORECASE)
 TITLE_LINE = 200  # a context line longer than this is a paragraph, not a title
+_BULLET = re.compile(r"^\s*[•◦▪●■‣⁃∙➢►]")  # an item of a list of highlights, never a title
+_NOTE = re.compile(r"\([^()]{1,200}\)")  # a parenthesised note in a paragraph
 RELEASE_LAG = timedelta(days=130)  # a release reports a quarter that ended this long before
 UNNAMED_LAG = timedelta(days=100)  # nearer than the end of the quarter before
 
@@ -380,7 +384,8 @@ def _statement(release: Release, pins: Sequence[Override]) -> tuple[_Statement |
     candidates: list[_Statement] = []
     for document in release.documents:
         if not document.tables:
-            notes.append(f"{document.doc_name}: no tables")
+            pictures = f", {document.images} pictures" if document.images else ""
+            notes.append(f"{document.doc_name}: no tables{pictures}")
             continue
         for position, table in enumerate(document.tables):
             if table_pin is not None and (
@@ -411,6 +416,8 @@ def _statement(release: Release, pins: Sequence[Override]) -> tuple[_Statement |
                 continue
             rows += _continuation(document.tables[position + 1 :], table, document)
             scale = find_scale([*context, *_heading_lines(table)])
+            if scale.money is None:
+                scale = find_scale(_paragraph_notes(table))
             candidates.append(_Statement(document, table, periods, scale, tuple(rows), titled))
         if candidates:
             break  # the first exhibit with a statement is the press release (§9.9)
@@ -421,7 +428,11 @@ def _statement(release: Release, pins: Sequence[Override]) -> tuple[_Statement |
 
 
 def _has_income_lines(release: Release) -> bool:
-    """Whether any table of the exhibits has a revenue, net income or diluted EPS line."""
+    """Whether any table of the exhibits has a revenue, net income or diluted EPS line, or an
+    exhibit is pages printed as pictures, whose statement the rules can't read: such a release
+    is not taken for one without a statement."""
+    if any(not document.tables and document.images for document in release.documents):
+        return True
     for document in release.documents:
         for table in document.tables:
             for located in _located(table, document):
@@ -447,8 +458,20 @@ def _continuation(
 
 def _title_context(table: Table) -> list[str]:
     """The table's title lines: the last three lines above it that are short enough to be
-    titles; a safe-harbor paragraph that mentions non-GAAP measures is not one."""
-    return [line for line in table.context[-3:] if len(line) <= TITLE_LINE]
+    titles; a safe-harbor paragraph that mentions non-GAAP measures is not one (Walmart), and
+    neither is a bullet of the highlights ("•Strong growth in … adjusted book value per share",
+    Travelers)."""
+    return [
+        line for line in table.context[-3:] if len(line) <= TITLE_LINE and not _BULLET.match(line)
+    ]
+
+
+def _paragraph_notes(table: Table) -> list[str]:
+    """The parenthesised notes of a paragraph right above the table, where a release may state
+    the scale it hasn't stated in the table's title or headings."""
+    if not table.context or len(table.context[-1]) <= TITLE_LINE:
+        return []
+    return _NOTE.findall(table.context[-1])
 
 
 def _located(table: Table, document: ReleaseDocument) -> list[_Located]:

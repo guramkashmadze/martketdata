@@ -47,7 +47,7 @@ from marketdata.extract.earnings_rules import (
     parse_overrides,
 )
 from marketdata.extract.html_tables import parse_document
-from marketdata.extract.interface import Release, ReleaseDocument, Slot
+from marketdata.extract.interface import Release, ReleaseDocument
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.ingest.watcher import FilingsWatcher
 from marketdata.normalize.changes import (
@@ -56,7 +56,7 @@ from marketdata.normalize.changes import (
     amendment_changes,
     correction_changes,
 )
-from marketdata.normalize.earnings import ReleaseRecord, assemble, revenue_not_applicable
+from marketdata.normalize.earnings import ReleaseRecord, assemble, not_applicable_slots
 from marketdata.normalize.filing_index import FilingIndex, earnings_exhibits, parse_filing_index
 from marketdata.normalize.filings import EARNINGS_EXTRACT, EARNINGS_FORMS
 from marketdata.normalize.security_master import SecFileError
@@ -131,7 +131,9 @@ class EarningsIngest:
             company = await companies.get(conn, cik)
             group = [cik, *await predecessors.predecessors_of(conn, cik)]
         fiscal_year_end = company.fiscal_year_end if company else None
-        not_applicable, overridden = self._not_applicable(cik, fetched, company)
+        not_applicable, overridden = not_applicable_slots(
+            cik, fetched.accession_no, company.sic_code if company else None, self._overrides
+        )
         release = Release(
             cik,
             fetched.accession_no,
@@ -174,24 +176,6 @@ class EarningsIngest:
             changes=len(changes),
         )
         return ExtractedRelease(fetched, record, tuple(changes))
-
-    def _not_applicable(
-        self, cik: int, fetched: FetchedRelease, company: companies.Company | None
-    ) -> tuple[dict[Slot, str], list[str]]:
-        reasons: dict[Slot, str] = {}
-        bank = revenue_not_applicable(company.sic_code if company else None)
-        if bank is not None:
-            reasons["revenue"] = bank
-        overridden = []
-        for override in self._overrides:
-            if (
-                override.cik == cik
-                and override.not_applicable is not None
-                and override.accession_no in (None, fetched.accession_no)
-            ):
-                reasons[override.slot] = f"override: {override.not_applicable}"
-                overridden.append(override.describe())
-        return reasons, overridden
 
     async def _store(
         self, record: ReleaseRecord, group: Sequence[int], form: str
@@ -238,7 +222,9 @@ class EarningsIngest:
             raw_key, data, fresh = await self._fetcher.fetch_document(url)
             fetched += int(fresh)
             parsed = parse_document(exhibit.name, data)
-            document = ReleaseDocument(exhibit.name, exhibit.doc_type, parsed.text, parsed.tables)
+            document = ReleaseDocument(
+                exhibit.name, exhibit.doc_type, parsed.text, parsed.tables, parsed.images
+            )
             exhibits.append(StoredExhibit(document, raw_key))
             if not parsed.tables and parsed.images:
                 # Pages printed as pictures, with their text in a hidden layer (EDGE_CASES.md).
