@@ -38,6 +38,7 @@ import psycopg
 
 from marketdata.config import SettingsError, load_settings
 from marketdata.db.repositories import raw_objects
+from marketdata.normalize.metric_catalog import concepts_by_taxonomy
 from marketdata.sec import urls
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
@@ -48,51 +49,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "sec"
 MANIFEST = FIXTURES / "MANIFEST.json"
 
-# PLAN.md §9.3, in catalog order; E4a's normalize/metric_catalog.py becomes the source.
+# The metric catalog's concepts (PLAN.md §9.3, normalize/metric_catalog.py) and the dei cover
+# facts, of which universe growth reads the public float (E4a-S5).
 CATALOG_CONCEPTS = {
-    "us-gaap": [
-        "Revenues",
-        "RevenueFromContractWithCustomerExcludingAssessedTax",
-        "RevenueFromContractWithCustomerIncludingAssessedTax",
-        "SalesRevenueNet",
-        "CostOfRevenue",
-        "CostOfGoodsAndServicesSold",
-        "CostOfGoodsSold",
-        "GrossProfit",
-        "ResearchAndDevelopmentExpense",
-        "SellingGeneralAndAdministrativeExpense",
-        "OperatingIncomeLoss",
-        "InterestExpense",
-        "InterestExpenseNonoperating",
-        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",  # noqa: E501
-        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",  # noqa: E501
-        "IncomeTaxExpenseBenefit",
-        "NetIncomeLoss",
-        "ProfitLoss",
-        "EarningsPerShareBasic",
-        "EarningsPerShareDiluted",
-        "WeightedAverageNumberOfDilutedSharesOutstanding",
-        "DepreciationDepletionAndAmortization",
-        "DepreciationAndAmortization",
-        "NetCashProvidedByUsedInOperatingActivities",
-        "PaymentsToAcquirePropertyPlantAndEquipment",
-        "PaymentsOfDividends",
-        "PaymentsOfDividendsCommonStock",
-        "PaymentsForRepurchaseOfCommonStock",
-        "CashAndCashEquivalentsAtCarryingValue",
-        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
-        "AssetsCurrent",
-        "Assets",
-        "LiabilitiesCurrent",
-        "Liabilities",
-        "LiabilitiesAndStockholdersEquity",
-        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
-        "LongTermDebtNoncurrent",
-        "LongTermDebt",
-        "StockholdersEquity",
-        "CommonStockSharesOutstanding",
-    ],
-    "dei": ["EntityCommonStockSharesOutstanding", "EntityPublicFloat"],
+    taxonomy: list(dict.fromkeys(names + (("EntityPublicFloat",) if taxonomy == "dei" else ())))
+    for taxonomy, names in concepts_by_taxonomy().items()
 }
 
 
