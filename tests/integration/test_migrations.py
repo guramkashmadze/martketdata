@@ -12,6 +12,7 @@ E2_TABLES = {"companies", "securities"}
 E3_TABLES = {"filings", "watch_state"}
 E7A_TABLES = {"documents", "company_predecessors"}
 EARNINGS_TABLES = {"earnings_releases", "earnings_facts", "value_changes"}
+FACTS_TABLES = {"xbrl_facts"}
 
 
 def _tables(url: str) -> set[str]:
@@ -30,14 +31,20 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0006(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0006"
+def test_head_is_0007(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0007"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
-    every = E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES | EARNINGS_TABLES
+    every = (
+        E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES | EARNINGS_TABLES | FACTS_TABLES
+    )
     assert _tables(migrated_database) >= every
     assert "priority" in _columns(migrated_database, "tasks")
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & FACTS_TABLES == set()
+    assert _tables(migrated_database) >= EARNINGS_TABLES
 
     command.downgrade(alembic_config, "-1")
     assert _tables(migrated_database) & EARNINGS_TABLES == set()
@@ -133,4 +140,31 @@ async def test_a_fact_that_failed_holds_no_value(conn: psycopg.AsyncConnection[A
             "insert into earnings_facts (accession_no, slot, value, unit, method, "
             "extractor_version, check_status) values ('0000320193-26-000018', 'revenue', 1, "
             "'USD', 'rule', '1', 'failed')"
+        )
+
+
+async def test_an_instant_fact_is_stored_once_per_filing(
+    conn: psycopg.AsyncConnection[Any],
+) -> None:
+    # Instants have no start: the key treats the missing starts as equal (nulls not distinct).
+    await conn.execute("insert into companies (cik) values (320193)")
+    insert = (
+        "insert into xbrl_facts (cik, taxonomy, concept, unit, period_end, value, filed_at, "
+        "accession_no) values (320193, %s, 'Assets', 'USD', '2026-06-27', 1, '2026-07-31', "
+        "'0000320193-26-000020')"
+    )
+    await conn.execute(insert, ["us-gaap"])
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        await conn.execute(insert, ["us-gaap"])
+
+
+async def test_only_us_gaap_and_dei_facts_are_stored(conn: psycopg.AsyncConnection[Any]) -> None:
+    await conn.execute("insert into companies (cik) values (320193)")
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(
+            "insert into xbrl_facts (cik, taxonomy, concept, unit, period_end, value, filed_at, "
+            "accession_no) values (320193, 'ifrs-full', 'Assets', 'USD', '2026-06-27', 1, "
+            "'2026-07-31', '0000320193-26-000020')"
         )

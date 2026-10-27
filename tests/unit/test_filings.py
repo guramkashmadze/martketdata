@@ -136,7 +136,9 @@ def test_routing_follows_section_four() -> None:
     assert route(earnings, filer_type="foreign_private_issuer") == []
     assert route(_row("a", items_8k=("5.02",)), filer_type="domestic") == []
     ten_q = route(_row("b", form="10-Q"), filer_type="domestic")
-    assert [(r.kind, r.key) for r in ten_q] == [(FACTS_REFRESH, "320193")]
+    # Keyed by company, so every new 10-K or 10-Q queues a finished refresh again (D-081).
+    assert [(r.kind, r.key, r.force) for r in ten_q] == [(FACTS_REFRESH, "320193", True)]
+    assert not any(r.force for r in route(earnings, filer_type="domestic"))
     assert route(_row("c", form="10-Q"), filer_type="fund") == []
     assert [r.kind for r in route(_row("d", form="4"), filer_type="domestic")] == [FORM4_PARSE]
     owner = _row("e", form="4", file_number="001-41042")  # the company is the reporting owner

@@ -14,6 +14,7 @@ import asyncio
 import calendar
 import logging
 import signal
+from collections.abc import Collection
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
@@ -28,6 +29,7 @@ from marketdata.db.pool import create_pool
 from marketdata.db.repositories import companies
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.fetch import Connect
+from marketdata.normalize.filings import FACTS_REFRESH
 from marketdata.tasks import queue
 from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
@@ -72,12 +74,16 @@ async def enqueue_backfills(conn: AsyncConnection[Any], since: date) -> list[Tas
 
 
 async def enqueue_earnings_backfills(
-    conn: AsyncConnection[Any], since: date, *, force: bool = False
+    conn: AsyncConnection[Any],
+    since: date,
+    *,
+    force: bool = False,
+    ciks: Collection[int] | None = None,
 ) -> list[Task]:
     """On demand (`marketdata backfill earnings`): one earnings_backfill per domestic universe
-    company (§9.1), back to `since`, behind live and periodic work (D-067). Each queues the
-    extraction of the company's releases; `force` extracts done ones again."""
-    universe = await companies.list_in_universe(conn)
+    company (§9.1), or per one of `ciks`, back to `since`, behind live and periodic work
+    (D-067). Each queues the extraction of the company's releases; `force` extracts done ones
+    again."""
     payload = {"since": since.isoformat(), "force": force}
     return [
         await queue.enqueue(
@@ -88,8 +94,37 @@ async def enqueue_earnings_backfills(
             force=True,
             priority=queue.PRIORITY_BACKFILL,
         )
+        for company in await _domestic_universe(conn, ciks)
+    ]
+
+
+async def enqueue_facts_backfills(
+    conn: AsyncConnection[Any], *, ciks: Collection[int] | None = None
+) -> list[Task]:
+    """On demand (`marketdata backfill facts`): one facts_refresh per domestic universe company
+    (§9.1), or per one of `ciks`, behind live and periodic work (D-067). Each loads the
+    company's XBRL facts and its predecessors' (D-081); a finished refresh runs again."""
+    return [
+        await queue.enqueue(
+            conn,
+            FACTS_REFRESH,
+            str(company.cik),
+            {"cik": company.cik},
+            force=True,
+            priority=queue.PRIORITY_BACKFILL,
+        )
+        for company in await _domestic_universe(conn, ciks)
+    ]
+
+
+async def _domestic_universe(
+    conn: AsyncConnection[Any], ciks: Collection[int] | None
+) -> list[companies.Company]:
+    universe = await companies.list_in_universe(conn)
+    return [
+        company
         for company in universe
-        if company.filer_type == "domestic"
+        if company.filer_type == "domestic" and (ciks is None or company.cik in ciks)
     ]
 
 

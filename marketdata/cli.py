@@ -213,6 +213,10 @@ def backfill_earnings(
         bool,
         typer.Option(help="Extract releases that were extracted before again (new rules)."),
     ] = False,
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="Only this universe company (repeatable); default: all."),
+    ] = None,
 ) -> None:
     """Queue an earnings backfill for each domestic universe company; the worker runs them.
 
@@ -224,9 +228,10 @@ def backfill_earnings(
     since = task_scheduler.months_before(datetime.now(UTC).date(), quarters * 3)
 
     async def work(conn: AsyncConnection[Any]) -> list[Task]:
-        return await task_scheduler.enqueue_earnings_backfills(conn, since, force=force)
+        ciks = await _universe_ciks(conn, tickers) if tickers else None
+        return await task_scheduler.enqueue_earnings_backfills(conn, since, force=force, ciks=ciks)
 
-    queued = _in_transaction(settings, work)
+    queued = _queue(settings, work)
     if not queued:
         raise _fail("No domestic universe companies: run `marketdata ingest security-master`.")
     start = since.isoformat()
@@ -243,6 +248,66 @@ def backfill_earnings(
         "Follow them with `marketdata tasks list --kind earnings_backfill` and "
         "`--kind earnings_extract`."
     )
+
+
+@groups["backfill"].command("facts")
+def backfill_facts(
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="Only this universe company (repeatable); default: all."),
+    ] = None,
+) -> None:
+    """Queue an XBRL facts refresh for each domestic universe company; the worker runs them.
+
+    Each task stores the company's companyfacts JSON, and its predecessors', in the raw store
+    and loads their us-gaap and dei facts, behind live work. Exits with 1 when no domestic
+    universe company matches.
+    """
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        ciks = await _universe_ciks(conn, tickers) if tickers else None
+        return await task_scheduler.enqueue_facts_backfills(conn, ciks=ciks)
+
+    queued = _queue(settings, work)
+    if not queued:
+        raise _fail("No domestic universe companies: run `marketdata ingest security-master`.")
+    waiting = [task for task in queued if task.status != "queued" or task.attempts]
+    typer.echo(
+        f"Queued facts refreshes for {len(queued)} domestic universe companies; the worker "
+        "runs them."
+    )
+    if waiting:
+        typer.echo(f"  {len(waiting)} were already running or waiting to retry.")
+    typer.echo("Follow them with `marketdata tasks list --kind facts_refresh`.")
+
+
+async def _universe_ciks(conn: AsyncConnection[Any], tickers: list[str]) -> list[int]:
+    """The CIKs of these tickers, each of a domestic universe company (InvalidParameter if
+    not)."""
+    ciks = []
+    for text in tickers:
+        security = await resolve_ticker(conn, text)
+        if not security.in_universe or security.filer_type != "domestic":
+            where = "in the universe" if security.in_universe else "outside the universe"
+            raise InvalidParameter(
+                f"{security.ticker} is a {security.filer_type} company {where}: facts and "
+                "earnings are loaded for domestic universe companies only (PLAN.md §9.1)"
+            )
+        ciks.append(security.cik)
+    return ciks
+
+
+def _queue(
+    settings: Settings, work: Callable[[AsyncConnection[Any]], Awaitable[list[Task]]]
+) -> list[Task]:
+    """Queue tasks in one transaction; a ticker that doesn't resolve exits with its reason."""
+    try:
+        return _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
 
 
 @app.command("scheduler")

@@ -232,11 +232,14 @@ def plan_filings(stored: Mapping[str, datetime | None], listed: Sequence[FilingR
 
 @dataclass(frozen=True)
 class Route:
-    """A task to enqueue for a new filing."""
+    """A task to enqueue for a new filing. `force` queues a finished task with the same key
+    again: a facts refresh is keyed by company, so every new 10-K or 10-Q must run it anew
+    (D-058, D-081)."""
 
     kind: str
     key: str
     payload: Mapping[str, Any] = field(default_factory=dict)
+    force: bool = False
 
 
 def route(
@@ -247,7 +250,7 @@ def route(
     managers (E9)."""
     accession = {"cik": filing.cik, "accession_no": filing.accession_no}
     if filing.form in PERIODIC_FORMS and filer_type == "domestic":
-        return [Route(FACTS_REFRESH, str(filing.cik), {"cik": filing.cik})]
+        return [Route(FACTS_REFRESH, str(filing.cik), {"cik": filing.cik}, force=True)]
     if (
         filing.form in EARNINGS_FORMS
         and "2.02" in (filing.items_8k or ())

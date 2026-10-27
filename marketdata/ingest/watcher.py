@@ -172,6 +172,7 @@ class FilingsWatcher:
                                 work.kind,
                                 work.key,
                                 work.payload,
+                                force=work.force,
                                 priority=tasks.PRIORITY_LIVE,
                             )
                             routed.append(f"{work.kind} {work.key}")

@@ -11,13 +11,14 @@ import structlog
 from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
+from marketdata.ingest.facts import FactsLoader
 from marketdata.ingest.security_master import (
     SecurityMasterLoader,
     read_data_files,
     read_predecessors,
 )
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
-from marketdata.normalize.filings import EARNINGS_EXTRACT
+from marketdata.normalize.filings import EARNINGS_EXTRACT, FACTS_REFRESH
 from marketdata.normalize.security_master import SnapshotRefused
 from marketdata.normalize.universe import DataFileError
 from marketdata.sec import urls
@@ -100,6 +101,13 @@ async def backfill_earnings(context: TaskContext, task: Task) -> None:
     await backfill.run(cik, since, force=task.payload.get("force") is True)
 
 
+async def refresh_facts(context: TaskContext, task: Task) -> None:
+    """One company's XBRL facts (E4a), routed from a new 10-K or 10-Q or queued by the facts
+    backfill: its companyfacts and its predecessors' stored and loaded. A new filing the SEC's
+    file doesn't list yet makes the task retry (FactsNotPublished)."""
+    await FactsLoader(context.fetcher, context.connect).refresh(_cik(task))
+
+
 def _accession(task: Task) -> str:
     accession = task.payload.get("accession_no")
     try:
@@ -139,4 +147,5 @@ def build_registry() -> Registry:
     registry.register(FILINGS_BACKFILL, backfill_filings)
     registry.register(EARNINGS_EXTRACT, extract_earnings)
     registry.register(EARNINGS_BACKFILL, backfill_earnings)
+    registry.register(FACTS_REFRESH, refresh_facts)
     return registry
