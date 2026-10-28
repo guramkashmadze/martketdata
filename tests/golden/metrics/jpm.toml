@@ -1,0 +1,102 @@
+# JPMorgan Chase: reported values (E4a-S4) as its earnings releases print them, read by hand on
+# 2026-10-28 from the exhibits at `url`, in millions of dollars (EPS as printed). Quarters
+# give revenue, net income and diluted EPS where the filings report three months (Q4 flows
+# are E4b"s) and total assets at every quarter end; years give the fiscal year"s values.
+cik = 19617
+fiscal_year_end = "1231"
+sic_code = "6021"
+fixtures = ["JPM-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-09-30
+fiscal = "2024 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm"]
+net_income = "12,898"
+eps_diluted = "4.37"
+total_assets = "4,210,048"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2024-12-31
+fiscal = "2024 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm"]
+total_assets = "4,002,814"
+
+[[period]]
+type = "FY"
+period_end = 2024-12-31
+fiscal = "2024 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm"]
+net_income = "58,471"
+eps_diluted = "19.75"
+total_assets = "4,002,814"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2025-03-31
+fiscal = "2025 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000332/a1q25erfex992supplement.htm"]
+net_income = "14,643"
+eps_diluted = "5.07"
+total_assets = "4,357,856"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2025-06-30
+fiscal = "2025 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000518/a2q25erfex992supplement.htm"]
+net_income = "14,987"
+eps_diluted = "5.24"
+total_assets = "4,552,482"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2025-09-30
+fiscal = "2025 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828025044845/a3q25erfex992supplement.htm"]
+net_income = "14,393"
+eps_diluted = "5.07"
+total_assets = "4,560,205"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2025-12-31
+fiscal = "2025 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm"]
+total_assets = "4,424,900"
+
+[[period]]
+type = "FY"
+period_end = 2025-12-31
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm"]
+net_income = "57,048"
+eps_diluted = "20.02"
+total_assets = "4,424,900"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2026-03-31
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828026024990/a1q26erfex992supplement.htm"]
+net_income = "16,494"
+eps_diluted = "5.94"
+total_assets = "4,900,475"
+not_applicable = ["revenue"]
+
+[[period]]
+type = "Q"
+period_end = 2026-06-30
+fiscal = "2026 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828026048078/a2q26erfex992supplement.htm"]
+net_income = "21,155"
+eps_diluted = "7.70"
+total_assets = "5,015,069"
+not_applicable = ["revenue"]

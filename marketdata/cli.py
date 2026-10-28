@@ -42,6 +42,7 @@ from marketdata.service.earnings import FactView, ReleaseView, latest_release
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.extraction import ExtractionReport, SlotCounts, extraction_report
 from marketdata.service.filings import FilingView, recent_filings
+from marketdata.service.financials import MetricView, metric_series
 from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
 from marketdata.tasks.handlers import build_registry
@@ -63,6 +64,7 @@ _GROUPS = [
     ("backfill", "Load history: filings, earnings, facts, prices, insiders, funds.", "E3"),
     ("extract", "Earnings extraction and the hit-rate report.", "E7a"),
     ("earnings", "A company's latest earnings release, each value with its proof.", "E7a"),
+    ("metrics", "A company's reported financial metrics, each with its filing.", "E4a"),
     ("stats", "Freshness and track-record statistics.", "E7c"),
     ("normalize", "Rebuild metrics from stored XBRL facts.", "E4b"),
     ("quality", "Quality checks and the accuracy report.", "E4b"),
@@ -793,4 +795,67 @@ def _fact_lines(fact: FactView) -> list[str]:
         f"  {'checks':<10} {', '.join(fact.checks)} passed; {fact.method} "
         f"version {fact.extractor_version}",
     ]
+    return lines
+
+
+class PeriodOption(StrEnum):
+    Q = "Q"
+    FY = "FY"
+
+
+@groups["metrics"].command("show")
+def metrics_show(
+    ticker: Annotated[str, typer.Argument(help="A ticker as people write it: AAPL, brk.b, BRK/B.")],
+    metric: Annotated[str, typer.Option(help="A catalog metric, e.g. revenue.")] = "revenue",
+    period: Annotated[
+        PeriodOption, typer.Option(help="Q (quarters) or FY (fiscal years).")
+    ] = PeriodOption.Q,
+    limit: Annotated[int, typer.Option(min=1, max=40, help="How many periods.")] = 8,
+) -> None:
+    """A company's reported values of one metric, newest first, each with its XBRL concept and
+    the filing it came from. Reads the database only."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> tuple[ResolvedSecurity, list[MetricView]]:
+        security = await resolve_ticker(conn, ticker)
+        rows = await metric_series(conn, security.cik, metric, period.value, limit=limit)
+        return security, rows
+
+    try:
+        security, rows = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _metric_lines(security, metric, period.value, rows):
+        typer.echo(line)
+
+
+def _metric_lines(
+    security: ResolvedSecurity, metric: str, period: str, rows: list[MetricView]
+) -> list[str]:
+    kind = "quarters" if period == "Q" else "fiscal years"
+    lines = [
+        f"{security.name or '(no name)'} ({security.ticker}, CIK {security.cik}): {metric}, {kind}"
+    ]
+    if not rows:
+        lines.append("  No reported values: the company's filings tag no catalog concept for it.")
+    for row in rows:
+        label = f"{row.fiscal_year} {row.fiscal_period}"
+        days = (
+            f"{row.period_start} to {row.period_end}"
+            if row.period_start
+            else f"at {row.period_end}"
+        )
+        value = f"{row.value:,} {row.unit}" if row.value is not None else "—"
+        filing = (
+            f"{row.proof.accession_no} filed {row.filed_at}"
+            if row.proof.accession_no
+            else "no filing"
+        )
+        filer = f" (CIK {row.cik})" if row.cik != security.cik else ""
+        lines.append(f"  {label:<8} {days:<26} {value:>26}  {filing}{filer}")
+        details = [row.proof.concept or "—"] + list(row.quality_flags)
+        lines.append(f"  {'':<8} {', '.join(details)}")
+    lines.append("Information from public filings. Not investment advice.")
     return lines

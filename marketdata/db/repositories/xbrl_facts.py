@@ -6,7 +6,7 @@ stored fact whose details the SEC changed (its `frame` moves to the latest filin
 the period); facts a file no longer lists stay stored.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -47,6 +47,15 @@ _UPSERT = """
 """
 
 _COUNT = "select count(*) from xbrl_facts where cik = %(cik)s"
+
+_FOR_CONCEPTS = """
+    select cik, taxonomy, concept, unit, period_start, period_end, value, fy, fp, form, frame,
+           filed_at, accession_no
+    from xbrl_facts
+    where cik = %(cik)s
+      and ((taxonomy = 'us-gaap' and concept = any(%(gaap)s))
+           or (taxonomy = 'dei' and concept = any(%(dei)s)))
+"""
 
 
 @dataclass(frozen=True)
@@ -98,6 +107,20 @@ async def upsert(conn: AsyncConnection[Any], facts: Sequence[XbrlFact]) -> Facts
                         )
                     )
     return FactsWritten(inserted, updated, tuple(moved))
+
+
+async def for_concepts(
+    conn: AsyncConnection[Any], cik: int, concepts: Mapping[str, Sequence[str]]
+) -> list[XbrlFact]:
+    """A company's stored facts of these concepts (by taxonomy), in every form and unit."""
+    params = {
+        "cik": cik,
+        "gaap": list(concepts.get("us-gaap", ())),
+        "dei": list(concepts.get("dei", ())),
+    }
+    async with conn.cursor() as cur:
+        await cur.execute(_FOR_CONCEPTS, params)
+        return [XbrlFact(*row) for row in await cur.fetchall()]
 
 
 async def count(conn: AsyncConnection[Any], cik: int) -> int:

@@ -1,0 +1,102 @@
+# Costco Wholesale: reported values (E4a-S4) as its earnings releases print them, read by hand on
+# 2026-10-28 from the exhibits at `url`, in millions of dollars (EPS as printed). Quarters
+# give revenue, net income and diluted EPS where the filings report three months (Q4 flows
+# are E4b"s) and total assets at every quarter end; years give the fiscal year"s values.
+cik = 909832
+fiscal_year_end = "0830"
+sic_code = "5331"
+fixtures = ["COST-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-11-24
+fiscal = "2025 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983224000075/costex9918-k121224.htm"]
+revenue = "62,151"
+net_income = "1,798"
+eps_diluted = "4.04"
+total_assets = "73,386"
+
+[[period]]
+type = "Q"
+period_end = 2025-02-16
+fiscal = "2025 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000012/costex9918-k3625.htm"]
+revenue = "63,723"
+net_income = "1,788"
+eps_diluted = "4.02"
+total_assets = "73,224"
+
+[[period]]
+type = "Q"
+period_end = 2025-05-11
+fiscal = "2025 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000031/costex9918-k52925.htm"]
+revenue = "63,205"
+net_income = "1,903"
+eps_diluted = "4.28"
+total_assets = "75,482"
+
+[[period]]
+type = "Q"
+period_end = 2025-08-31
+fiscal = "2025 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000093/costex9918-k92525.htm"]
+total_assets = "77,099"
+
+[[period]]
+type = "FY"
+period_end = 2025-08-31
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000093/costex9918-k92525.htm"]
+revenue = "275,235"
+net_income = "8,099"
+eps_diluted = "18.21"
+total_assets = "77,099"
+
+[[period]]
+type = "Q"
+period_end = 2025-11-23
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000164/costex9918-k121125.htm"]
+revenue = "67,307"
+net_income = "2,001"
+eps_diluted = "4.50"
+total_assets = "82,790"
+
+[[period]]
+type = "Q"
+period_end = 2026-02-15
+fiscal = "2026 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000025/costex9918-k3526.htm"]
+revenue = "69,597"
+net_income = "2,035"
+eps_diluted = "4.58"
+total_assets = "83,639"
+
+[[period]]
+type = "Q"
+period_end = 2026-05-10
+fiscal = "2026 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000046/costex9918-k52826.htm"]
+revenue = "70,527"
+net_income = "2,192"
+eps_diluted = "4.93"
+total_assets = "86,430"
+
+[[period]]
+type = "Q"
+period_end = 2026-08-30
+fiscal = "2026 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000084/costex9918-k92426.htm"]
+total_assets = "89,045"
+
+[[period]]
+type = "FY"
+period_end = 2026-08-30
+fiscal = "2026 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000084/costex9918-k92426.htm"]
+revenue = "303,154"
+net_income = "9,226"
+eps_diluted = "20.76"
+total_assets = "89,045"

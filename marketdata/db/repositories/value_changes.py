@@ -41,6 +41,13 @@ _FOR_ACCESSION = """
     order by change_id
 """
 
+_FOR_METRIC = """
+    select change_id, entity, entity_key, cik, old_value, new_value, reason, detail, changed_at
+    from value_changes
+    where entity = 'financial_metric' and cik = %(cik)s and entity_key->>'metric' = %(metric)s
+    order by change_id
+"""
+
 _COUNT_BY_REASON = """
     select reason, count(*) from value_changes
     where entity = 'earnings_fact' and changed_at >= %(since)s
@@ -65,6 +72,31 @@ async def record_fact_changes(
                     "detail": change.detail,
                 },
             )
+
+
+async def record_metric_changes(
+    conn: AsyncConnection[Any], cik: int, changes: Sequence[ValueChange]
+) -> None:
+    async with conn.cursor() as cur:
+        for change in changes:
+            await cur.execute(
+                _INSERT,
+                {
+                    "entity": "financial_metric",
+                    "entity_key": Jsonb(dict(change.entity_key)),
+                    "cik": cik,
+                    "old_value": change.old_value,
+                    "new_value": change.new_value,
+                    "reason": change.reason,
+                    "detail": change.detail,
+                },
+            )
+
+
+async def for_metric(conn: AsyncConnection[Any], cik: int, metric: str) -> list[StoredChange]:
+    async with conn.cursor(row_factory=class_row(StoredChange)) as cur:
+        await cur.execute(_FOR_METRIC, {"cik": cik, "metric": metric})
+        return await cur.fetchall()
 
 
 async def for_accession(conn: AsyncConnection[Any], accession_no: str) -> list[StoredChange]:

@@ -7,6 +7,10 @@ the one stored, a `value_changes` row records the old value, the new value and w
   or new document text rules; the detail says which version changed.
 - `amendment`: an 8-K/A for the same company and quarter as a release already stored; its
   values are compared with that release's (the original stays stored).
+- `restatement` (financial metrics, E4a): a filing filed after the one a stored metric came
+  from reports the period with another value (§9.4 rule 2: the latest filing wins).
+- `correction` (financial metrics): the calc version changed, or the stored facts did without
+  a later filing (the SEC dropped a filing's facts); the detail says which.
 
 A served value is what the API shows: the value of a slot that passed, else null. Both the
 current value and the prior-year value are compared; a slot that newly passes or newly fails
@@ -15,8 +19,11 @@ is a change too (null to a value, or a value to null).
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from typing import Literal
+
+from marketdata.normalize.metrics import MetricKey, MetricRow
 
 type Reason = Literal["correction", "restatement", "amendment"]
 FIELDS = ("value", "prior_value")
@@ -85,4 +92,51 @@ def _differences(
             if old_value != new_value:
                 key = {"accession_no": accession_no, "slot": row.slot, "field": name}
                 changes.append((key, old_value, new_value))
+    return changes
+
+
+@dataclass(frozen=True)
+class StoredMetric:
+    """What a stored `financial_metrics` row serves, and where it came from."""
+
+    value: Decimal | None
+    accession_no: str | None
+    filed_at: date | None
+    calc_version: str
+
+
+def metric_changes(
+    stored: Mapping[MetricKey, StoredMetric], new: Sequence[MetricRow]
+) -> list[ValueChange]:
+    """The changes a rebuild of one company's metrics makes to its stored values (D-027)."""
+    changes = []
+    for row in new:
+        old = stored.get(row.key)
+        if old is None or old.value == row.value:
+            continue
+        key = {
+            "metric": row.metric,
+            "period_type": row.period_type,
+            "period_end": row.period_end.isoformat(),
+        }
+        if (
+            row.accession_no != old.accession_no
+            and row.filed_at is not None
+            and old.filed_at is not None
+            and row.filed_at > old.filed_at
+        ):
+            reason: Reason = "restatement"
+            detail = (
+                f"{row.accession_no}, filed {row.filed_at}, restates {old.accession_no} "
+                f"of {old.filed_at}"
+            )
+        elif old.calc_version != row.calc_version:
+            reason, detail = "correction", f"calc version {old.calc_version} to {row.calc_version}"
+        else:
+            reason = "correction"
+            detail = (
+                f"calc version {row.calc_version} unchanged: the stored facts changed "
+                f"({old.accession_no} to {row.accession_no})"
+            )
+        changes.append(ValueChange(key, old.value, row.value, reason, detail))
     return changes

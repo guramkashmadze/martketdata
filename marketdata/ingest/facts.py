@@ -9,7 +9,12 @@ A refresh of one company (`facts_refresh`: routed from each new 10-K or 10-Q, an
    listed under both CIKs while its facts sit under one (XOM's joint Q2 2026 10-Q).
 2. Upserts the facts into xbrl_facts: new facts are inserted, a stored fact whose details moved
    is updated, and facts a file no longer lists stay stored.
-3. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
+3. Rebuilds the CIK's reported metrics from its stored facts (normalize/metrics.py, E4a-S4) and
+   writes the rows that changed, with a `value_changes` row for each served value that moved,
+   in one transaction (D-027): `restatement` when a later filing reports it differently,
+   `correction` when the calc version changed. A row the rebuild no longer gives is kept and
+   logged.
+4. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
    files. companyfacts can lag a filing by a few minutes, and a refresh that is already running
    when the next filing is listed doesn't see it, so a filing that no file holds yet makes the
    task retry while the watcher stored it less than an hour ago (FactsNotPublished). An older
@@ -24,11 +29,21 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 
-from marketdata.db.repositories import filings, predecessors, xbrl_facts
+from marketdata.db.repositories import (
+    companies,
+    filings,
+    financial_metrics,
+    predecessors,
+    value_changes,
+    xbrl_facts,
+)
 from marketdata.db.repositories.xbrl_facts import FactsWritten
 from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.normalize.changes import metric_changes
 from marketdata.normalize.companyfacts import CompanyFacts, parse_companyfacts
 from marketdata.normalize.filings import PERIODIC_FORMS
+from marketdata.normalize.metric_catalog import concepts_by_taxonomy
+from marketdata.normalize.metrics import CALC_VERSION, reported_metrics
 from marketdata.normalize.security_master import SecFileError
 from marketdata.sec import urls
 from marketdata.sec.client import SecNotFound
@@ -44,6 +59,14 @@ class FactsNotPublished(Exception):
 
 
 @dataclass(frozen=True)
+class MetricsBuilt:
+    rows: int  # rows the rebuild gives
+    written: int  # rows new or changed
+    changes: int  # served values that moved (value_changes rows)
+    kept: int  # stored rows the rebuild no longer gives
+
+
+@dataclass(frozen=True)
 class LoadedFile:
     cik: int
     raw_key: str | None  # None: the SEC has no companyfacts for this CIK
@@ -51,6 +74,7 @@ class LoadedFile:
     written: FactsWritten | None
     skipped: int = 0
     conflicts: int = 0
+    metrics: MetricsBuilt | None = None
 
 
 @dataclass(frozen=True)
@@ -61,12 +85,15 @@ class FactsReport:
 
 
 class FactsLoader:
-    def __init__(self, fetcher: RawFetcher, connect: Connect) -> None:
+    def __init__(
+        self, fetcher: RawFetcher, connect: Connect, *, calc_version: str = CALC_VERSION
+    ) -> None:
         self._fetcher = fetcher
         self._connect = connect
+        self._calc_version = calc_version
 
     async def refresh(self, cik: int, *, now: datetime | None = None) -> FactsReport:
-        """Load the facts of `cik` and its predecessors (steps 1-3 above)."""
+        """Load the facts of `cik` and its predecessors (steps 1-4 above)."""
         now = now or datetime.now(UTC)
         async with self._connect() as conn:
             group = [cik, *await predecessors.predecessors_of(conn, cik)]
@@ -128,10 +155,59 @@ class FactsLoader:
             conflicts=len(parsed.conflicts),
             other_taxonomies=dict(parsed.other_taxonomies),
         )
+        built = await self.rebuild_metrics(cik)
         file = LoadedFile(
-            cik, key, len(parsed.facts), written, parsed.skipped, len(parsed.conflicts)
+            cik, key, len(parsed.facts), written, parsed.skipped, len(parsed.conflicts), built
         )
         return file, parsed
+
+    async def rebuild_metrics(self, cik: int) -> MetricsBuilt:
+        """Step 3: the CIK's reported metrics from its stored facts."""
+        async with self._connect() as conn:
+            company = await companies.get(conn, cik)
+            facts = await xbrl_facts.for_concepts(conn, cik, concepts_by_taxonomy())
+        result = reported_metrics(
+            cik,
+            facts,
+            fiscal_year_end=company.fiscal_year_end if company else None,
+            sic_code=company.sic_code if company else None,
+            calc_version=self._calc_version,
+        )
+        async with self._connect() as conn, conn.transaction():
+            stored = await financial_metrics.stored(conn, cik)
+            changes = metric_changes(stored, result.rows)
+            written = await financial_metrics.upsert(conn, result.rows)
+            await value_changes.record_metric_changes(conn, cik, changes)
+        kept = sorted(set(stored) - {row.key for row in result.rows})
+        for metric, period_type, period_end in kept:
+            log.warning(
+                "metric_row_without_facts",
+                cik=cik,
+                metric=metric,
+                period_type=period_type,
+                period_end=period_end.isoformat(),
+            )
+        for change in changes:
+            log.info(
+                "metric_value_changed",
+                cik=cik,
+                **change.entity_key,
+                old=str(change.old_value),
+                new=str(change.new_value),
+                reason=change.reason,
+                detail=change.detail,
+            )
+        for note in result.notes:
+            log.debug("metric_period_left_out", cik=cik, note=note)
+        log.info(
+            "metrics_built",
+            cik=cik,
+            rows=len(result.rows),
+            written=written,
+            changes=len(changes),
+            kept=len(kept),
+        )
+        return MetricsBuilt(len(result.rows), written, len(changes), len(kept))
 
     async def _missing(
         self, group: Sequence[int], held: set[str], now: datetime

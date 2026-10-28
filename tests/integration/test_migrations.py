@@ -13,6 +13,7 @@ E3_TABLES = {"filings", "watch_state"}
 E7A_TABLES = {"documents", "company_predecessors"}
 EARNINGS_TABLES = {"earnings_releases", "earnings_facts", "value_changes"}
 FACTS_TABLES = {"xbrl_facts"}
+METRICS_TABLES = {"financial_metrics"}
 
 
 def _tables(url: str) -> set[str]:
@@ -31,16 +32,20 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0007(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0007"
+def test_head_is_0008(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0008"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
     every = (
         E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES | EARNINGS_TABLES | FACTS_TABLES
     )
-    assert _tables(migrated_database) >= every
+    assert _tables(migrated_database) >= every | METRICS_TABLES
     assert "priority" in _columns(migrated_database, "tasks")
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & METRICS_TABLES == set()
+    assert _tables(migrated_database) >= FACTS_TABLES
 
     command.downgrade(alembic_config, "-1")
     assert _tables(migrated_database) & FACTS_TABLES == set()
@@ -71,7 +76,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) & E0_TABLES == set()
 
     command.upgrade(alembic_config, "head")
-    assert _tables(migrated_database) >= every
+    assert _tables(migrated_database) >= every | METRICS_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:
@@ -168,3 +173,16 @@ async def test_only_us_gaap_and_dei_facts_are_stored(conn: psycopg.AsyncConnecti
             "accession_no) values (320193, 'ifrs-full', 'Assets', 'USD', '2026-06-27', 1, "
             "'2026-07-31', '0000320193-26-000020')"
         )
+
+
+async def test_a_metric_without_a_value_needs_a_flag(conn: psycopg.AsyncConnection[Any]) -> None:
+    await conn.execute("insert into companies (cik) values (19617)")
+    insert = (
+        "insert into financial_metrics (cik, metric, period_type, fiscal_year, fiscal_period, "
+        "period_end, unit, method, source_accessions, quality_flags, calc_version) values "
+        "(19617, 'revenue', 'Q', 2026, 'Q2', '2026-06-30', 'USD', 'reported', '{}', %s, '1.1')"
+    )
+    await conn.execute(insert, [["not_applicable_financials"]])
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(insert.replace("'revenue'", "'gross_profit'"), [[]])

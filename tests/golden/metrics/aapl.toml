@@ -1,0 +1,102 @@
+# Apple Inc.: reported values (E4a-S4) as its earnings releases print them, read by hand on
+# 2026-10-28 from the exhibits at `url`, in millions of dollars (EPS as printed). Quarters
+# give revenue, net income and diluted EPS where the filings report three months (Q4 flows
+# are E4b"s) and total assets at every quarter end; years give the fiscal year"s values.
+cik = 320193
+fiscal_year_end = "0926"
+sic_code = "3571"
+fixtures = ["AAPL-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-09-28
+fiscal = "2024 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019324000120/a8-kex991q4202409282024.htm"]
+total_assets = "364,980"
+
+[[period]]
+type = "FY"
+period_end = 2024-09-28
+fiscal = "2024 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019324000120/a8-kex991q4202409282024.htm"]
+revenue = "391,035"
+net_income = "93,736"
+eps_diluted = "6.08"
+total_assets = "364,980"
+
+[[period]]
+type = "Q"
+period_end = 2024-12-28
+fiscal = "2025 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000007/a8-kex991q1202512282024.htm"]
+revenue = "124,300"
+net_income = "36,330"
+eps_diluted = "2.40"
+total_assets = "344,085"
+
+[[period]]
+type = "Q"
+period_end = 2025-03-29
+fiscal = "2025 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000055/a8-kex991q2202503292025.htm"]
+revenue = "95,359"
+net_income = "24,780"
+eps_diluted = "1.65"
+total_assets = "331,233"
+
+[[period]]
+type = "Q"
+period_end = 2025-06-28
+fiscal = "2025 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000071/a8-kex991q3202506282025.htm"]
+revenue = "94,036"
+net_income = "23,434"
+eps_diluted = "1.57"
+total_assets = "331,495"
+
+[[period]]
+type = "Q"
+period_end = 2025-09-27
+fiscal = "2025 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/a8-kex991q4202509272025.htm"]
+total_assets = "359,241"
+
+[[period]]
+type = "FY"
+period_end = 2025-09-27
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/a8-kex991q4202509272025.htm"]
+revenue = "416,161"
+net_income = "112,010"
+eps_diluted = "7.46"
+total_assets = "359,241"
+
+[[period]]
+type = "Q"
+period_end = 2025-12-27
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019326000005/a8-kex991q1202612272025.htm"]
+revenue = "143,756"
+net_income = "42,097"
+eps_diluted = "2.84"
+total_assets = "379,297"
+
+[[period]]
+type = "Q"
+period_end = 2026-03-28
+fiscal = "2026 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019326000011/a8-kex991q2202603282026.htm"]
+revenue = "111,184"
+net_income = "29,578"
+eps_diluted = "2.01"
+total_assets = "371,082"
+
+[[period]]
+type = "Q"
+period_end = 2026-06-27
+fiscal = "2026 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/a8-kex991q3202606272026.htm"]
+revenue = "109,417"
+net_income = "29,789"
+eps_diluted = "2.02"
+total_assets = "383,266"
