@@ -74,7 +74,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E3 | Task queue and filings watcher | 4 | E2 | Done | 2026-10-26. Queue in PostgreSQL with forced re-runs, backoff and fencing (D-058); `marketdata worker`, `scheduler` (APScheduler 3.11, D-065), `backfill filings`, `filings list` and `tasks list|retry|purge-done`; one process calls the SEC at a time (D-062). Migration `0004`: `filings` keyed by accession and listing company, with the listing's file number (D-060), and `watch_state`, so unchanged submissions are neither stored nor parsed (D-059). `accepted_at` comes from submissions, checked per file after the SEC served Apple's file with every time shifted (D-057). 13D/13G codes verified and labelled on the subject's listing only (D-061); §9.6 gains eight 8-K items (D-064); routing starts after a company's first watch (D-063). Lint gate and 491 tests green on local PostgreSQL 18. Live run on the dev database, 2026-10-25 21:15–21:31 UTC: `backfill filings --years 5`, then scheduler and worker for 15 minutes. The backfill and the day's security-master load (no changes) took 52 seconds: 74 submissions files and 56 older pages gave 187,005 filings of the 74 universe companies (JPMorgan 102,256), all with acceptance times. Watch rounds at 21:15 and 21:25 found every file unchanged and stored nothing. 354 SEC requests in all, no failed task and nothing logged above info; both processes stopped cleanly on SIGTERM. `filings list FUBO --form 'SCHEDULE 13D'` shows Disney's 13D with the activist label; Disney's own listing has none. 8 edge cases logged. CI on main is green ([run 40236585444](https://github.com/guramkashmadze/martketdata/actions/runs/40236585444), commit `5ca042a`) |
 | E7a | Earnings release extraction and verification (rule-based) | 5 | E3 | Done | 2026-10-27. No LLM (D-014); rules version 2 (D-079). S1: the press release found by exhibit type through the index page and stored once (D-070), with EDGAR's SGML wrapper stripped; task priority (D-067); predecessor CIKs (D-068); migration `0005` (`documents`, `tasks.priority`, `company_predecessors`). S2: the `Extractor` interface and lxml table grids (D-066). S3: `RuleExtractor`: statement tables, quarter columns (D-073), fiscal labels (D-074), scale, labels and TOML overrides (D-075). S4: verification in `verify/` (in the source, scale, sanity with D-076's EPS tolerance); migration `0006` (`earnings_releases` with `no_statement` (D-071), `earnings_facts`, `value_changes`); corrections and amendments (D-077). S5: `backfill earnings --quarters 4`, `extract report` and `earnings show`; 16 overrides; a golden set of 35 releases, all passing (D-078). Run through the worker on the dev database: 242 filings of 60 companies, with no SEC request for documents. Hit rate 81.2% (91.8% without the releases printed as pictures), so OD-10 calls for E12 (D-080); the version-2 run wrote 14 corrections. Lint gate and 912 tests green on local PostgreSQL 18. 40 edge cases logged. CI on main is green ([run 40541236490](https://github.com/guramkashmadze/martketdata/actions/runs/40541236490), commit `39da1d8`) |
 | E7c | Live run and track record | 6 | E7a, OD-1 | Not started | Starts the track record during the Q3 2026 season |
-| E4a | XBRL facts and reported metrics | 7 | E3 | Not started | Includes the universe growth rule (D-035) |
+| E4a | XBRL facts and reported metrics | 7 | E3 | Done | 2026-10-28. Built before E7c (Guram's choice: E7c needs the server of OD-1). S1: `xbrl_facts` (migration `0007`), every us-gaap and dei fact from per-company companyfacts, each response kept, predecessors loaded too; `facts_refresh` routed with force (D-081). S2: catalog version 1, §9.3 plus four concepts from a survey of the 60 companies against E7a's verified releases (D-082). S3: durations widened for Costco, the latest filing wins among the 10-K and 10-Q family, year ends from each company's 10-Ks and transition reports (D-083). S4: `financial_metrics` (migration `0008`), reported quarters, years and instants, banks' revenue not applicable, restatement and correction value changes, predecessors merged in the service layer, `metrics show`; golden set of 5 companies × 4 metrics × 8 quarters, every value equal to its press release (D-084). S5: public float from the frames API with a share-count check, `frame_facts` (migration `0009`), `universe suggest` (D-085). Dev database: 1,149,093 facts and 69,121 metric rows for 61 CIKs; 500 candidates ranked, 309 suspect floats listed apart. The survey found two wrong E7a releases (Rivian, Meta) and companyfacts files missing 10-Qs (KO, V, NEE) (§16). Lint gate and 1,033 tests green on local PostgreSQL 18. 21 edge cases logged. Commits local, not pushed |
 | E4b | Derived metrics, quality checks, cross-checks | 8 | E4a, E7a | Not started | Release-vs-filing cross-check (D-028) |
 | E5a | Data API | 9 | E4b | Not started | Clients, keys, envelope, all M1 data endpoints |
 | E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Not started | |
@@ -536,10 +536,10 @@ create table webhook_deliveries (
   primary key (event_id, dest_id, attempt)
 );
 
--- E4a
+-- E4a (migrations 0007-0009; checks and frame_facts per D-081, D-084, D-085)
 create table xbrl_facts (
   id            bigserial primary key,
-  cik           bigint not null,
+  cik           bigint not null references companies(cik),
   taxonomy      text not null,                -- us-gaap, dei
   concept       text not null,
   unit          text not null,                -- USD, shares, USD/shares
@@ -576,6 +576,22 @@ create table financial_metrics (
   calc_version       text not null,           -- version of the normalization rules
   updated_at         timestamptz not null default now(),
   primary key (cik, metric, period_type, period_end)
+);
+
+create table frame_facts (                    -- E4a-S5 (D-085): one concept across every filer
+  taxonomy      text not null,
+  concept       text not null,                -- EntityPublicFloat, EntityCommonStockSharesOutstanding
+  unit          text not null,
+  frame         text not null,                -- e.g. CY2025Q2I
+  cik           bigint not null,              -- any filer, not only one in companies
+  entity_name   text,
+  period_start  date,
+  period_end    date not null,
+  value         numeric not null,
+  accession_no  text not null,
+  raw_key       text not null references raw_objects(key),
+  loaded_at     timestamptz not null default now(),
+  primary key (taxonomy, concept, unit, frame, cik)
 );
 
 -- E8
@@ -775,7 +791,8 @@ create table drafts (
 - `acceptanceDateTime` in submissions is UTC, but the SEC once served a whole file with every time shifted by the Eastern offset a second time (Apple, 2026-10-24). The watcher checks each file and stores no times from a file that fails (D-057). (E3)
 - Form 4: `primaryDocument` in submissions often points at a rendered path like `xslF345X05/form4.xml`. The raw XML is usually the same filename without the `xsl…/` folder. (E8)
 - 13F: the information table is a separate XML document in the filing; find it through the filing index (type `INFORMATION TABLE`). (E9)
-- `dei:EntityPublicFloat` is reported once a year on the 10-K cover page, measured at the end of the second fiscal quarter; some filers omit it or report it oddly. The universe growth rule (D-035) must handle missing and stale values. (E4a)
+- `dei:EntityPublicFloat` is reported once a year on the 10-K cover page, measured at the end of the second fiscal quarter; some filers omit it or report it oddly. The universe growth rule (D-035) must handle missing and stale values. (E4a) Verified in E4a (D-085): the frames API serves dei concepts; hundreds of cover pages state the float a thousand or a million times too large (Cabot: 4.4 quadrillion dollars), and some date it a year early (AMD).
+- companyfacts doesn't list every XBRL 10-Q (KO, V and NEE lacked their July 2026 10-Qs three months later), gives the CIK as an integer or a string, and includes facts of 8-K, proxy statements and other forms. (E4a)
 
 ---
 
@@ -784,7 +801,7 @@ create table drafts (
 ### 9.1 Universe
 
 - `data/universe.csv` with columns `ticker,note`, maintained by hand (D-050, which resolved OD-3). The starter list is 31 domestic filers chosen for variety (at least a bank, an insurer, a REIT, a January year-end retailer, a September year-end company and a company that reports in thousands), plus 4 ETFs and 4 foreign private issuers. On 2026-10-25 it grew to 74 tickers with 35 companies the operator asked for (D-056): 60 domestic filers, 9 foreign private issuers and 5 funds. One ticker per company is enough; the company's other tickers load with it. The file is checked before anything is fetched: header, canonical tickers, no duplicates, a note on every row.
-- **Growth (D-035):** after E4a, `marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` and writes a candidate list for review. Index membership lists are not used, to avoid depending on index providers' data.
+- **Growth (D-035, D-085):** `marketdata backfill public-float` loads nine quarters of `dei:EntityPublicFloat` and cover-page share counts from the SEC's frames API; `marketdata universe suggest --top N` ranks listed filers by their latest float into a candidate CSV for review, and lists apart universe companies without a value, stale values (over two years) and suspect ones (over 10,000 dollars a share, or 0). Index membership lists are not used, to avoid depending on index providers' data.
 - Each universe company is classified on load (D-018, D-052): `fund` if listed in the SEC fund ticker file; otherwise the newest periodic report in its submissions' `filings.recent` decides: 10-K or 10-Q (and amendments, transition reports) `domestic`, 20-F or 40-F `foreign_private_issuer`, N-CSR, N-CSRS or NPORT-P `fund`. A 10-K filer with SIC 6221 (commodity contracts) and no 8-K item 2.02 is an exchange-traded commodity trust or pool: `fund`. With no periodic report, a 6-K makes it `foreign_private_issuer`, else `other`. Nothing is rejected; the loader prints the class and its evidence for each universe company and a count per class. Companies outside the universe are not fetched, so they stay `unknown` unless the fund list makes them `fund`.
 - In the MVP, earnings facts and fundamentals are produced for `domestic` companies only. Other classes resolve and return a clear reason, e.g. "fund: fundamentals not applicable".
 
@@ -800,13 +817,13 @@ create table drafts (
 
 ### 9.3 Metric catalog
 
-Defined in code (`normalize/metric_catalog.py`), versioned with `CATALOG_VERSION` (D-005). Concepts are tried in the order listed; all are `us-gaap` unless marked `dei`.
+Defined in code (`normalize/metric_catalog.py`), versioned with `CATALOG_VERSION` (D-005; version 1 in E4a, D-082). Concepts are tried in the order listed, per period; all are `us-gaap` unless marked `dei`.
 
 **Core set (D-020, called the core set there):** revenue, operating_income, net_income, eps_diluted, operating_cash_flow, capex, cash, long_term_debt, total_equity, shares_outstanding, plus the computed free_cash_flow, margins and year-over-year growth. Golden tests and API defaults cover the core set first; the other metrics are built in the same pass but have lower priority.
 
 | Metric | Kind | Unit | Concepts in priority order | Notes |
 | --- | --- | --- | --- | --- |
-| `revenue` | flow | USD | Revenues; RevenueFromContractWithCustomerExcludingAssessedTax; RevenueFromContractWithCustomerIncludingAssessedTax; SalesRevenueNet | See financials rule in §9.4 |
+| `revenue` | flow | USD | Revenues; RevenuesNetOfInterestExpense; RevenueFromContractWithCustomerExcludingAssessedTax; RevenueFromContractWithCustomerIncludingAssessedTax; SalesRevenueNet | See financials rule in §9.4. RevenuesNetOfInterestExpense is SoFi's total net revenue (D-082) |
 | `cost_of_revenue` | flow | USD | CostOfRevenue; CostOfGoodsAndServicesSold; CostOfGoodsSold | |
 | `gross_profit` | flow | USD | GrossProfit | Else computed: revenue − cost_of_revenue |
 | `rnd_expense` | flow | USD | ResearchAndDevelopmentExpense | |
@@ -815,38 +832,38 @@ Defined in code (`normalize/metric_catalog.py`), versioned with `CATALOG_VERSION
 | `interest_expense` | flow | USD | InterestExpense; InterestExpenseNonoperating | |
 | `pretax_income` | flow | USD | IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest; IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments | |
 | `income_tax` | flow | USD | IncomeTaxExpenseBenefit | |
-| `net_income` | flow | USD | NetIncomeLoss; ProfitLoss | ProfitLoss includes minority interests: flag `net_income_includes_nci` |
+| `net_income` | flow | USD | NetIncomeLoss; NetIncomeLossAvailableToCommonStockholdersBasic; ProfitLoss | The amount available to common stockholders is after preferred dividends: flag `net_income_to_common` (Realty Income, D-082). ProfitLoss includes minority interests: flag `net_income_includes_nci` |
 | `eps_basic` | flow | USD/shares | EarningsPerShareBasic | Never derived by subtraction |
 | `eps_diluted` | flow | USD/shares | EarningsPerShareDiluted | Never derived by subtraction |
 | `shares_diluted_avg` | flow | shares | WeightedAverageNumberOfDilutedSharesOutstanding | Average over the period; never derived by subtraction |
 | `depreciation_amortization` | flow | USD | DepreciationDepletionAndAmortization; DepreciationAndAmortization | |
 | `operating_cash_flow` | flow | USD | NetCashProvidedByUsedInOperatingActivities | 10-Q values are usually year-to-date |
-| `capex` | flow | USD | PaymentsToAcquirePropertyPlantAndEquipment | Year-to-date in 10-Qs |
+| `capex` | flow | USD | PaymentsToAcquirePropertyPlantAndEquipment; PaymentsToAcquireProductiveAssets | Year-to-date in 10-Qs. Productive assets: Amazon, NVIDIA, Visa (D-082) |
 | `dividends_paid` | flow | USD | PaymentsOfDividends; PaymentsOfDividendsCommonStock | Year-to-date in 10-Qs |
 | `buybacks` | flow | USD | PaymentsForRepurchaseOfCommonStock | Year-to-date in 10-Qs |
-| `cash` | instant | USD | CashAndCashEquivalentsAtCarryingValue; CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents | Flag when the second concept is used |
+| `cash` | instant | USD | CashAndCashEquivalentsAtCarryingValue; CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents | Flag `cash_includes_restricted` when the second concept is used |
 | `current_assets` | instant | USD | AssetsCurrent | |
 | `total_assets` | instant | USD | Assets | |
 | `current_liabilities` | instant | USD | LiabilitiesCurrent | |
 | `total_liabilities` | instant | USD | Liabilities | Else computed: LiabilitiesAndStockholdersEquity − StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest |
-| `long_term_debt` | instant | USD | LongTermDebtNoncurrent; LongTermDebt | |
+| `long_term_debt` | instant | USD | LongTermDebtNoncurrent; LongTermDebt; LongTermDebtAndCapitalLeaseObligations | The third: Coca-Cola, ExxonMobil, Accenture (D-082) |
 | `total_equity` | instant | USD | StockholdersEquity; StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest | |
-| `shares_outstanding` | instant | shares | dei:EntityCommonStockSharesOutstanding; CommonStockSharesOutstanding | dei value is as of the cover-page date, not the period end |
+| `shares_outstanding` | instant | shares | dei:EntityCommonStockSharesOutstanding; CommonStockSharesOutstanding | dei value is as of the cover-page date, not the period end; it is counted at the end of the period its filing reports (D-084). Companies with several share classes have neither (dimensional facts) |
 
 **Computed metrics** (method `computed`): `free_cash_flow` = operating_cash_flow − capex; `gross_margin`, `operating_margin`, `net_margin` = metric / revenue; `revenue_growth_yoy`, `eps_diluted_growth_yoy` = vs the same fiscal period one year earlier. With a price (E10, §9.12), either the latest licensed close or a price the client passes: `market_cap` = price × shares_outstanding; `pe_ttm` = price / TTM eps_diluted (null when TTM EPS ≤ 0).
 
 ### 9.4 Period logic
 
-1. **Duration** = `period_end − period_start + 1` days. Quarter: 80–100. Six months: 170–195. Nine months: 260–285. Year: 350–380 (covers 52/53-week years). Anything else is ignored with a debug log.
-2. **Restatements:** for each (concept, period_start, period_end), use the fact with the latest `filed_at`; ties go to the latest accession number. All facts stay in `xbrl_facts`.
+1. **Duration** = `period_end − period_start + 1` days. Quarter: 80–120. Six months: 165–200. Nine months: 250–290. Year: 350–380 (covers 52/53-week years, and Costco's 12-, 16- and 17-week quarters and 24- and 36-week year-to-date periods; D-083). Anything else is ignored with a debug log.
+2. **Restatements:** for each (concept, period_start, period_end), use the fact with the latest `filed_at`; ties go to the latest accession number. All facts stay in `xbrl_facts`. Metrics read facts of the 10-K and 10-Q family only, transition reports included; facts from 8-K, proxy statements and other forms are stored but never used (D-083).
 3. **Concept choice:** per metric and company, use the first concept in the priority list that has a fact for the period. **Never mix concepts inside one derivation** (e.g. a nine-month value from one concept and a full-year value from another). On a mismatch, skip the derivation and flag `concept_mismatch`.
 4. **Discrete quarters:** use a reported three-month fact when one exists (`method = reported`). Otherwise derive from year-to-date facts: Q2 = 6M − Q1, Q3 = 9M − 6M (`derived_ytd`). This is the normal case for cash-flow metrics in 10-Qs.
 5. **Q4:** FY − 9M year-to-date, or FY − (Q1 + Q2 + Q3) when no 9M fact exists (`derived_q4`). Not for per-share or average-share metrics: if Q4 EPS isn't reported, value is null with flag `eps_q4_not_reported`.
 6. **Instant metrics:** the value at each quarter end and fiscal year end; no derivation.
-7. **Fiscal labels:** `fiscal_year` = the calendar year in which the fiscal year ends (D-008). Quarters are numbered by position after the previous fiscal year end. This can differ from a company's own label (some retailers whose year ends in January call it the previous year). The API always returns `period_start` and `period_end` so nothing is ambiguous. The same rule labels earnings releases (§9.9).
+7. **Fiscal labels:** `fiscal_year` = the calendar year in which the fiscal year ends (D-008), the year before for a year ending January 1 to 7 (D-074). Quarters are numbered by position after the previous fiscal year end. This can differ from a company's own label (some retailers whose year ends in January call it the previous year). Over history the year ends are the ends of the company's 10-K annual periods and of its transition reports; after the last of them, the nominal year end from submissions, counted from the last real one (FuboTV's move to September; D-083). The API always returns `period_start` and `period_end` so nothing is ambiguous. The same rule labels earnings releases (§9.9), from the nominal year end.
 8. **TTM:** flows = sum of the last four discrete quarters, which must be contiguous; any gap gives null with flag `ttm_gap`. Instants = latest quarter-end value.
 9. **Units:** only USD, shares and USD/shares are used. A company reporting in another currency is flagged `non_usd_reporter` and its money metrics are skipped in the MVP.
-10. **Financial-sector companies** (SIC 6000–6999): revenue concepts differ for banks and insurers. Use `Revenues` if reported; otherwise revenue and gross profit are null with flag `not_applicable_financials`.
+10. **Banks** (SIC 6000–6099): revenue and gross profit are null with flag `not_applicable_financials`, as in their releases (D-072, D-084); a bank's net revenue isn't comparable. Insurers, REITs, lenders and holding companies keep the catalog's revenue concepts. Supersedes the SIC 6000–6999 rule.
 
 ### 9.5 Quality checks
 
@@ -862,6 +879,8 @@ Checks write flag codes into `quality_flags` and are returned by the API. **A fl
 | `stale_data` | Latest 10-Q or 10-K is older than 120 days |
 | `eps_q4_not_reported` | See §9.4 rule 5 |
 | `net_income_includes_nci` | ProfitLoss used for net_income |
+| `net_income_to_common` | NetIncomeLossAvailableToCommonStockholdersBasic used for net_income: after preferred dividends (E4a, D-082) |
+| `cash_includes_restricted` | The second cash concept used: cash includes restricted cash (E4a, D-082) |
 | `non_usd_reporter`, `not_applicable_financials` | See §9.4 rules 9–10 |
 | `release_vs_filing_mismatch` | On `earnings_facts` (E4b): the release value differs from the later 10-Q/10-K XBRL value for the same quarter by more than 0.5% (EPS: more than $0.01); sets `cross_check_status = mismatch` (D-028) |
 | `scale_unknown`, `sign_change` | Earnings extraction flags (§9.9) |
@@ -1331,7 +1350,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E4a-S1 Facts loader.** As a developer, I want every company's XBRL facts in Postgres so metrics are computed with SQL and Python, not by re-reading JSON.
   - AC: migration creates `xbrl_facts` (§7).
   - AC: `facts_refresh` handler loads `us-gaap` and `dei` facts from companyfacts JSON (raw file stored first); idempotent.
-  - AC: `pdm run marketdata backfill facts` loads all universe companies (per-company API, or the nightly bulk ZIP if faster).
+  - AC: `pdm run marketdata backfill facts` loads all universe companies (per-company API, or the nightly bulk ZIP if faster). (Per-company API, with predecessors; D-081.)
   - AC: fact counts for a fixture company match a count computed directly from the fixture JSON.
 - **E4a-S2 Metric catalog.** As a developer, I want the metric definitions in one versioned module so rules are reviewable in git.
   - AC: `normalize/metric_catalog.py` implements §9.3 with `CATALOG_VERSION` and marks the core set; a test asserts every metric has at least one concept, a kind and a unit.
@@ -1342,10 +1361,10 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: migration creates `financial_metrics` (§7).
   - AC: rows with `method = reported` for Q (three-month facts), FY and instant metrics, with `concept`, `accession_no`, `source_accessions`, `filed_at`, `calc_version`.
   - AC: when a newer filing changes a stored value, a `value_changes` row with reason `restatement` is written; a new `calc_version` that changes a value writes `correction` (tested, D-027).
-  - AC: golden tests for 5 companies × 4 metrics (revenue, net_income, eps_diluted, total_assets) × last 8 quarters, hand-checked against press releases (YAML in `tests/golden/` with the release URL per value).
+  - AC: golden tests for 5 companies × 4 metrics (revenue, net_income, eps_diluted, total_assets) × last 8 quarters, hand-checked against press releases (YAML in `tests/golden/` with the release URL per value). (TOML in `tests/golden/metrics/`, D-084.)
 
 - **E4a-S5 Universe growth (D-035).** As the operator, I want a rule-based way to grow coverage without licensed index lists.
-  - AC: `pdm run marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` (from the nightly bulk companyfacts file) and writes a candidate CSV for review; filers with a missing or stale value are listed separately.
+  - AC: `pdm run marketdata universe suggest --top N` ranks domestic filers by their latest `dei:EntityPublicFloat` (from the nightly bulk companyfacts file) and writes a candidate CSV for review; filers with a missing or stale value are listed separately. (From the frames API, with a share-count check for suspect values; D-085.)
 
 **Out of scope:** YTD differencing, Q4, TTM, computed metrics, quality checks (E4b).
 **Demo:** `pdm run marketdata metrics show <TICKER> --metric revenue --period Q` prints values with their source accession numbers.
@@ -1722,6 +1741,11 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-078 | 2026-10-27 | Golden earnings files are TOML (`tests/golden/earnings/*.toml`, one per company): values as printed with the statement's scale and the exhibit's URL; `differences` lists slots the rules don't serve, each also in §16. `tests/unit/test_golden_earnings.py` runs the rules and checks over the committed fixtures with the production overrides | The overrides' format (D-075); printed values are what a reader checks against the exhibit |
 | D-079 | 2026-10-27 | Rules version 2 (E7a-S5): a bullet is never a table's title line, and when neither the title lines nor the headings state a scale, a parenthesised note in the paragraph right above the table may | Travelers' Q4 highlights sat under a bullet mentioning "adjusted book value"; Berkshire states its scale only in the paragraph above its table. Each change has a crafted test and a golden release |
 | D-080 | 2026-10-27 | OD-10 decided by its proposed rule: the E7a hit rate is 81.2% (698 of the 860 slots that apply passed, in the 231 releases with a statement), below 90%, so the LLM fallback (E12) is needed. Its first target is the releases printed as pictures: 100 of the 162 missed slots (UnitedHealth, Tesla, NuScale, Roblox, MercadoLibre, Aurora, SpaceX's Q2). On releases whose exhibits have tables the rules pass 91.8% (698 of 760). When E12 is built is open (§16); E7c runs on the rules | `marketdata extract report`, 2026-10-27, rules version 2, over the four-quarter backfill of the 60 domestic companies: 242 filings (complete 186, partial 8, failed 37, no statement 11); revenue 83.0%, operating income 78.6%, net income 82.3%, diluted EPS 80.4%; overrides used on 60 slots. The other misses: NextEra's per-segment tables (20), Trilogy Metals' annual-only tables (12), real changes over 1000% (12), two 8-Ks that aren't results releases (8), Q4 releases without a quarterly statement (7), EPS that doesn't match net income (3). Golden set: 35 releases hand-checked, every served value equal |
+| D-081 | 2026-10-28 | Facts loader (E4a-S1): per-company companyfacts (not the bulk ZIP), each response kept in the raw store as served on every refresh; every us-gaap and dei fact, in every unit and from every form, in `xbrl_facts` (migration `0007`, with checks and a reference to companies), values as Decimal, the CIK taken as an integer or a string of digits. `facts_refresh` is routed with force, since it is keyed by company and a finished task otherwise never runs again (D-058); a refresh loads the company and its predecessors (D-068), rebuilds their metrics, and retries while a recent XBRL 10-K or 10-Q of the group, listed less than an hour ago, is missing from the files; an older one is logged (`facts_filing_missing`). `marketdata backfill facts [--ticker]`; `backfill earnings` gains `--ticker` | 60 refreshes took about 30 seconds in the worker; the ZIP is over a gigabyte and `fetch_and_store` can't stream it. XOM's joint Q2 10-Q has its facts under 2115436 only, so both CIKs are refreshed. companyfacts can lag a filing, and a refresh running when the next one is listed would miss it for a quarter. 1,149,093 facts for 61 CIKs, 485 MB with indexes; about 1 GB of files a year |
+| D-082 | 2026-10-28 | Metric catalog version 1 (E4a-S2): §9.3 plus `RevenuesNetOfInterestExpense` after `Revenues`, `NetIncomeLossAvailableToCommonStockholdersBasic` before `ProfitLoss` (flag `net_income_to_common`), `PaymentsToAcquireProductiveAssets` for capex and `LongTermDebtAndCapitalLeaseObligations` for long-term debt; flags `net_income_includes_nci` and `cash_includes_restricted` come from the concept used. Concepts are chosen per period | A survey of the 60 companies compared each catalog concept's quarters with E7a's 559 verified release slots: the plan's order gave SoFi's fee income (153.6 million) as revenue instead of total net revenue (1,218.7 million) and Realty Income's net income with minority interests; Amazon, NVIDIA and Visa tag capex as productive assets; Coca-Cola, ExxonMobil and Accenture tag long-term debt with leases. KO's and V's NetIncomeLoss is there (the E2 gap was companyconcept's). 13 companies tag no OperatingIncomeLoss, as their releases print none |
+| D-083 | 2026-10-28 | Period rules (E4a-S3): durations quarter 80–120 days, six months 165–200, nine months 250–290, year 350–380; the latest filing wins, ties to the latest accession; metrics read the 10-K and 10-Q family only, transition reports included; fiscal year ends over history are the ends of a company's 10-K annual periods and of its transition reports, then the nominal year end counted from the last real one. `fiscal_quarter` keeps E7a's labels | Costco's 12-, 16- and 17-week quarters and 24- and 36-week year-to-date periods; proxy statements and 8-Ks tag NetIncomeLoss and would otherwise be the latest filing; FuboTV changed its year end without a transition report, Deckers with a 10-QT in 2014 |
+| D-084 | 2026-10-28 | Reported metrics (E4a-S4): `financial_metrics` (migration `0008`; a null value needs a flag); rows for three-month quarters and fiscal years, and instants at every quarter end (Q1–Q4) and year end (FY, the same value as Q4), a quarter end being the end of any period the company reports; the cover-page share count sits at the end of its filing's period; banks' revenue and gross profit null with `not_applicable_financials` for every period of their other flows; two quarters ending on the same day give the later filing. A rebuild logs `restatement` when a later filing changes a value and `correction` when the calc version (catalog, then rules: 1.1) changed or the facts did without a later filing; a row without facts is kept. Rows stay under each filer's CIK; the service layer merges predecessors by period, the company winning (`metrics show`). Golden files are TOML in `tests/golden/metrics/` (D-078's format) | Releases and filings agree: all 164 golden values (AAPL, TGT, COST, JPM, XOM; revenue, net income, diluted EPS, total assets; the last 8 quarters) equal their press releases. A value as of the cover date at the quarter end is what §9.3's note implies; keeping each filer's rows keeps every proof link right (D-068) |
+| D-085 | 2026-10-28 | Universe growth (E4a-S5; refines D-035 and the S5 AC): the public float comes from the SEC's frames API, not the nightly ZIP: `public_float_load` (`marketdata backfill public-float`) fetches nine quarterly instant frames of `dei:EntityPublicFloat` and of `dei:EntityCommonStockSharesOutstanding` into `frame_facts` (migration `0009`), raw first. `marketdata universe suggest --top N` ranks filers with a current listed common ticker by their latest float; known funds and foreign issuers are left out and other classes marked "not checked"; a company without a value takes its predecessor's; stale values (over two years), suspect ones (over 10,000 dollars a share on the filer's latest cover-page share count, or 0) and universe companies without a value go to a second CSV; floats over 1,000 dollars a share are ranked with a note | 18 requests of about a megabyte instead of a gigabyte. Ranked as given, the first twelve of 500 were scale errors (Cabot's 4.4 quadrillion dollars); with the check 309 are suspect and the top of the list is NVIDIA, Microsoft, Apple, Amazon, Alphabet. A 10-K's own share count is rarely in a frame, so the filer's latest count checks it; a lower cutoff would drop Booking or NVR |
 
 ---
 
@@ -1804,6 +1828,14 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-27 | E7a | E4a's golden files: TOML like E7a's (D-078) instead of the YAML §12 names | E4a |
 | 2026-10-27 | E7a | E7a's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 | 2026-10-27 | E7a | Done: E7a pushed to `origin` with Guram's OK; CI on main is green ([run 40541236490](https://github.com/guramkashmadze/martketdata/actions/runs/40541236490), commit `39da1d8`) | — |
+| 2026-10-28 | E4a | Done: predecessor CIKs for facts (E2-S4 follow-up: refreshes load them, the service merges them, D-081, D-084); KO's and V's net income concept (E2 follow-up: NetIncomeLoss is in companyfacts, D-082); §9.4 rule 10 names banks only (E2 follow-up, D-084); Costco's durations (E2 follow-up, D-083); FuboTV's changed year end (E2 follow-up, D-083); E4a's golden files in TOML (E7a follow-up, D-084); bulk ZIPs not needed for E4a (E1-S3 follow-up stands for other uses) | — |
+| 2026-10-28 | E4a-S1 (survey) | E7a serves wrong values for Rivian's Q2 2026 release (the six months as the quarter, 0001874178-26-000053) and dates Meta's Q1 2026 release a year early with no prior-year values (0001628280-26-028364); Gevo's net loss is read before minority interests. Fix the column choice and the period date, then re-run with `backfill earnings --force` (corrections are logged, D-077) | E7a fix, before E7c |
+| 2026-10-28 | E4a-S1 | companyfacts lacks some XBRL 10-Qs for months (KO's and V's of 2026-07-29, NEE's of 2026-07-24 and 2026-10-21): read the filing's own XBRL instance (or its Financial Report) when the API doesn't list it; the same parser would give dimensional facts: shares outstanding per class (META, NKE, BRK, V and nine others have none in companyfacts), segments and the cover-page security types (E2-S1 follow-up) | E4b or later |
+| 2026-10-28 | E4a-S4 | E4b's derived Q4 must not replace a reported three-month Q4 (Accenture's 10-K, Target's equity statements; 34 CIKs have one) | E4b |
+| 2026-10-28 | E4a-S4 | `marketdata normalize --all` (E4b-S5) should rebuild metrics from stored facts without SEC requests; until then `backfill facts` rebuilds them and stores a new companyfacts file per company | E4b |
+| 2026-10-28 | E4a-S3 | When FuboTV files its first 10-K for a September year, its comparatives (Hulu + Live TV's years to September) will sit beside old FuboTV's December year ends, and quarter labels between them may shift. Check its labels after that 10-K (expected December 2026) | E4b |
+| 2026-10-28 | E4a-S5 | The public float load reads nine quarters, so a filer whose latest float is older (or, like AMD's fiscal 2025 10-K, dated a year early) is missing rather than stale; 309 suspect floats are listed for review, and those below 10,000 dollars a share (CleanSpark, HIVE, Select Water, Repay: thousandfold errors on low-priced shares) are ranked with a note. Review `var/universe_candidates.csv` before adding companies | Guram |
+| 2026-10-28 | E4a | E4a's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 
 ---
 
