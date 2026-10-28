@@ -35,6 +35,7 @@ from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
     FILINGS_BACKFILL,
     FILINGS_WATCH,
+    PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
 )
 
@@ -115,6 +116,19 @@ async def enqueue_facts_backfills(
         )
         for company in await _domestic_universe(conn, ciks)
     ]
+
+
+async def enqueue_public_float(conn: AsyncConnection[Any], day: date) -> Task:
+    """On demand (`marketdata backfill public-float`): one public_float_load for the day, run
+    again if one finished that day (E4a-S5)."""
+    return await queue.enqueue(
+        conn,
+        PUBLIC_FLOAT_LOAD,
+        day.isoformat(),
+        {"day": day.isoformat()},
+        force=True,
+        priority=queue.PRIORITY_BACKFILL,
+    )
 
 
 async def _domestic_universe(

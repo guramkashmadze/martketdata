@@ -12,6 +12,7 @@ from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
 from marketdata.ingest.facts import FactsLoader
+from marketdata.ingest.public_float import PublicFloatLoader
 from marketdata.ingest.security_master import (
     SecurityMasterLoader,
     read_data_files,
@@ -26,6 +27,7 @@ from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
     FILINGS_BACKFILL,
     FILINGS_WATCH,
+    PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
 )
 from marketdata.tasks.registry import Registry, TaskContext, TaskRefused
@@ -108,6 +110,22 @@ async def refresh_facts(context: TaskContext, task: Task) -> None:
     await FactsLoader(context.fetcher, context.connect).refresh(_cik(task))
 
 
+async def load_public_float(context: TaskContext, task: Task) -> None:
+    """Every filer's public float from the SEC's frames API (E4a-S5), for universe growth."""
+    day = task.payload.get("day")
+    try:
+        today = date.fromisoformat(day) if isinstance(day, str) else datetime.now(UTC).date()
+    except ValueError:
+        raise TaskRefused(f"the task's payload has no usable day: {task.payload}") from None
+    report = await PublicFloatLoader(context.fetcher, context.connect).load(today)
+    log.info(
+        "public_float_loaded",
+        frames=[frame.frame for frame in report.frames],
+        missing=list(report.missing),
+        points=sum(frame.points for frame in report.frames),
+    )
+
+
 def _accession(task: Task) -> str:
     accession = task.payload.get("accession_no")
     try:
@@ -148,4 +166,5 @@ def build_registry() -> Registry:
     registry.register(EARNINGS_EXTRACT, extract_earnings)
     registry.register(EARNINGS_BACKFILL, backfill_earnings)
     registry.register(FACTS_REFRESH, refresh_facts)
+    registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
     return registry

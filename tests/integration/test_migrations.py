@@ -14,6 +14,7 @@ E7A_TABLES = {"documents", "company_predecessors"}
 EARNINGS_TABLES = {"earnings_releases", "earnings_facts", "value_changes"}
 FACTS_TABLES = {"xbrl_facts"}
 METRICS_TABLES = {"financial_metrics"}
+FRAMES_TABLES = {"frame_facts"}
 
 
 def _tables(url: str) -> set[str]:
@@ -32,16 +33,20 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0008(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0008"
+def test_head_is_0009(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0009"
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
     every = (
         E0_TABLES | E1_TABLES | E2_TABLES | E3_TABLES | E7A_TABLES | EARNINGS_TABLES | FACTS_TABLES
     )
-    assert _tables(migrated_database) >= every | METRICS_TABLES
+    assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES
     assert "priority" in _columns(migrated_database, "tasks")
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & FRAMES_TABLES == set()
+    assert _tables(migrated_database) >= METRICS_TABLES
 
     command.downgrade(alembic_config, "-1")
     assert _tables(migrated_database) & METRICS_TABLES == set()
@@ -76,7 +81,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) & E0_TABLES == set()
 
     command.upgrade(alembic_config, "head")
-    assert _tables(migrated_database) >= every | METRICS_TABLES
+    assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:

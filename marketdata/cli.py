@@ -5,9 +5,12 @@ fills in its group. Commands load settings themselves, so `--help` works without
 """
 
 import asyncio
+import csv
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from pathlib import Path
 from typing import Annotated, Any
 
 import typer
@@ -27,6 +30,7 @@ from marketdata.ingest.security_master import (
     read_predecessors,
 )
 from marketdata.log import configure_logging
+from marketdata.normalize.public_float import Suggestion
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError, SecurityOverride, UniverseEntry
 from marketdata.sec.client import SecClient, SecError
@@ -43,6 +47,7 @@ from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.extraction import ExtractionReport, SlotCounts, extraction_report
 from marketdata.service.filings import FilingView, recent_filings
 from marketdata.service.financials import MetricView, metric_series
+from marketdata.service.universe import suggest
 from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
 from marketdata.tasks.handlers import build_registry
@@ -73,6 +78,8 @@ _GROUPS = [
     ("webhooks", "Manage webhook destinations and send test events.", "E5b"),
     ("usage", "API and MCP usage per client.", "E11"),
 ]
+
+CANDIDATES_FILE = Path("var/universe_candidates.csv")  # var/ is not committed
 
 groups: dict[str, typer.Typer] = {}
 for _name, _help, _epic in _GROUPS:
@@ -284,6 +291,23 @@ def backfill_facts(
     typer.echo("Follow them with `marketdata tasks list --kind facts_refresh`.")
 
 
+@groups["backfill"].command("public-float")
+def backfill_public_float() -> None:
+    """Queue the load of every filer's public float from the SEC's frames API (nine quarterly
+    frames of dei:EntityPublicFloat); the worker runs it. `marketdata universe suggest` reads
+    the result."""
+    settings = _settings()
+    today = datetime.now(UTC).date()
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        return [await task_scheduler.enqueue_public_float(conn, today)]
+
+    [task] = _queue(settings, work)
+    state = "queued" if task.status == "queued" else f"already {task.status}"
+    typer.echo(f"Public float load for {today}: {state}; the worker runs it.")
+    typer.echo("Follow it with `marketdata tasks list --kind public_float_load`.")
+
+
 async def _universe_ciks(conn: AsyncConnection[Any], tickers: list[str]) -> list[int]:
     """The CIKs of these tickers, each of a domestic universe company (InvalidParameter if
     not)."""
@@ -400,6 +424,103 @@ def universe_check() -> None:
         typer.echo(line)
     if check.universe.unknown:
         raise typer.Exit(1)
+
+
+@groups["universe"].command("suggest")
+def universe_suggest(
+    top: Annotated[int, typer.Option(min=1, max=5000, help="How many candidates to rank.")] = 500,
+    out: Annotated[
+        Path, typer.Option(help="The candidate CSV; the unranked list goes next to it.")
+    ] = CANDIDATES_FILE,
+) -> None:
+    """Rank listed filers by their latest public float (dei:EntityPublicFloat) for review, and
+    list apart the universe companies without a value, stale values and suspect ones (a float
+    implying more than 10,000 dollars a share on the cover page's share count) (D-035, D-085).
+    Reads the database only: run `marketdata backfill public-float` and the worker first."""
+    settings = _settings()
+    today = datetime.now(UTC).date()
+
+    async def work(conn: AsyncConnection[Any]) -> Suggestion | None:
+        return await suggest(conn, today=today, top=top)
+
+    suggestion = _in_transaction(settings, work)
+    if suggestion is None:
+        raise _fail(
+            "No public float loaded: run `marketdata backfill public-float` and the worker."
+        )
+    unranked = out.with_name(f"{out.stem}_unranked{out.suffix}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "rank",
+                "tickers",
+                "cik",
+                "name",
+                "public_float_usd",
+                "measured_on",
+                "accession_no",
+                "in_universe",
+                "filer_class",
+                "note",
+            ]
+        )
+        for candidate in suggestion.candidates:
+            writer.writerow(
+                [
+                    candidate.rank,
+                    " ".join(candidate.tickers),
+                    candidate.cik,
+                    candidate.name or "",
+                    candidate.public_float,
+                    candidate.measured_on,
+                    candidate.accession_no,
+                    "yes" if candidate.in_universe else "no",
+                    candidate.filer_type,
+                    candidate.note,
+                ]
+            )
+    with unranked.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "status",
+                "tickers",
+                "cik",
+                "name",
+                "public_float_usd",
+                "measured_on",
+                "accession_no",
+                "note",
+            ]
+        )
+        for row in suggestion.unranked:
+            writer.writerow(
+                [
+                    row.status,
+                    " ".join(row.tickers),
+                    row.cik,
+                    row.name or "",
+                    "" if row.public_float is None else row.public_float,
+                    row.measured_on or "",
+                    row.accession_no or "",
+                    row.note,
+                ]
+            )
+    new = [candidate for candidate in suggestion.candidates if not candidate.in_universe]
+    typer.echo(
+        f"Ranked {len(suggestion.candidates)} listed filers by public float: {len(new)} are not in "
+        f"the universe ({out})."
+    )
+    status = Counter(row.status for row in suggestion.unranked)
+    typer.echo(
+        f"Not ranked: {status['missing']} universe companies without a value, "
+        f"{status['stale']} stale and {status['suspect']} suspect values ({unranked}); "
+        f"{suggestion.left_out} filers left out (no listed common ticker, or a fund or foreign "
+        "issuer)."
+    )
+    typer.echo("Review the candidates before adding any to the universe file.")
 
 
 @groups["company"].command("show")
