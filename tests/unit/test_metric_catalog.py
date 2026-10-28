@@ -15,7 +15,7 @@ def test_every_metric_has_a_concept_a_kind_and_a_unit() -> None:
         assert metric.kind in ("flow", "instant"), metric.name
         assert metric.unit in ("USD", "shares", "USD/shares"), metric.name
     assert len(BY_NAME) == len(METRICS) == 26
-    assert CATALOG_VERSION == "1"
+    assert CATALOG_VERSION == "2"  # version 2 adds the computed metrics (E4b)
 
 
 def test_the_core_set_is_the_one_d020_names() -> None:

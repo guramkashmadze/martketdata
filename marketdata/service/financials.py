@@ -17,12 +17,12 @@ from pydantic import BaseModel, ConfigDict
 
 from marketdata.db.repositories import financial_metrics, predecessors
 from marketdata.db.repositories.financial_metrics import StoredRow
-from marketdata.normalize.metric_catalog import BY_NAME
+from marketdata.normalize.metric_catalog import UNITS
 from marketdata.sec import urls
 from marketdata.service.errors import InvalidParameter
 
-type Period = Literal["Q", "FY"]
-PERIODS: tuple[Period, ...] = ("Q", "FY")
+type Period = Literal["Q", "FY", "TTM"]
+PERIODS: tuple[Period, ...] = ("Q", "FY", "TTM")
 
 
 class MetricProof(BaseModel):
@@ -56,15 +56,15 @@ class MetricView(BaseModel):
 async def metric_series(
     conn: AsyncConnection[Any], cik: int, metric: str, period: str, *, limit: int = 8
 ) -> list[MetricView]:
-    """The latest `limit` periods of one metric for a company and its predecessors, newest
-    first. Raises InvalidParameter for a metric the catalog doesn't have or a period other
-    than Q or FY (TTM comes with E4b)."""
-    if metric not in BY_NAME:
+    """The latest `limit` periods of one metric (catalog or computed) for a company and its
+    predecessors, newest first. Raises InvalidParameter for a metric the catalog doesn't have
+    or a period other than Q, FY or TTM."""
+    if metric not in UNITS:
         raise InvalidParameter(
-            f"unknown metric {metric!r}; the catalog has {', '.join(sorted(BY_NAME))}"
+            f"unknown metric {metric!r}; the catalog has {', '.join(sorted(UNITS))}"
         )
     if period not in PERIODS:
-        raise InvalidParameter(f"period must be Q or FY, not {period!r} (TTM comes with E4b)")
+        raise InvalidParameter(f"period must be Q, FY or TTM, not {period!r}")
     group = [cik, *await predecessors.predecessors_of(conn, cik)]
     rank = {member: position for position, member in enumerate(group)}
     merged: dict[date, StoredRow] = {}

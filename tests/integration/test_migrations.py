@@ -33,8 +33,17 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0009(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0009"
+def test_head_is_0010(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0010"
+
+
+def _units(url: str) -> str:
+    with psycopg.connect(url) as conn:
+        row = conn.execute(
+            "select pg_get_constraintdef(oid) from pg_constraint "
+            "where conname = 'financial_metrics_unit_check'"
+        ).fetchone()
+    return str(row[0]) if row else ""
 
 
 def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -> None:
@@ -43,6 +52,11 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     )
     assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES
     assert "priority" in _columns(migrated_database, "tasks")
+    assert "percent" in _units(migrated_database)
+
+    command.downgrade(alembic_config, "-1")
+    assert "percent" not in _units(migrated_database)
+    assert _tables(migrated_database) >= FRAMES_TABLES
 
     command.downgrade(alembic_config, "-1")
     assert _tables(migrated_database) & FRAMES_TABLES == set()

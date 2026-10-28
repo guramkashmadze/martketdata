@@ -11,7 +11,7 @@ import pytest
 
 from marketdata.normalize.companyfacts import parse_companyfacts
 from marketdata.normalize.financials import build_metrics
-from marketdata.normalize.metric_catalog import BY_NAME
+from marketdata.normalize.metric_catalog import UNITS
 from marketdata.normalize.metrics import NOT_APPLICABLE_FINANCIALS, MetricRow
 from marketdata.sec import urls
 
@@ -51,7 +51,7 @@ def _value(metric: str, printed: str) -> Decimal:
     printed."""
     negative = printed.startswith("(")
     number = Decimal(printed.strip("()").replace(",", ""))
-    if BY_NAME[metric].unit in ("USD", "shares"):
+    if UNITS[metric] in ("USD", "shares"):
         number *= MILLION
     return -number if negative else number
 

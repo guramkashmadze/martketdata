@@ -14,16 +14,21 @@ to common stockholders (Realty Income tags no NetIncomeLoss), `PaymentsToAcquire
 (Amazon's, NVIDIA's and Visa's capital expenditure) and
 `LongTermDebtAndCapitalLeaseObligations` (Coca-Cola's, ExxonMobil's and Accenture's long-term
 debt).
+
+Version 2 (E4b) adds §9.3's computed metrics (COMPUTED): free cash flow, the three margins and
+the two year-over-year growth rates, computed by normalize/computed.py from the rows of the
+metrics they read. Margins and growth are percentages (unit `percent`). Price-based metrics
+(market cap, P/E) are computed on read from a licensed price (E10) and are not here.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-CATALOG_VERSION = "1"
+CATALOG_VERSION = "2"
 
 type Kind = Literal["flow", "instant"]
-type Unit = Literal["USD", "shares", "USD/shares"]
+type Unit = Literal["USD", "shares", "USD/shares", "percent"]
 
 # Quality flags set from the concept a value comes from (§9.5).
 NET_INCOME_INCLUDES_NCI = "net_income_includes_nci"
@@ -229,6 +234,63 @@ METRICS: tuple[Metric, ...] = (
 
 BY_NAME: Mapping[str, Metric] = {metric.name: metric for metric in METRICS}
 CORE = frozenset(metric.name for metric in METRICS if metric.core)
+
+
+@dataclass(frozen=True)
+class ComputedMetric:
+    """A metric computed from other metrics' rows of the same period (method `computed`)."""
+
+    name: str
+    unit: Unit
+    inputs: tuple[str, ...]  # the metrics it reads
+    formula: str
+    core: bool = False  # the core set (D-020) names free cash flow, margins and growth
+
+
+COMPUTED: tuple[ComputedMetric, ...] = (
+    ComputedMetric(
+        "free_cash_flow",
+        "USD",
+        ("operating_cash_flow", "capex"),
+        "operating_cash_flow - capex",
+        core=True,
+    ),
+    ComputedMetric(
+        "gross_margin", "percent", ("gross_profit", "revenue"), "gross_profit / revenue", core=True
+    ),
+    ComputedMetric(
+        "operating_margin",
+        "percent",
+        ("operating_income", "revenue"),
+        "operating_income / revenue",
+        core=True,
+    ),
+    ComputedMetric(
+        "net_margin", "percent", ("net_income", "revenue"), "net_income / revenue", core=True
+    ),
+    ComputedMetric(
+        "revenue_growth_yoy",
+        "percent",
+        ("revenue",),
+        "revenue against the same period a year earlier",
+        core=True,
+    ),
+    ComputedMetric(
+        "eps_diluted_growth_yoy",
+        "percent",
+        ("eps_diluted",),
+        "eps_diluted against the same period a year earlier",
+        core=True,
+    ),
+)
+
+COMPUTED_BY_NAME: Mapping[str, ComputedMetric] = {metric.name: metric for metric in COMPUTED}
+# Every metric a company's rows can hold, with its unit: the catalog's, then the computed ones.
+UNITS: Mapping[str, Unit] = {
+    **{metric.name: metric.unit for metric in METRICS},
+    **{metric.name: metric.unit for metric in COMPUTED},
+}
+CORE_COMPUTED = frozenset(metric.name for metric in COMPUTED if metric.core)
 
 # Read by E4b's computed metrics and checks, not served as metrics: the balance check
 # (§9.5 balance_mismatch) and total_liabilities' fallback.

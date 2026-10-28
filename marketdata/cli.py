@@ -9,6 +9,7 @@ import csv
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
@@ -922,19 +923,24 @@ def _fact_lines(fact: FactView) -> list[str]:
 class PeriodOption(StrEnum):
     Q = "Q"
     FY = "FY"
+    TTM = "TTM"
 
 
 @groups["metrics"].command("show")
 def metrics_show(
     ticker: Annotated[str, typer.Argument(help="A ticker as people write it: AAPL, brk.b, BRK/B.")],
-    metric: Annotated[str, typer.Option(help="A catalog metric, e.g. revenue.")] = "revenue",
+    metric: Annotated[
+        str, typer.Option(help="A catalog or computed metric, e.g. revenue or net_margin.")
+    ] = "revenue",
     period: Annotated[
-        PeriodOption, typer.Option(help="Q (quarters) or FY (fiscal years).")
+        PeriodOption,
+        typer.Option(help="Q (quarters), FY (fiscal years) or TTM (trailing twelve months)."),
     ] = PeriodOption.Q,
     limit: Annotated[int, typer.Option(min=1, max=40, help="How many periods.")] = 8,
 ) -> None:
-    """A company's reported values of one metric, newest first, each with its XBRL concept and
-    the filing it came from. Reads the database only."""
+    """A company's values of one metric, newest first, each with how it was made (reported,
+    derived or computed), its XBRL concept and the filing it came from. Reads the database
+    only."""
     settings = _settings()
 
     async def work(conn: AsyncConnection[Any]) -> tuple[ResolvedSecurity, list[MetricView]]:
@@ -955,12 +961,12 @@ def metrics_show(
 def _metric_lines(
     security: ResolvedSecurity, metric: str, period: str, rows: list[MetricView]
 ) -> list[str]:
-    kind = "quarters" if period == "Q" else "fiscal years"
+    kind = {"Q": "quarters", "FY": "fiscal years", "TTM": "trailing twelve months"}[period]
     lines = [
         f"{security.name or '(no name)'} ({security.ticker}, CIK {security.cik}): {metric}, {kind}"
     ]
     if not rows:
-        lines.append("  No reported values: the company's filings tag no catalog concept for it.")
+        lines.append("  No values: the company's filings tag none of the concepts it needs.")
     for row in rows:
         label = f"{row.fiscal_year} {row.fiscal_period}"
         days = (
@@ -968,7 +974,7 @@ def _metric_lines(
             if row.period_start
             else f"at {row.period_end}"
         )
-        value = f"{row.value:,} {row.unit}" if row.value is not None else "—"
+        value = "—" if row.value is None else _amount(row.value, row.unit)
         filing = (
             f"{row.proof.accession_no} filed {row.filed_at}"
             if row.proof.accession_no
@@ -976,7 +982,11 @@ def _metric_lines(
         )
         filer = f" (CIK {row.cik})" if row.cik != security.cik else ""
         lines.append(f"  {label:<8} {days:<26} {value:>26}  {filing}{filer}")
-        details = [row.proof.concept or "—"] + list(row.quality_flags)
+        details = [row.proof.method, row.proof.concept or "—", *row.quality_flags]
         lines.append(f"  {'':<8} {', '.join(details)}")
     lines.append("Information from public filings. Not investment advice.")
     return lines
+
+
+def _amount(value: Decimal, unit: str) -> str:
+    return f"{value}%" if unit == "percent" else f"{value:,} {unit}"

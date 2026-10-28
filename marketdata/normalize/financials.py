@@ -1,8 +1,13 @@
 """A company's metric rows (E4b): every rule of PLAN.md §9.3-§9.5, in order.
 
-Pure. From the company's stored facts: reported quarters, years and instants, and the quarters
-derived from year-to-date facts (normalize/metrics.py, §9.4 rules 1-7), then banks' revenue
-and gross profit not applicable (rule 10).
+Pure. From the company's stored facts:
+
+1. reported quarters, years and instants, and the quarters derived from year-to-date facts
+   (normalize/metrics.py, §9.4 rules 1-7);
+2. total liabilities computed where the filings tag none (§9.3), and banks' revenue and gross
+   profit not applicable (rule 10);
+3. gross profit computed where none is tagged, TTM, then the computed metrics
+   (normalize/computed.py, rule 8 and §9.3).
 
 A company's predecessors' facts (D-068) help derive its quarters: XOM's six months to
 2026-06-30 are under ExxonMobil Holdings (2115436) and its first quarter under Exxon Mobil Corp
@@ -17,6 +22,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from marketdata.normalize.companyfacts import XbrlFact
+from marketdata.normalize.computed import computed_rows, gross_profit_rows, ttm_rows
 from marketdata.normalize.metric_catalog import METRICS, Metric
 from marketdata.normalize.metrics import (
     BANK_NOT_APPLICABLE,
@@ -55,10 +61,17 @@ def build_metrics(
             rows += builder.flows(metric, derive=True)
         else:
             rows += builder.instants(metric)
+    if any(metric.name == "total_liabilities" for metric in metrics):
+        rows += builder.liabilities(
+            {row.period_end for row in rows if row.metric == "total_liabilities"}
+        )
     if bank:
         rows += builder.not_applicable(
             [metric for metric in metrics if metric.name in BANK_NOT_APPLICABLE], rows
         )
+    rows += gross_profit_rows(rows)
+    rows += ttm_rows(rows)
+    rows += computed_rows(rows)
     if earlier:
         rows = _own(rows, {fact.accession_no for fact in own})
     rows.sort(key=lambda row: (row.metric, row.period_type, row.period_end))

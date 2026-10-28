@@ -130,10 +130,11 @@ async def test_a_refresh_builds_the_companys_metrics_and_a_second_changes_nothin
     again = await _refresh(conn, tmp_path, AAPL, routes)
 
     built = first.files[0].metrics
-    # E4a's 1,848 reported rows and 351 quarters derived from year-to-date facts (E4b-S1).
-    assert built is not None and built.rows == built.written == 2199
+    # E4a's 1,848 reported rows, 351 quarters derived from year-to-date facts (E4b-S1), and
+    # 2,500 TTM and computed rows (E4b-S2).
+    assert built is not None and built.rows == built.written == 4699
     assert again.files[0].metrics is not None and again.files[0].metrics.written == 0
-    assert await financial_metrics.count(conn, AAPL) == 2199
+    assert await financial_metrics.count(conn, AAPL) == 4699
     [q3] = [
         row
         for row in await financial_metrics.series(conn, [AAPL], "revenue", "Q")
@@ -151,14 +152,17 @@ async def test_a_later_filing_that_changes_a_value_is_a_restatement(
 
     report = await _refresh(conn, tmp_path, AAPL, {urls.companyfacts(AAPL): _restated(AAPL_FACTS)})
 
-    assert report.files[0].metrics is not None and report.files[0].metrics.changes == 1
-    [change] = await value_changes.for_metric(conn, AAPL, "revenue")
+    # The quarter and the TTM that sums it (E4b-S2); the margins and growth keep one decimal.
+    assert report.files[0].metrics is not None and report.files[0].metrics.changes == 2
+    change, ttm = await value_changes.for_metric(conn, AAPL, "revenue")
     assert (change.entity, change.reason) == ("financial_metric", "restatement")
     assert change.entity_key == {"metric": "revenue", "period_type": "Q", "period_end": Q3[1]}
     assert (change.old_value, change.new_value) == (Decimal(109417000000), Decimal(109416000000))
     assert change.detail == (
         "0000320193-26-000099, filed 2026-09-15, restates 0000320193-26-000020 of 2026-07-31"
     )
+    assert (ttm.reason, ttm.entity_key["period_type"]) == ("restatement", "TTM")
+    assert ttm.old_value is not None and ttm.new_value == ttm.old_value - 1000000
 
 
 async def test_a_new_calc_version_that_changes_a_value_is_a_correction(
@@ -242,8 +246,8 @@ async def test_a_series_merges_the_predecessors_and_the_company_wins(
 async def test_an_unknown_metric_or_period_is_refused(conn: Conn) -> None:
     with pytest.raises(InvalidParameter, match="unknown metric"):
         await metric_series(conn, AAPL, "ebitda", "Q")
-    with pytest.raises(InvalidParameter, match="TTM comes with E4b"):
-        await metric_series(conn, AAPL, "revenue", "TTM")
+    with pytest.raises(InvalidParameter, match="period must be Q, FY or TTM"):
+        await metric_series(conn, AAPL, "revenue", "H1")
 
 
 @pytest.fixture
@@ -291,7 +295,7 @@ def test_metrics_show_prints_values_with_their_filings(stored_apple: str) -> Non
     assert lines[0] == "Apple Inc. (AAPL, CIK 320193): revenue, quarters"
     assert "2026 Q3" in lines[1] and "109,417,000,000 USD" in lines[1]
     assert "0000320193-26-000020 filed 2026-07-31" in lines[1]
-    assert lines[2].strip() == "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert lines[2].strip() == "reported, RevenueFromContractWithCustomerExcludingAssessedTax"
     assert "2026 Q2" in lines[3]
     assert lines[-1] == "Information from public filings. Not investment advice."
 
