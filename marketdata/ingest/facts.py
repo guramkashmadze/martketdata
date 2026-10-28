@@ -15,7 +15,9 @@ A refresh of one company (`facts_refresh`: routed from each new 10-K or 10-Q, an
    reports it differently, `correction` when the calc version changed. A row the rebuild no
    longer gives is kept and logged. `marketdata normalize --all` runs the same rebuild for
    every company with stored facts and makes no SEC request (`rebuild_all`, E4b-S5).
-4. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
+4. Cross-checks the company's earnings releases against the 10-Qs and 10-Ks now loaded
+   (ingest/cross_check.py, E4b-S6).
+5. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
    files. companyfacts can lag a filing by a few minutes, and a refresh that is already running
    when the next filing is listed doesn't see it, so a filing that no file holds yet makes the
    task retry while the watcher stored it less than an hour ago (FactsNotPublished). An older
@@ -39,6 +41,7 @@ from marketdata.db.repositories import (
     xbrl_facts,
 )
 from marketdata.db.repositories.xbrl_facts import FactsWritten
+from marketdata.ingest.cross_check import cross_check_company
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.normalize.changes import metric_changes
 from marketdata.normalize.companyfacts import CompanyFacts, parse_companyfacts
@@ -106,7 +109,7 @@ class FactsLoader:
         self._calc_version = calc_version
 
     async def refresh(self, cik: int, *, now: datetime | None = None) -> FactsReport:
-        """Load the facts of `cik` and its predecessors (steps 1-4 above)."""
+        """Load the facts of `cik` and its predecessors (steps 1-5 above)."""
         now = now or datetime.now(UTC)
         async with self._connect() as conn:
             group = [cik, *await predecessors.predecessors_of(conn, cik)]
@@ -126,6 +129,7 @@ class FactsLoader:
             )
             for file in loaded
         ]
+        await cross_check_company(self._connect, cik)
         missing = await self._missing(group, held, now)
         waiting = [accession for accession, stored in missing if now - stored < PUBLISH_WAIT]
         if waiting:

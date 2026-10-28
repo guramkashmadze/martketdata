@@ -1,8 +1,11 @@
-"""E4b-S3: the quality report's tally: flags by company and metric, stale companies, and a
-predecessor's rows under its own CIK with the ticker of the company it became."""
+"""E4b-S3, S6: the quality report's tally: flags by company and metric, stale companies, a
+predecessor's rows under its own CIK with the ticker of the company it became, and the
+release-vs-filing mismatches."""
 
 from datetime import date
+from decimal import Decimal
 
+from marketdata.db.repositories.earnings import CrossChecked
 from marketdata.service.quality import tally
 
 XOM, EXXON = 2115436, 34088
@@ -54,3 +57,39 @@ def test_a_company_whose_filings_stopped_is_stale_and_flags_can_be_chosen() -> N
     [company] = report.stale
     assert [entry.flag for entry in company.flags] == ["outlier_jump"]
     assert report.by_flag == {"outlier_jump": 2}
+
+
+def test_release_mismatches_appear_with_both_values_and_the_match_rate() -> None:
+    def slot(name: str, status: str, value: str, filing: str | None) -> CrossChecked:
+        return CrossChecked(
+            cik=1874178,
+            accession_no="0001874178-26-000053",
+            period_end=date(2026, 6, 30),
+            slot=name,
+            unit="USD",
+            value=Decimal(value),
+            cross_check_status=status,
+            cross_check_value=Decimal(filing) if filing else None,
+            cross_check_accession="0001874178-26-000054" if filing else None,
+        )
+
+    checked = [
+        slot("revenue", "mismatch", "3039", "1658"),
+        slot("operating_income", "matched", "-836", "-836"),
+        slot("net_income", "matched", "-833", "-833"),
+        slot("eps_diluted", "not_comparable", "1", None),
+    ]
+
+    report = tally(
+        [], {}, today=TODAY, names={}, tickers={1874178: "RIVN"}, successors={}, checked=checked
+    )
+
+    checks = report.cross_checks
+    assert checks.statuses == {"matched": 2, "mismatch": 1, "not_comparable": 1, "pending": 0}
+    assert checks.match_rate == Decimal("66.7")
+    [mismatch] = checks.mismatches
+    assert (mismatch.ticker, mismatch.slot, mismatch.difference_pct) == (
+        "RIVN",
+        "revenue",
+        Decimal("83.3"),
+    )

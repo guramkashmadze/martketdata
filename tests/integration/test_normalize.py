@@ -70,11 +70,14 @@ def test_normalize_all_rebuilds_from_stored_facts(stored_facts: str) -> None:
     result = CliRunner().invoke(cli.app, ["normalize", "--all"])
 
     assert result.exit_code == 0, result.output
+    rebuilt, checked = result.stdout.strip().splitlines()
     assert re.fullmatch(
         rf"Rebuilt the metrics of 1 companies from stored facts in \d+\.\d s, calc version "
         rf"{re.escape(CALC_VERSION)}: [\d,]+ rows, [\d,]+ written, 1 value changes logged\.",
-        result.stdout.strip(),
+        rebuilt,
     ), result.stdout
+    # No earnings releases are stored here; E4b-S6's tests check releases.
+    assert checked.startswith("Cross-checked 0 earnings releases against their 10-Qs and 10-Ks")
     with psycopg.connect(stored_facts) as conn:
         versions = conn.execute(
             "select distinct calc_version from financial_metrics where cik = %s", [AAPL]

@@ -7,6 +7,7 @@ by the caller in the same transaction (D-027).
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -57,6 +58,8 @@ class StoredFact(BaseModel):
     check_status: str
     cross_check_status: str
     quality_flags: list[str]
+    cross_check_value: Decimal | None = None  # E4b-S6: the filing's value and accession
+    cross_check_accession: str | None = None
 
 
 _RELEASE_COLUMNS = """
@@ -66,7 +69,7 @@ _RELEASE_COLUMNS = """
 _FACT_COLUMNS = """
     accession_no, slot, value, unit, prior_value, change_pct, basis, source_row_label,
     source_quote, scale_text, method, extractor_version, check_status, cross_check_status,
-    quality_flags
+    cross_check_value, cross_check_accession, quality_flags
 """
 
 _UPSERT_RELEASE = """
@@ -152,6 +155,30 @@ _EVERY_RELEASE = f"""
     select {_RELEASE_COLUMNS} from earnings_releases order by cik, accepted_at, accession_no
 """
 _EVERY_FACT = f"select {_FACT_COLUMNS} from earnings_facts order by accession_no, slot"
+
+# E4b-S6: a slot's cross-check against the later 10-Q/10-K (D-028); the flags travel joined by
+# newlines, since unnest flattens arrays of arrays.
+_CROSS_CHECK = """
+    update earnings_facts f set
+      cross_check_status = c.status,
+      cross_check_value = c.value,
+      cross_check_accession = c.accession,
+      quality_flags = coalesce(string_to_array(nullif(c.flags, ''), E'\\n'), '{}')
+    from unnest(
+      %(accession_no)s::text[], %(slot)s::text[], %(status)s::text[], %(value)s::numeric[],
+      %(accession)s::text[], %(flags)s::text[]
+    ) as c (accession_no, slot, status, value, accession, flags)
+    where f.accession_no = c.accession_no and f.slot = c.slot
+"""
+
+# The quality report (E4b-S6): every slot's cross-check, with its release.
+_CROSS_CHECKS = """
+    select r.cik, r.accession_no, r.period_end, f.slot, f.unit, f.value, f.cross_check_status,
+           f.cross_check_value, f.cross_check_accession
+    from earnings_facts f join earnings_releases r using (accession_no)
+    where %(ciks)s::bigint[] is null or r.cik = any(%(ciks)s)
+    order by r.cik, r.accepted_at, r.accession_no, f.slot
+"""
 
 _ALL_FACTS = f"""
     select {_FACT_COLUMNS} from earnings_facts
@@ -261,4 +288,56 @@ async def every_release(conn: AsyncConnection[Any]) -> list[StoredRelease]:
 async def every_fact(conn: AsyncConnection[Any]) -> list[StoredFact]:
     async with conn.cursor(row_factory=class_row(StoredFact)) as cur:
         await cur.execute(_EVERY_FACT)
+        return await cur.fetchall()
+
+
+@dataclass(frozen=True)
+class CrossCheckRow:
+    """A slot's new cross-check (E4b-S6)."""
+
+    accession_no: str
+    slot: str
+    status: str
+    value: Decimal | None
+    accession: str | None
+    flags: tuple[str, ...]
+
+
+async def set_cross_checks(conn: AsyncConnection[Any], rows: Sequence[CrossCheckRow]) -> int:
+    """Write these slots' cross-checks and flags; returns how many rows were updated."""
+    if not rows:
+        return 0
+    params = {
+        "accession_no": [row.accession_no for row in rows],
+        "slot": [row.slot for row in rows],
+        "status": [row.status for row in rows],
+        "value": [row.value for row in rows],
+        "accession": [row.accession for row in rows],
+        "flags": ["\n".join(row.flags) for row in rows],
+    }
+    async with conn.cursor() as cur:
+        await cur.execute(_CROSS_CHECK, params)
+        return cur.rowcount
+
+
+class CrossChecked(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    cik: int
+    accession_no: str
+    period_end: date | None
+    slot: str
+    unit: str
+    value: Decimal | None
+    cross_check_status: str
+    cross_check_value: Decimal | None
+    cross_check_accession: str | None
+
+
+async def cross_checks(
+    conn: AsyncConnection[Any], ciks: Sequence[int] | None = None
+) -> list[CrossChecked]:
+    """Every slot's cross-check, of these companies' releases (all when None)."""
+    async with conn.cursor(row_factory=class_row(CrossChecked)) as cur:
+        await cur.execute(_CROSS_CHECKS, {"ciks": list(ciks) if ciks is not None else None})
         return await cur.fetchall()

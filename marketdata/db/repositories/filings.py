@@ -88,6 +88,14 @@ _WITH_ITEM = f"""
     order by filed_at, accession_no, cik
 """
 
+# A company group's filings of some forms, oldest first; a joint filing listed under two of the
+# group's CIKs comes once (E4b-S6's cross-check reads the periodic ones).
+_OF_FORMS = f"""
+    select distinct on (accession_no) {_COLUMNS} from filings
+    where cik = any(%(ciks)s) and form = any(%(forms)s)
+    order by accession_no, cik
+"""
+
 
 async def insert_new(conn: AsyncConnection[Any], rows: Sequence[FilingRow]) -> list[str]:
     """Insert listings not stored yet; returns the accession numbers inserted."""
@@ -175,3 +183,13 @@ async def with_item(
     async with conn.cursor(row_factory=class_row(Filing)) as cur:
         await cur.execute(_WITH_ITEM, params)
         return await cur.fetchall()
+
+
+async def of_forms(
+    conn: AsyncConnection[Any], ciks: Sequence[int], forms: Sequence[str]
+) -> list[Filing]:
+    """These companies' filings of these forms, each accession once, oldest first."""
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_OF_FORMS, {"ciks": list(ciks), "forms": list(forms)})
+        listed = await cur.fetchall()
+    return sorted(listed, key=lambda filing: (filing.filed_at, filing.accession_no))

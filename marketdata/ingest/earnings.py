@@ -14,6 +14,8 @@ Extracting, verifying and storing (E7a-S3, S4):
 4. normalize/earnings.py checks every value against the stored text (verify/) and builds the
    rows; they are stored in one transaction with a `value_changes` row for each served value a
    re-run (correction) or an 8-K/A (amendment) changes (D-027, D-077).
+5. The company's releases are cross-checked against the 10-Qs and 10-Ks already loaded
+   (ingest/cross_check.py, E4b-S6).
 
 Filing documents never change once filed, so a document stored before is read from the raw
 store: re-running a release (new rules, a new override) makes no SEC request (D-070).
@@ -48,6 +50,7 @@ from marketdata.extract.earnings_rules import (
 )
 from marketdata.extract.html_tables import parse_document
 from marketdata.extract.interface import Release, ReleaseDocument
+from marketdata.ingest.cross_check import cross_check_company
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.ingest.watcher import FilingsWatcher
 from marketdata.normalize.changes import (
@@ -166,6 +169,8 @@ class EarningsIngest:
             },
         )
         changes = await self._store(record, group, fetched.index.form)
+        # Its 10-Q or 10-K may be loaded already (a re-run, an 8-K/A): check it now (E4b-S6).
+        await cross_check_company(self._connect, cik)
         log.info(
             "earnings_release_stored",
             cik=cik,

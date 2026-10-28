@@ -33,8 +33,8 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0010(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0010"
+def test_head_is_0011(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0011"
 
 
 def _units(url: str) -> str:
@@ -52,6 +52,9 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     )
     assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES
     assert "priority" in _columns(migrated_database, "tasks")
+    assert "percent" in _units(migrated_database)
+
+    command.downgrade(alembic_config, "-1")
     assert "percent" in _units(migrated_database)
 
     command.downgrade(alembic_config, "-1")
@@ -205,3 +208,19 @@ async def test_a_metric_without_a_value_needs_a_flag(conn: psycopg.AsyncConnecti
 
     with pytest.raises(psycopg.errors.CheckViolation):
         await conn.execute(insert.replace("'revenue'", "'gross_profit'"), [[]])
+
+
+async def test_a_compared_slot_names_its_filing(conn: psycopg.AsyncConnection[Any]) -> None:
+    await conn.execute("insert into companies (cik) values (320193)")
+    await conn.execute(
+        "insert into earnings_releases (accession_no, cik, status, extractor, extractor_version, "
+        "check_report) values ('0000320193-26-000018', 320193, 'complete', 'rules', '3', '{}')"
+    )
+    insert = (
+        "insert into earnings_facts (accession_no, slot, value, unit, method, extractor_version, "
+        "check_status, cross_check_status, cross_check_value, cross_check_accession) values "
+        "('0000320193-26-000018', 'revenue', 1, 'USD', 'rule', '3', 'passed', %s, %s, %s)"
+    )
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(insert, ["matched", None, None])

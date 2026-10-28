@@ -22,6 +22,11 @@ from marketdata.config import Settings, SettingsError, load_settings
 from marketdata.db.pool import create_pool
 from marketdata.db.repositories import predecessors
 from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
+from marketdata.ingest.cross_check import (
+    CrossCheckReport,
+    cross_check_all,
+    cross_check_company,
+)
 from marketdata.ingest.facts import RebuildReport, rebuild_all
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.sec_lock import SecProcessBusy, sec_process_lock
@@ -921,8 +926,19 @@ def _fact_lines(fact: FactView) -> list[str]:
         f"  {'scale':<10} {fact.scale_text or '— (per-share values are not scaled)'}",
         f"  {'checks':<10} {', '.join(fact.checks)} passed; {fact.method} "
         f"version {fact.extractor_version}",
+        f"  {'filing':<10} {_cross_check(fact)}",
     ]
     return lines
+
+
+def _cross_check(fact: FactView) -> str:
+    """The slot against the 10-Q or 10-K for its quarter (D-028)."""
+    check = fact.cross_check
+    status = check.status.replace("_", " ")
+    if check.filing_value is None:
+        return status
+    unit = fact.unit if fact.unit == "USD" else "USD per share"
+    return f"{status}: {check.filing_value:,} {unit} in {check.filing_accession_no}"
 
 
 class PeriodOption(StrEnum):
@@ -1054,6 +1070,24 @@ def _quality_lines(report: QualityReport) -> list[str]:
         )
     if not report.stale:
         lines.append("  none")
+    checks = report.cross_checks
+    counts = ", ".join(
+        f"{count:,} {status.replace('_', ' ')}" for status, count in checks.statuses.items()
+    )
+    rate = f"{checks.match_rate}%" if checks.match_rate is not None else "—"
+    lines += [
+        "",
+        f"Earnings releases against their 10-Qs and 10-Ks (D-028), slots: {counts}; "
+        f"match rate {rate}",
+    ]
+    for mismatch in checks.mismatches:
+        unit = mismatch.unit if mismatch.unit == "USD" else "USD per share"
+        difference = f"{mismatch.difference_pct:+}%" if mismatch.difference_pct is not None else ""
+        lines.append(
+            f"  {mismatch.ticker or '—':<7} {mismatch.accession_no}  {mismatch.period_end or '—'}  "
+            f"{mismatch.slot:<17} release {_number(mismatch.release_value)}, filing "
+            f"{_number(mismatch.filing_value)} {unit} ({mismatch.filing_accession}) {difference}"
+        )
     lines += ["", "By company and metric (rows flagged, the latest period flagged):"]
     for company in report.companies:
         if not company.flags:
@@ -1088,8 +1122,9 @@ def normalize(
 ) -> None:
     """Rebuild financial metrics from the XBRL facts already stored (E4b, PLAN.md §9.3-§9.5):
     reported, derived, TTM and computed rows with their quality flags, at the current calc
-    version. Makes no SEC request. A value that changes is logged in value_changes with its
-    reason (D-027). Prints the duration."""
+    version, then cross-check the earnings releases against them (D-028). Makes no SEC
+    request. A value that changes is logged in value_changes with its reason (D-027). Prints
+    the duration."""
     if every == bool(tickers):
         raise _fail("Say --all, or name companies with --ticker.", 2)
     settings = _settings()
@@ -1101,17 +1136,28 @@ def normalize(
             ciks += [cik, *await predecessors.predecessors_of(conn, cik)]
         return ciks
 
-    async def run() -> RebuildReport:
+    async def run() -> tuple[RebuildReport, CrossCheckReport]:
         async with create_pool(str(settings.database_url), max_size=1) as pool:
             ciks = None
             if tickers:
                 async with pool.connection() as conn:
                     ciks = await chosen(conn)
-            return await rebuild_all(pool.connection, ciks)
+            rebuilt = await rebuild_all(pool.connection, ciks)
+            if ciks is None:
+                return rebuilt, await cross_check_all(pool.connection)
+            checked = [await cross_check_company(pool.connection, cik) for cik in ciks]
+            statuses: Counter[str] = Counter()
+            for each in checked:
+                statuses.update(each.statuses)
+            return rebuilt, CrossCheckReport(
+                sum(each.releases for each in checked),
+                dict(statuses),
+                sum(each.written for each in checked),
+            )
 
     started = time.monotonic()
     try:
-        report = asyncio.run(run())
+        report, checked = asyncio.run(run())
     except InvalidParameter as exc:
         raise _fail(str(exc), 2) from None
     except NotFound as exc:
@@ -1124,3 +1170,16 @@ def normalize(
         + (f", {report.kept:,} stored rows without facts kept" if report.kept else "")
         + "."
     )
+    counts = ", ".join(
+        f"{checked.statuses.get(status, 0):,} {status.replace('_', ' ')}"
+        for status in ("matched", "mismatch", "not_comparable", "pending")
+    )
+    typer.echo(
+        f"Cross-checked {checked.releases:,} earnings releases against their 10-Qs and 10-Ks: "
+        f"{counts} (slots); {checked.written:,} changed. `marketdata quality report` lists the "
+        "mismatches."
+    )
+
+
+def _number(value: Decimal | None) -> str:
+    return f"{value:,}" if value is not None else "—"

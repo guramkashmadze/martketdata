@@ -1,8 +1,9 @@
 """Earnings releases with proof: E7a's `marketdata earnings show`; E5a serves them.
 
 Reads earnings_releases and earnings_facts only (CLAUDE.md). Each value carries its proof: the
-filing and exhibit on sec.gov, the row it was read from as printed, the scale words and the
-checks it passed. A slot that failed, wasn't found or doesn't apply has no value, only why.
+filing and exhibit on sec.gov, the row it was read from as printed, the scale words, the
+checks it passed and its cross-check against the later 10-Q or 10-K (E4b, D-028). A slot that
+failed, wasn't found or doesn't apply has no value, only why.
 """
 
 from datetime import date, datetime
@@ -17,6 +18,16 @@ from marketdata.db.repositories.earnings import StoredFact, StoredRelease
 from marketdata.extract.interface import SLOTS
 from marketdata.sec import urls
 from marketdata.service.errors import NotFound
+
+
+class CrossCheck(BaseModel):
+    """The slot against the later 10-Q or 10-K for its quarter (D-028, §9.10)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: str  # pending, matched, mismatch, not_comparable
+    filing_accession_no: str | None
+    filing_value: Decimal | None
 
 
 class FactView(BaseModel):
@@ -36,6 +47,7 @@ class FactView(BaseModel):
     quality_flags: tuple[str, ...]
     method: str
     extractor_version: str
+    cross_check: CrossCheck
 
 
 class ReleaseView(BaseModel):
@@ -122,4 +134,9 @@ def _fact_view(fact: StoredFact, entry: dict[str, Any]) -> FactView:
         quality_flags=tuple(fact.quality_flags),
         method=fact.method,
         extractor_version=fact.extractor_version,
+        cross_check=CrossCheck(
+            status=fact.cross_check_status,
+            filing_accession_no=fact.cross_check_accession,
+            filing_value=fact.cross_check_value,
+        ),
     )

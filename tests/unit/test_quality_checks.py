@@ -52,11 +52,11 @@ INDEX = {
     "not_applicable_financials": "test_reported_metrics.py::test_a_bank_has_no_revenue",
     "scale_unknown": "test_earnings_rules.py::test_no_scale_fails_the_money_slots_but_not_eps",
     "sign_change": "test_earnings_assembly.py::test_a_sign_change_has_no_change_percent",
+    "release_vs_filing_mismatch": (
+        "test_cross_check.py::test_a_quarter_whose_numbers_changed_between_release_and_filing"
+    ),
 }
-LATER = {
-    "release_vs_filing_mismatch": "E4b-S6",
-    "price_not_licensed": "E10: prices are not loaded yet",
-}
+LATER = {"price_not_licensed": "E10: prices are not loaded yet"}
 
 
 def _fact(
