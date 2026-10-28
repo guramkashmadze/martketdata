@@ -2,12 +2,13 @@
 
 Pure. From the company's stored facts:
 
-1. reported quarters, years and instants, and the quarters derived from year-to-date facts
-   (normalize/metrics.py, §9.4 rules 1-7);
+1. reported quarters, years and instants, the quarters derived from year-to-date facts and
+   money metrics reported only in another currency (normalize/metrics.py, §9.4 rules 1-7, 9);
 2. total liabilities computed where the filings tag none (§9.3), and banks' revenue and gross
    profit not applicable (rule 10);
 3. gross profit computed where none is tagged, TTM, then the computed metrics
-   (normalize/computed.py, rule 8 and §9.3).
+   (normalize/computed.py, rule 8 and §9.3);
+4. the quality checks (normalize/quality.py, §9.5).
 
 A company's predecessors' facts (D-068) help derive its quarters: XOM's six months to
 2026-06-30 are under ExxonMobil Holdings (2115436) and its first quarter under Exxon Mobil Corp
@@ -31,6 +32,7 @@ from marketdata.normalize.metrics import (
     MetricRow,
     is_bank,
 )
+from marketdata.normalize.quality import check
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,7 @@ def build_metrics(
             rows += builder.flows(metric, derive=True)
         else:
             rows += builder.instants(metric)
+        rows += builder.non_usd(metric)
     if any(metric.name == "total_liabilities" for metric in metrics):
         rows += builder.liabilities(
             {row.period_end for row in rows if row.metric == "total_liabilities"}
@@ -72,6 +75,7 @@ def build_metrics(
     rows += gross_profit_rows(rows)
     rows += ttm_rows(rows)
     rows += computed_rows(rows)
+    rows = check(rows, builder.balances())
     if earlier:
         rows = _own(rows, {fact.accession_no for fact in own})
     rows.sort(key=lambda row: (row.metric, row.period_type, row.period_end))

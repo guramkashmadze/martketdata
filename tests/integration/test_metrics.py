@@ -295,7 +295,11 @@ def test_metrics_show_prints_values_with_their_filings(stored_apple: str) -> Non
     assert lines[0] == "Apple Inc. (AAPL, CIK 320193): revenue, quarters"
     assert "2026 Q3" in lines[1] and "109,417,000,000 USD" in lines[1]
     assert "0000320193-26-000020 filed 2026-07-31" in lines[1]
-    assert lines[2].strip() == "reported, RevenueFromContractWithCustomerExcludingAssessedTax"
+    # The method and concept; `stale_data` follows once the filing is 120 days old.
+    assert lines[2].strip().split(", ")[:2] == [
+        "reported",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+    ]
     assert "2026 Q2" in lines[3]
     assert lines[-1] == "Information from public filings. Not investment advice."
 

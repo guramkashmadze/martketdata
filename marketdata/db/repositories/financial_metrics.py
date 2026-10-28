@@ -105,6 +105,23 @@ _SERIES = f"""
 
 _COUNT = "select count(*) from financial_metrics where cik = %(cik)s"
 
+# The quality report (E4b-S3): flags by company, metric and code, and each company's latest
+# filing among its rows.
+_FLAG_COUNTS = """
+    select m.cik, m.metric, flag, count(*), max(m.period_end)
+    from financial_metrics m cross join lateral unnest(m.quality_flags) as flag
+    where %(ciks)s::bigint[] is null or m.cik = any(%(ciks)s)
+    group by m.cik, m.metric, flag
+    order by m.cik, m.metric, flag
+"""
+
+_ROW_COUNTS = """
+    select cik, count(*), count(*) filter (where cardinality(quality_flags) > 0), max(filed_at)
+    from financial_metrics
+    where %(ciks)s::bigint[] is null or cik = any(%(ciks)s)
+    group by cik
+"""
+
 
 async def upsert(conn: AsyncConnection[Any], rows: Sequence[MetricRow]) -> int:
     """Write the rows that are new or changed; returns how many."""
@@ -159,3 +176,27 @@ async def count(conn: AsyncConnection[Any], cik: int) -> int:
         await cur.execute(_COUNT, {"cik": cik})
         row = await cur.fetchone()
     return int(row[0]) if row else 0
+
+
+async def flag_counts(
+    conn: AsyncConnection[Any], ciks: Sequence[int] | None = None
+) -> list[tuple[int, str, str, int, date]]:
+    """(cik, metric, flag, rows, latest period end) for every flag on these companies' rows."""
+    async with conn.cursor() as cur:
+        await cur.execute(_FLAG_COUNTS, {"ciks": list(ciks) if ciks is not None else None})
+        return [
+            (int(cik), str(metric), str(flag), int(rows), latest)
+            for cik, metric, flag, rows, latest in await cur.fetchall()
+        ]
+
+
+async def row_counts(
+    conn: AsyncConnection[Any], ciks: Sequence[int] | None = None
+) -> dict[int, tuple[int, int, date | None]]:
+    """For each company with rows: (rows, rows with a flag, the latest filing date)."""
+    async with conn.cursor() as cur:
+        await cur.execute(_ROW_COUNTS, {"ciks": list(ciks) if ciks is not None else None})
+        return {
+            int(cik): (int(rows), int(flagged), filed)
+            for cik, rows, flagged, filed in await cur.fetchall()
+        }

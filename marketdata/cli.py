@@ -32,6 +32,7 @@ from marketdata.ingest.security_master import (
 )
 from marketdata.log import configure_logging
 from marketdata.normalize.public_float import Suggestion
+from marketdata.normalize.quality import DESCRIPTIONS
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError, SecurityOverride, UniverseEntry
 from marketdata.sec.client import SecClient, SecError
@@ -48,6 +49,7 @@ from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.extraction import ExtractionReport, SlotCounts, extraction_report
 from marketdata.service.filings import FilingView, recent_filings
 from marketdata.service.financials import MetricView, metric_series
+from marketdata.service.quality import QualityReport, quality_report
 from marketdata.service.universe import suggest
 from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
@@ -990,3 +992,84 @@ def _metric_lines(
 
 def _amount(value: Decimal, unit: str) -> str:
     return f"{value}%" if unit == "percent" else f"{value:,} {unit}"
+
+
+@groups["quality"].command("report")
+def quality_report_command(
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="Only this company (repeatable); default: all."),
+    ] = None,
+    flags: Annotated[
+        list[str] | None, typer.Option("--flag", help="Only this flag code (repeatable).")
+    ] = None,
+) -> None:
+    """Quality flags (PLAN.md §9.5) on the stored metric rows by company and metric, and the
+    companies whose latest 10-Q or 10-K is more than 120 days old. A flag never changes or
+    hides a value. Reads the database only."""
+    settings = _settings()
+    today = datetime.now(UTC).date()
+    unknown = sorted(set(flags or ()) - set(DESCRIPTIONS))
+    if unknown:
+        raise _fail(
+            f"unknown flag {', '.join(unknown)}; PLAN.md §9.5 has {', '.join(DESCRIPTIONS)}", 2
+        )
+
+    async def work(conn: AsyncConnection[Any]) -> QualityReport:
+        ciks = [(await resolve_ticker(conn, text)).cik for text in tickers] if tickers else None
+        return await quality_report(conn, today=today, ciks=ciks, flags=flags)
+
+    try:
+        report = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _quality_lines(report):
+        typer.echo(line)
+
+
+def _quality_lines(report: QualityReport) -> list[str]:
+    if not report.companies:
+        return ["No metric rows are stored. `marketdata backfill facts` loads them."]
+    lines = [
+        f"Quality report, {report.today}: {report.rows:,} metric rows of "
+        f"{len(report.companies)} companies, {report.flagged:,} with a flag",
+        "",
+        "Flags by code (rows):",
+    ]
+    for flag, count in report.by_flag.items():
+        lines.append(f"  {flag:<28}{count:>9,}  {DESCRIPTIONS.get(flag, '')}")
+    if not report.by_flag:
+        lines.append("  none")
+    lines += ["", "Stale data (the latest 10-Q or 10-K with facts is more than 120 days old):"]
+    for company in report.stale:
+        filed = company.latest_filed or "never"
+        lines.append(
+            f"  {company.ticker or '—':<7} {company.cik:<8} {_cut(company.name or '—', 30):<30} "
+            f"latest filing {filed}"
+        )
+    if not report.stale:
+        lines.append("  none")
+    lines += ["", "By company and metric (rows flagged, the latest period flagged):"]
+    for company in report.companies:
+        if not company.flags:
+            continue
+        label = (
+            f"predecessor of CIK {company.successor_cik}"
+            if company.successor_cik
+            else _cut(company.name or "—", 30)
+        )
+        lines.append(
+            f"  {company.ticker or '—':<7} {company.cik:<8} {label} ({company.rows:,} rows, "
+            f"{company.flagged:,} flagged; latest filing {company.latest_filed or '—'})"
+        )
+        by_metric: dict[str, list[str]] = {}
+        for entry in company.flags:
+            by_metric.setdefault(entry.metric, []).append(
+                f"{entry.flag} {entry.rows:,} ({entry.latest})"
+            )
+        for metric, listed in by_metric.items():
+            lines.append(f"    {metric:<26}{', '.join(listed)}")
+    lines.append("Information from public filings. Not investment advice.")
+    return lines
