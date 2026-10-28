@@ -3,6 +3,7 @@ facts for each rule: six months less the first quarter, nine less six, the year 
 months or less its first three quarters; one concept per derivation; a reported quarter wins;
 no derived per-share or average-share values."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -281,3 +282,48 @@ def test_e4as_reported_rows_have_no_derived_quarters() -> None:
 
     assert {row.method for row in rows} == {"reported"}
     assert [row.period_end for row in rows if row.period_type == "Q"] == [Q1[1]]
+
+
+def test_a_predecessors_facts_fill_only_periods_the_company_doesnt_report() -> None:
+    # The successor's first 10-Q reports six months, the quarter a year earlier and that
+    # quarter's end; the predecessor's 10-Q reports the first quarter and the same quarter end
+    # under the catalog's first cash concept (XOM, 2026).
+    def successor(fact: XbrlFact) -> XbrlFact:
+        return replace(fact, cik=2, accession_no="0000000002-26-000020")
+
+    own = [
+        successor(_fact(CASH, SIX, 250, Q2_10Q)),
+        successor(_fact("Revenues", (date(2025, 4, 1), date(2025, 6, 30)), 90, Q2_10Q)),
+        successor(
+            _fact(
+                "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+                (date(2025, 6, 30), date(2025, 6, 30)),
+                75,
+                Q2_10Q,
+            )
+        ),
+    ]
+    own[2] = replace(own[2], period_start=None)
+    earlier = [
+        _fact(CASH, Q1, 100, Q1_10Q),
+        replace(
+            _fact("CashAndCashEquivalentsAtCarryingValue", Q1, 70, Q1_10Q),
+            period_start=None,
+            period_end=date(2025, 6, 30),
+        ),
+    ]
+    built = build_metrics(
+        2, own, fiscal_year_end="1231", sic_code="2911", predecessor_facts=earlier
+    )
+    rows = {row.key: row for row in built.rows}
+
+    second = rows[("operating_cash_flow", "Q", Q2[1])]
+    assert (second.value, second.source_accessions) == (
+        Decimal(150),
+        (Q1_10Q, "0000000002-26-000020"),
+    )
+    # Where the company reports the period itself, its own facts decide (E4a's row stays).
+    cash = rows[("cash", "Q", date(2025, 6, 30))]
+    assert (cash.value, cash.quality_flags) == (Decimal(75), ("cash_includes_restricted",))
+    # The predecessor's first quarter is the predecessor's row, not the company's.
+    assert ("operating_cash_flow", "Q", Q1[1]) not in rows

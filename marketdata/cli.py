@@ -6,6 +6,7 @@ fills in its group. Commands load settings themselves, so `--help` works without
 
 import asyncio
 import csv
+import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -19,7 +20,9 @@ from psycopg import AsyncConnection
 
 from marketdata.config import Settings, SettingsError, load_settings
 from marketdata.db.pool import create_pool
+from marketdata.db.repositories import predecessors
 from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
+from marketdata.ingest.facts import RebuildReport, rebuild_all
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.sec_lock import SecProcessBusy, sec_process_lock
 from marketdata.ingest.security_master import (
@@ -31,6 +34,7 @@ from marketdata.ingest.security_master import (
     read_predecessors,
 )
 from marketdata.log import configure_logging
+from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.normalize.public_float import Suggestion
 from marketdata.normalize.quality import DESCRIPTIONS
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
@@ -74,7 +78,6 @@ _GROUPS = [
     ("earnings", "A company's latest earnings release, each value with its proof.", "E7a"),
     ("metrics", "A company's reported financial metrics, each with its filing.", "E4a"),
     ("stats", "Freshness and track-record statistics.", "E7c"),
-    ("normalize", "Rebuild metrics from stored XBRL facts.", "E4b"),
     ("quality", "Quality checks and the accuracy report.", "E4b"),
     ("clients", "Create and list API clients.", "E5a"),
     ("keys", "Create, list and revoke API keys.", "E5a"),
@@ -1073,3 +1076,51 @@ def _quality_lines(report: QualityReport) -> list[str]:
             lines.append(f"    {metric:<26}{', '.join(listed)}")
     lines.append("Information from public filings. Not investment advice.")
     return lines
+
+
+@app.command("normalize")
+def normalize(
+    every: Annotated[bool, typer.Option("--all", help="Every company with stored facts.")] = False,
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="Only this company and its predecessors (repeatable)."),
+    ] = None,
+) -> None:
+    """Rebuild financial metrics from the XBRL facts already stored (E4b, PLAN.md §9.3-§9.5):
+    reported, derived, TTM and computed rows with their quality flags, at the current calc
+    version. Makes no SEC request. A value that changes is logged in value_changes with its
+    reason (D-027). Prints the duration."""
+    if every == bool(tickers):
+        raise _fail("Say --all, or name companies with --ticker.", 2)
+    settings = _settings()
+
+    async def chosen(conn: AsyncConnection[Any]) -> list[int]:
+        ciks: list[int] = []
+        for text in tickers or ():
+            cik = (await resolve_ticker(conn, text)).cik
+            ciks += [cik, *await predecessors.predecessors_of(conn, cik)]
+        return ciks
+
+    async def run() -> RebuildReport:
+        async with create_pool(str(settings.database_url), max_size=1) as pool:
+            ciks = None
+            if tickers:
+                async with pool.connection() as conn:
+                    ciks = await chosen(conn)
+            return await rebuild_all(pool.connection, ciks)
+
+    started = time.monotonic()
+    try:
+        report = asyncio.run(run())
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    seconds = time.monotonic() - started
+    typer.echo(
+        f"Rebuilt the metrics of {report.companies} companies from stored facts in "
+        f"{seconds:.1f} s, calc version {CALC_VERSION}: {report.rows:,} rows, "
+        f"{report.written:,} written, {report.changes:,} value changes logged"
+        + (f", {report.kept:,} stored rows without facts kept" if report.kept else "")
+        + "."
+    )

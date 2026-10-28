@@ -14,7 +14,7 @@ A refresh of one company (`facts_refresh`: routed from each new 10-K or 10-Q, an
    served value that moved, in one transaction (D-027): `restatement` when a later filing
    reports it differently, `correction` when the calc version changed. A row the rebuild no
    longer gives is kept and logged. `marketdata normalize --all` runs the same rebuild for
-   every company with stored facts (`rebuild_metrics`).
+   every company with stored facts and makes no SEC request (`rebuild_all`, E4b-S5).
 4. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
    files. companyfacts can lag a filing by a few minutes, and a refresh that is already running
    when the next filing is listed doesn't see it, so a filing that no file holds yet makes the
@@ -66,6 +66,17 @@ class MetricsBuilt:
     written: int  # rows new or changed
     changes: int  # served values that moved (value_changes rows)
     kept: int  # stored rows the rebuild no longer gives
+
+
+@dataclass(frozen=True)
+class RebuildReport:
+    """`marketdata normalize`: every company's metrics rebuilt from its stored facts."""
+
+    companies: int
+    rows: int
+    written: int
+    changes: int
+    kept: int
 
 
 @dataclass(frozen=True)
@@ -251,3 +262,22 @@ async def rebuild_metrics(
         kept=len(kept),
     )
     return MetricsBuilt(len(result.rows), written, len(changes), len(kept))
+
+
+async def rebuild_all(
+    connect: Connect, ciks: Sequence[int] | None = None, *, calc_version: str = CALC_VERSION
+) -> RebuildReport:
+    """The metrics of these companies (every company with stored facts when None) rebuilt from
+    the facts already stored: no SEC request. Each company is written in its own transaction,
+    with its value changes."""
+    if ciks is None:
+        async with connect() as conn:
+            ciks = await xbrl_facts.ciks(conn)
+    built = [await rebuild_metrics(connect, cik, calc_version=calc_version) for cik in ciks]
+    return RebuildReport(
+        companies=len(built),
+        rows=sum(each.rows for each in built),
+        written=sum(each.written for each in built),
+        changes=sum(each.changes for each in built),
+        kept=sum(each.kept for each in built),
+    )

@@ -10,11 +10,13 @@ Pure. From the company's stored facts:
    (normalize/computed.py, rule 8 and §9.3);
 4. the quality checks (normalize/quality.py, §9.5).
 
-A company's predecessors' facts (D-068) help derive its quarters: XOM's six months to
-2026-06-30 are under ExxonMobil Holdings (2115436) and its first quarter under Exxon Mobil Corp
-(34088). Given `predecessor_facts`, the rows are built over both and the company keeps the
-rows that read one of its own filings, and the rows without a value at a period one of those
-covers; each predecessor's own rows are built from its facts alone, as in E4a (D-084).
+A company's predecessors' facts (D-068) fill the periods its own filings don't report, so its
+quarters can be derived across a succession: XOM's six months to 2026-06-30 are under
+ExxonMobil Holdings (2115436) and its first quarter under Exxon Mobil Corp (34088). Given
+`predecessor_facts`, the rows are built over the company's facts and the predecessors' facts of
+other periods, and the company keeps the rows that read one of its own filings, and the rows
+without a value at a period one of those covers; each predecessor's own rows are built from
+its facts alone, as in E4a (D-084).
 
 `facts_refresh` and `marketdata normalize --all` store the result (ingest/facts.py).
 """
@@ -52,7 +54,10 @@ def build_metrics(
     predecessor_facts: Iterable[XbrlFact] = (),
 ) -> BuiltMetrics:
     own = list(facts)
-    earlier = list(predecessor_facts)
+    covered = {(fact.period_start, fact.period_end) for fact in own}
+    earlier = [
+        fact for fact in predecessor_facts if (fact.period_start, fact.period_end) not in covered
+    ]
     builder = MetricBuilder(cik, [*own, *earlier], fiscal_year_end, calc_version)
     bank = is_bank(sic_code)
     rows: list[MetricRow] = []

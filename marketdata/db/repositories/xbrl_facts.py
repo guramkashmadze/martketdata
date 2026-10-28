@@ -48,6 +48,8 @@ _UPSERT = """
 
 _COUNT = "select count(*) from xbrl_facts where cik = %(cik)s"
 
+_CIKS = "select distinct cik from xbrl_facts order by cik"
+
 _FOR_CONCEPTS = """
     select cik, taxonomy, concept, unit, period_start, period_end, value, fy, fp, form, frame,
            filed_at, accession_no
@@ -121,6 +123,13 @@ async def for_concepts(
     async with conn.cursor() as cur:
         await cur.execute(_FOR_CONCEPTS, params)
         return [XbrlFact(*row) for row in await cur.fetchall()]
+
+
+async def ciks(conn: AsyncConnection[Any]) -> list[int]:
+    """Every company with stored facts."""
+    async with conn.cursor() as cur:
+        await cur.execute(_CIKS)
+        return [int(row[0]) for row in await cur.fetchall()]
 
 
 async def count(conn: AsyncConnection[Any], cik: int) -> int:
