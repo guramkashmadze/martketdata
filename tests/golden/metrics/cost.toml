@@ -16,33 +16,53 @@ revenue = "62,151"
 net_income = "1,798"
 eps_diluted = "4.04"
 total_assets = "73,386"
+operating_cash_flow = "3,260"
+capex = "1,264"
 
 [[period]]
 type = "Q"
 period_end = 2025-02-16
 fiscal = "2025 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000012/costex9918-k3625.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983225000012/costex9918-k3625.htm",
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983224000075/costex9918-k121224.htm",
+]
 revenue = "63,723"
 net_income = "1,788"
 eps_diluted = "4.02"
 total_assets = "73,224"
+# operating cash flow and capex: 24 weeks 6,008 less 12 weeks 3,260; capex 2,401 less 1,264
+operating_cash_flow = "2,748"
+capex = "1,137"
 
 [[period]]
 type = "Q"
 period_end = 2025-05-11
 fiscal = "2025 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000031/costex9918-k52925.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983225000031/costex9918-k52925.htm",
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983225000012/costex9918-k3625.htm",
+]
 revenue = "63,205"
 net_income = "1,903"
 eps_diluted = "4.28"
 total_assets = "75,482"
+# operating cash flow and capex: 36 weeks 9,468 less 24 weeks 6,008; capex 3,532 less 2,401
+operating_cash_flow = "3,460"
+capex = "1,131"
 
 [[period]]
 type = "Q"
 period_end = 2025-08-31
 fiscal = "2025 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983225000093/costex9918-k92525.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983225000093/costex9918-k92525.htm",
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983225000031/costex9918-k52925.htm",
+]
 total_assets = "77,099"
+# operating cash flow and capex: 52 weeks 13,335 less 36 weeks 9,468; capex 5,498 less 3,532
+operating_cash_flow = "3,867"
+capex = "1,966"
 
 [[period]]
 type = "FY"
@@ -53,6 +73,8 @@ revenue = "275,235"
 net_income = "8,099"
 eps_diluted = "18.21"
 total_assets = "77,099"
+operating_cash_flow = "13,335"
+capex = "5,498"
 
 [[period]]
 type = "Q"
@@ -63,33 +85,56 @@ revenue = "67,307"
 net_income = "2,001"
 eps_diluted = "4.50"
 total_assets = "82,790"
+operating_cash_flow = "4,688"
+capex = "1,526"
 
 [[period]]
 type = "Q"
 period_end = 2026-02-15
 fiscal = "2026 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000025/costex9918-k3526.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983226000025/costex9918-k3526.htm",
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983225000164/costex9918-k121125.htm",
+]
 revenue = "69,597"
 net_income = "2,035"
 eps_diluted = "4.58"
 total_assets = "83,639"
+# operating cash flow and capex: 24 weeks 7,684 less 12 weeks 4,688; capex 2,815 less 1,526
+operating_cash_flow = "2,996"
+capex = "1,289"
 
 [[period]]
 type = "Q"
 period_end = 2026-05-10
 fiscal = "2026 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000046/costex9918-k52826.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983226000046/costex9918-k52826.htm",
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983226000025/costex9918-k3526.htm",
+]
 revenue = "70,527"
 net_income = "2,192"
 eps_diluted = "4.93"
 total_assets = "86,430"
+# operating cash flow and capex: 36 weeks 11,133 less 24 weeks 7,684; capex 4,228 less 2,815
+operating_cash_flow = "3,449"
+capex = "1,413"
 
 [[period]]
 type = "Q"
 period_end = 2026-08-30
 fiscal = "2026 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/909832/000090983226000084/costex9918-k92426.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983226000084/costex9918-k92426.htm",
+  "https://www.sec.gov/Archives/edgar/data/909832/000090983226000046/costex9918-k52826.htm",
+]
 total_assets = "89,045"
+# operating cash flow and capex: 52 weeks 15,825 less 36 weeks 11,133; capex 6,435 less 4,228.
+# The release's statement is "Subject to Reclassification"; the 10-K 0000909832-26-000093 tags
+# 15,817 for the 52 weeks, so the derived quarter is 4,684 (PLAN.md §16).
+known_differences = { operating_cash_flow = "the 10-K tags 15,817 for the year" }
+operating_cash_flow = "4,692"
+capex = "2,207"
 
 [[period]]
 type = "FY"
@@ -100,3 +145,8 @@ revenue = "303,154"
 net_income = "9,226"
 eps_diluted = "20.76"
 total_assets = "89,045"
+# The release prints 15,825 in a statement "Subject to Reclassification"; the 10-K
+# 0000909832-26-000093 tags 15,817 (PLAN.md §16).
+known_differences = { operating_cash_flow = "the 10-K tags 15,817" }
+operating_cash_flow = "15,825"
+capex = "6,435"

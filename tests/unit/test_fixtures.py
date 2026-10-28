@@ -48,15 +48,22 @@ def test_fixture_matches_its_manifest_entry(name: str) -> None:
 
 
 # E1's fixtures (D-048); E3's: index pages, copies from the raw store and 13D examples; E7a's:
-# earnings filings (index pages and press releases) under filings/{cik}/{accession}/.
+# earnings filings (index pages and press releases) under filings/{cik}/{accession}/; E4's:
+# trimmed companyfacts copied from the raw store for the golden metrics (E4a, E4b).
 E1_FIXTURES = {
     f"{kind}/{ticker}.json" for kind in ("companyfacts", "submissions") for ticker, *_ in COMPANIES
 }
 E7A_FIXTURES = {name for name in MANIFEST if name.startswith("filings/")}
+E4_FIXTURES = {
+    name
+    for name, entry in MANIFEST.items()
+    if name.startswith("companyfacts/") and "raw_key" in entry
+}
 E3_FIXTURES = {
     name
     for name, entry in MANIFEST.items()
-    if name not in E7A_FIXTURES and (name.startswith("filing_index/") or "raw_key" in entry)
+    if name not in E7A_FIXTURES | E4_FIXTURES
+    and (name.startswith("filing_index/") or "raw_key" in entry)
 }
 
 
@@ -70,7 +77,8 @@ def test_fixture_folder_stays_small() -> None:
     assert _size(E1_FIXTURES) < 3 * 1024 * 1024  # E1's share
     assert _size(E3_FIXTURES) < 1.5 * 1024 * 1024  # E3's share
     assert _size(E7A_FIXTURES) < 12 * 1024 * 1024  # E7a's share
-    e2 = set(MANIFEST) - E1_FIXTURES - E3_FIXTURES - E7A_FIXTURES
+    assert _size(E4_FIXTURES) < 2 * 1024 * 1024  # E4's share
+    e2 = set(MANIFEST) - E1_FIXTURES - E3_FIXTURES - E7A_FIXTURES - E4_FIXTURES
     assert _size(e2) < 1.5 * 1024 * 1024  # E2's share
 
 

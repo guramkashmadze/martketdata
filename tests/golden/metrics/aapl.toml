@@ -11,8 +11,14 @@ fixtures = ["AAPL-20261028.json"]
 type = "Q"
 period_end = 2024-09-28
 fiscal = "2024 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019324000120/a8-kex991q4202409282024.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019324000120/a8-kex991q4202409282024.htm",
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000071/a8-kex991q3202506282025.htm",
+]
 total_assets = "364,980"
+# operating cash flow and capex: twelve months 118,254 less nine 91,443; capex 9,447 less 6,539
+operating_cash_flow = "26,811"
+capex = "2,908"
 
 [[period]]
 type = "FY"
@@ -23,6 +29,8 @@ revenue = "391,035"
 net_income = "93,736"
 eps_diluted = "6.08"
 total_assets = "364,980"
+operating_cash_flow = "118,254"
+capex = "9,447"
 
 [[period]]
 type = "Q"
@@ -33,33 +41,53 @@ revenue = "124,300"
 net_income = "36,330"
 eps_diluted = "2.40"
 total_assets = "344,085"
+operating_cash_flow = "29,935"
+capex = "2,940"
 
 [[period]]
 type = "Q"
 period_end = 2025-03-29
 fiscal = "2025 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000055/a8-kex991q2202503292025.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000055/a8-kex991q2202503292025.htm",
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000007/a8-kex991q1202512282024.htm",
+]
 revenue = "95,359"
 net_income = "24,780"
 eps_diluted = "1.65"
 total_assets = "331,233"
+# operating cash flow and capex: six months 53,887 less three 29,935; capex 6,011 less 2,940
+operating_cash_flow = "23,952"
+capex = "3,071"
 
 [[period]]
 type = "Q"
 period_end = 2025-06-28
 fiscal = "2025 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000071/a8-kex991q3202506282025.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000071/a8-kex991q3202506282025.htm",
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000055/a8-kex991q2202503292025.htm",
+]
 revenue = "94,036"
 net_income = "23,434"
 eps_diluted = "1.57"
 total_assets = "331,495"
+# operating cash flow and capex: nine months 81,754 less six 53,887; capex 9,473 less 6,011
+operating_cash_flow = "27,867"
+capex = "3,462"
 
 [[period]]
 type = "Q"
 period_end = 2025-09-27
 fiscal = "2025 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/a8-kex991q4202509272025.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/a8-kex991q4202509272025.htm",
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019325000071/a8-kex991q3202506282025.htm",
+]
 total_assets = "359,241"
+# operating cash flow and capex: twelve months 111,482 less nine 81,754; capex 12,715 less 9,473
+operating_cash_flow = "29,728"
+capex = "3,242"
 
 [[period]]
 type = "FY"
@@ -70,6 +98,8 @@ revenue = "416,161"
 net_income = "112,010"
 eps_diluted = "7.46"
 total_assets = "359,241"
+operating_cash_flow = "111,482"
+capex = "12,715"
 
 [[period]]
 type = "Q"
@@ -80,23 +110,37 @@ revenue = "143,756"
 net_income = "42,097"
 eps_diluted = "2.84"
 total_assets = "379,297"
+operating_cash_flow = "53,925"
+capex = "2,373"
 
 [[period]]
 type = "Q"
 period_end = 2026-03-28
 fiscal = "2026 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019326000011/a8-kex991q2202603282026.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019326000011/a8-kex991q2202603282026.htm",
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019326000005/a8-kex991q1202612272025.htm",
+]
 revenue = "111,184"
 net_income = "29,578"
 eps_diluted = "2.01"
 total_assets = "371,082"
+# operating cash flow and capex: six months 82,627 less three 53,925; capex 4,344 less 2,373
+operating_cash_flow = "28,702"
+capex = "1,971"
 
 [[period]]
 type = "Q"
 period_end = 2026-06-27
 fiscal = "2026 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/a8-kex991q3202606272026.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/a8-kex991q3202606272026.htm",
+  "https://www.sec.gov/Archives/edgar/data/320193/000032019326000011/a8-kex991q2202603282026.htm",
+]
 revenue = "109,417"
 net_income = "29,789"
 eps_diluted = "2.02"
 total_assets = "383,266"
+# operating cash flow and capex: nine months 116,996 less six 82,627; capex 6,799 less 4,344
+operating_cash_flow = "34,369"
+capex = "2,455"

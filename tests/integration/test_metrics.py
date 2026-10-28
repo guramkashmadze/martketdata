@@ -20,6 +20,7 @@ from marketdata.db.repositories import financial_metrics, predecessors, value_ch
 from marketdata.db.repositories.predecessors import CompanyPredecessor
 from marketdata.ingest.facts import FactsLoader, FactsReport
 from marketdata.ingest.fetch import RawFetcher
+from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.sec import urls
 from marketdata.sec.raw_store import LocalRawStore
 from marketdata.service.errors import InvalidParameter
@@ -129,9 +130,10 @@ async def test_a_refresh_builds_the_companys_metrics_and_a_second_changes_nothin
     again = await _refresh(conn, tmp_path, AAPL, routes)
 
     built = first.files[0].metrics
-    assert built is not None and built.rows == built.written == 1848
+    # E4a's 1,848 reported rows and 351 quarters derived from year-to-date facts (E4b-S1).
+    assert built is not None and built.rows == built.written == 2199
     assert again.files[0].metrics is not None and again.files[0].metrics.written == 0
-    assert await financial_metrics.count(conn, AAPL) == 1848
+    assert await financial_metrics.count(conn, AAPL) == 2199
     [q3] = [
         row
         for row in await financial_metrics.series(conn, [AAPL], "revenue", "Q")
@@ -177,7 +179,7 @@ async def test_a_new_calc_version_that_changes_a_value_is_a_correction(
 
     assert (built.written, built.changes) == (1, 1)
     [change] = await value_changes.for_metric(conn, AAPL, "revenue")
-    assert (change.reason, change.detail) == ("correction", "calc version 0.9 to 1.1")
+    assert (change.reason, change.detail) == ("correction", f"calc version 0.9 to {CALC_VERSION}")
     assert (change.old_value, change.new_value) == (Decimal(1), Decimal(109417000000))
 
 

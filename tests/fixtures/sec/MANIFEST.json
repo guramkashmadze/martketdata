@@ -28,6 +28,16 @@
     "sha256": "02981b62faf732a922c2c7c4434f241bc1f689db94271d0922b84684ab132276",
     "raw_key": "raw/sec/api/companyfacts/909832/20261028T031431.689648Z.json"
   },
+  "companyfacts/DE-20261028.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000315189.json",
+    "fetched_at": "2026-10-28T03:14:26+00:00",
+    "original_size_bytes": 5244762,
+    "original_sha256": "b845478ca3e2c2a83471cfb92524b33d83ec47fd3c1c68614f3f2487f1606b6c",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only; facts filed in 2024 or later",
+    "size_bytes": 127544,
+    "sha256": "f7711e732f583290fb2ef9d2c217449dbca15765329195556e043c3b3fc886e7",
+    "raw_key": "raw/sec/api/companyfacts/315189/20261028T031426.804877Z.json"
+  },
   "companyfacts/GOOGL.json": {
     "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001652044.json",
     "fetched_at": "2026-10-24T18:18:29+00:00",
@@ -47,6 +57,36 @@
     "sha256": "2fcbe758c28ca84b430d6581dc8d0f88b9674e9e80243c1e5c09d6f785a1622d",
     "raw_key": "raw/sec/api/companyfacts/19617/20261028T031419.522443Z.json"
   },
+  "companyfacts/NVDA-20261028.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json",
+    "fetched_at": "2026-10-28T03:14:34+00:00",
+    "original_size_bytes": 4092966,
+    "original_sha256": "19ef503a5770f5660964b3c3aea6937579d9b359da344afe6a9adf59c63d26ff",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only; facts filed in 2024 or later",
+    "size_bytes": 143481,
+    "sha256": "fbf217c90f749ca03344133682c3c3bf1d5faaefff389864d916b67f0d1bbbe9",
+    "raw_key": "raw/sec/api/companyfacts/1045810/20261028T031434.063957Z.json"
+  },
+  "companyfacts/O-20261028.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000726728.json",
+    "fetched_at": "2026-10-28T03:14:29+00:00",
+    "original_size_bytes": 3235550,
+    "original_sha256": "676caac36e22f0d1087ec209f80728d2ab38536a1851d1f226daf27aaef44acb",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only; facts filed in 2024 or later",
+    "size_bytes": 104852,
+    "sha256": "9c44b03e456014d414b86d9488acb7af16bda346591bd371bc2661cca1e85adb",
+    "raw_key": "raw/sec/api/companyfacts/726728/20261028T031429.194272Z.json"
+  },
+  "companyfacts/PG-20261028.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000080424.json",
+    "fetched_at": "2026-10-28T03:14:23+00:00",
+    "original_size_bytes": 3950379,
+    "original_sha256": "78bda2f805b7d0b792a6217a66f62696930a88810fb61d79123ebb64312db7dc",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only; facts filed in 2024 or later",
+    "size_bytes": 144165,
+    "sha256": "199f52c2c9714e9a77294fa9dbcbd943f3674b6f44ef0b40d46bda5a80d3cbc6",
+    "raw_key": "raw/sec/api/companyfacts/80424/20261028T031423.705351Z.json"
+  },
   "companyfacts/TGT-20261028.json": {
     "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000027419.json",
     "fetched_at": "2026-10-28T03:14:22+00:00",
@@ -65,6 +105,16 @@
     "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only",
     "size_bytes": 840612,
     "sha256": "db08e841d6ac411d0588f8d7a9e3fc510d5038e6ccd4e2a8ad5741a0ccaec2e8"
+  },
+  "companyfacts/TRV-20261028.json": {
+    "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000086312.json",
+    "fetched_at": "2026-10-28T03:14:23+00:00",
+    "original_size_bytes": 4393196,
+    "original_sha256": "590033535bac24bbe16b0f90a3e3fb051e6c8d800643ee9cb654acb6a4a69b61",
+    "trim": "companyfacts: PLAN.md §9.3 catalog concepts and dei cover facts only; facts filed in 2024 or later",
+    "size_bytes": 111768,
+    "sha256": "655c616ba5cd9df21504ba3cf5fdf00140fa826b6e96500761ccfe2e62aa43fa",
+    "raw_key": "raw/sec/api/companyfacts/86312/20261028T031423.959560Z.json"
   },
   "companyfacts/XOM-20261028.json": {
     "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0002115436.json",

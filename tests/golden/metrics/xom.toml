@@ -12,11 +12,17 @@ fixtures = ["XOM-20261028.json", "XOM-predecessor-34088-20261028.json"]
 type = "Q"
 period_end = 2024-09-30
 fiscal = "2024 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/34088/000003408824000066/f8k3q24991.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/34088/000003408824000066/f8k3q24991.htm",
+  "https://www.sec.gov/Archives/edgar/data/34088/000003408825000040/livef8k2q25991.htm",
+]
 revenue = "90,016"
 net_income = "8,610"
 eps_diluted = "1.92"
 total_assets = "461,916"
+# operating cash flow and capex: printed for 3Q24; nine months 42,793 less six 25,224; capex 17,469 less 11,309
+operating_cash_flow = "17,569"
+capex = "6,160"
 
 [[period]]
 type = "Q"
@@ -24,6 +30,9 @@ period_end = 2024-12-31
 fiscal = "2024 Q4"
 url = ["https://www.sec.gov/Archives/edgar/data/34088/000003408825000006/f8k4q24991.htm"]
 total_assets = "453,475"
+# operating cash flow and capex: printed for 4Q24; the year 55,022 less nine months 42,793; capex 24,306 less 17,469
+operating_cash_flow = "12,229"
+capex = "6,837"
 
 [[period]]
 type = "FY"
@@ -34,6 +43,8 @@ revenue = "349,585"
 net_income = "33,680"
 eps_diluted = "7.84"
 total_assets = "453,475"
+operating_cash_flow = "55,022"
+capex = "24,306"
 
 [[period]]
 type = "Q"
@@ -44,6 +55,8 @@ revenue = "83,130"
 net_income = "7,713"
 eps_diluted = "1.76"
 total_assets = "451,908"
+operating_cash_flow = "12,953"
+capex = "5,898"
 
 [[period]]
 type = "Q"
@@ -54,6 +67,9 @@ revenue = "81,506"
 net_income = "7,082"
 eps_diluted = "1.64"
 total_assets = "447,597"
+# operating cash flow and capex: printed for 2Q25; six months 24,503 less three 12,953; capex 12,181 less 5,898
+operating_cash_flow = "11,550"
+capex = "6,283"
 
 [[period]]
 type = "Q"
@@ -64,6 +80,9 @@ revenue = "85,294"
 net_income = "7,548"
 eps_diluted = "1.76"
 total_assets = "454,340"
+# operating cash flow and capex: printed for 3Q25; nine months 39,291 less six 24,503; capex 20,908 less 12,181
+operating_cash_flow = "14,788"
+capex = "8,727"
 
 [[period]]
 type = "Q"
@@ -71,6 +90,9 @@ period_end = 2025-12-31
 fiscal = "2025 Q4"
 url = ["https://www.sec.gov/Archives/edgar/data/34088/000003408826000033/livef8k4q25991.htm"]
 total_assets = "448,980"
+# operating cash flow and capex: printed for 4Q25; the year 51,970 less nine months 39,291; capex 28,358 less 20,908
+operating_cash_flow = "12,679"
+capex = "7,450"
 
 [[period]]
 type = "FY"
@@ -81,6 +103,8 @@ revenue = "332,238"
 net_income = "28,844"
 eps_diluted = "6.70"
 total_assets = "448,980"
+operating_cash_flow = "51,970"
+capex = "28,358"
 
 [[period]]
 type = "Q"
@@ -91,13 +115,21 @@ revenue = "85,138"
 net_income = "4,183"
 eps_diluted = "1.00"
 total_assets = "464,410"
+operating_cash_flow = "8,705"
+capex = "6,470"
 
 [[period]]
 type = "Q"
 period_end = 2026-06-30
 fiscal = "2026 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/2115436/000211543626000006/livef8k2q26992.htm", "https://www.sec.gov/Archives/edgar/data/2115436/000211543626000006/livef8k2q26991.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/2115436/000211543626000006/livef8k2q26992.htm",
+  "https://www.sec.gov/Archives/edgar/data/2115436/000211543626000006/livef8k2q26991.htm",
+]
 revenue = "116,017"
 net_income = "14,525"
 eps_diluted = "3.48"
 total_assets = "464,482"
+# operating cash flow and capex: printed for 2Q26; six months 32,260 less three 8,705; capex 12,997 less 6,470
+operating_cash_flow = "23,555"
+capex = "6,527"

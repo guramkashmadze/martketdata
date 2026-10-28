@@ -9,11 +9,12 @@ A refresh of one company (`facts_refresh`: routed from each new 10-K or 10-Q, an
    listed under both CIKs while its facts sit under one (XOM's joint Q2 2026 10-Q).
 2. Upserts the facts into xbrl_facts: new facts are inserted, a stored fact whose details moved
    is updated, and facts a file no longer lists stay stored.
-3. Rebuilds the CIK's reported metrics from its stored facts (normalize/metrics.py, E4a-S4) and
-   writes the rows that changed, with a `value_changes` row for each served value that moved,
-   in one transaction (D-027): `restatement` when a later filing reports it differently,
-   `correction` when the calc version changed. A row the rebuild no longer gives is kept and
-   logged.
+3. Rebuilds the CIK's metrics from its stored facts (normalize/financials.py: reported in E4a,
+   derived in E4b) and writes the rows that changed, with a `value_changes` row for each
+   served value that moved, in one transaction (D-027): `restatement` when a later filing
+   reports it differently, `correction` when the calc version changed. A row the rebuild no
+   longer gives is kept and logged. `marketdata normalize --all` runs the same rebuild for
+   every company with stored facts (`rebuild_metrics`).
 4. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
    files. companyfacts can lag a filing by a few minutes, and a refresh that is already running
    when the next filing is listed doesn't see it, so a filing that no file holds yet makes the
@@ -24,7 +25,7 @@ A company without companyfacts (404) has no facts yet: logged, not retried.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -42,8 +43,9 @@ from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.normalize.changes import metric_changes
 from marketdata.normalize.companyfacts import CompanyFacts, parse_companyfacts
 from marketdata.normalize.filings import PERIODIC_FORMS
+from marketdata.normalize.financials import build_metrics
 from marketdata.normalize.metric_catalog import concepts_by_taxonomy
-from marketdata.normalize.metrics import CALC_VERSION, reported_metrics
+from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.normalize.security_master import SecFileError
 from marketdata.sec import urls
 from marketdata.sec.client import SecNotFound
@@ -104,6 +106,15 @@ class FactsLoader:
             loaded.append(file)
             if parsed is not None:
                 held |= parsed.accessions
+        # Once every file is in: the company's quarters may read its predecessors' facts.
+        loaded = [
+            (
+                replace(file, metrics=await self.rebuild_metrics(file.cik))
+                if file.raw_key is not None
+                else file
+            )
+            for file in loaded
+        ]
         missing = await self._missing(group, held, now)
         waiting = [accession for accession, stored in missing if now - stored < PUBLISH_WAIT]
         if waiting:
@@ -155,59 +166,14 @@ class FactsLoader:
             conflicts=len(parsed.conflicts),
             other_taxonomies=dict(parsed.other_taxonomies),
         )
-        built = await self.rebuild_metrics(cik)
         file = LoadedFile(
-            cik, key, len(parsed.facts), written, parsed.skipped, len(parsed.conflicts), built
+            cik, key, len(parsed.facts), written, parsed.skipped, len(parsed.conflicts)
         )
         return file, parsed
 
     async def rebuild_metrics(self, cik: int) -> MetricsBuilt:
-        """Step 3: the CIK's reported metrics from its stored facts."""
-        async with self._connect() as conn:
-            company = await companies.get(conn, cik)
-            facts = await xbrl_facts.for_concepts(conn, cik, concepts_by_taxonomy())
-        result = reported_metrics(
-            cik,
-            facts,
-            fiscal_year_end=company.fiscal_year_end if company else None,
-            sic_code=company.sic_code if company else None,
-            calc_version=self._calc_version,
-        )
-        async with self._connect() as conn, conn.transaction():
-            stored = await financial_metrics.stored(conn, cik)
-            changes = metric_changes(stored, result.rows)
-            written = await financial_metrics.upsert(conn, result.rows)
-            await value_changes.record_metric_changes(conn, cik, changes)
-        kept = sorted(set(stored) - {row.key for row in result.rows})
-        for metric, period_type, period_end in kept:
-            log.warning(
-                "metric_row_without_facts",
-                cik=cik,
-                metric=metric,
-                period_type=period_type,
-                period_end=period_end.isoformat(),
-            )
-        for change in changes:
-            log.info(
-                "metric_value_changed",
-                cik=cik,
-                **change.entity_key,
-                old=str(change.old_value),
-                new=str(change.new_value),
-                reason=change.reason,
-                detail=change.detail,
-            )
-        for note in result.notes:
-            log.debug("metric_period_left_out", cik=cik, note=note)
-        log.info(
-            "metrics_built",
-            cik=cik,
-            rows=len(result.rows),
-            written=written,
-            changes=len(changes),
-            kept=len(kept),
-        )
-        return MetricsBuilt(len(result.rows), written, len(changes), len(kept))
+        """Step 3: the CIK's metrics from its stored facts."""
+        return await rebuild_metrics(self._connect, cik, calc_version=self._calc_version)
 
     async def _missing(
         self, group: Sequence[int], held: set[str], now: datetime
@@ -225,3 +191,63 @@ class FactsLoader:
                     if filing.is_xbrl and filing.accession_no not in held:
                         missing.setdefault(filing.accession_no, filing.discovered_at)
         return sorted(missing.items())
+
+
+async def rebuild_metrics(
+    connect: Connect, cik: int, *, calc_version: str = CALC_VERSION
+) -> MetricsBuilt:
+    """A CIK's metrics rebuilt from its stored facts (its predecessors' helping derive its
+    quarters) and the rows that changed written, each served value that moved with its
+    `value_changes` row, in one transaction (D-027)."""
+    concepts = concepts_by_taxonomy()
+    async with connect() as conn:
+        company = await companies.get(conn, cik)
+        facts = await xbrl_facts.for_concepts(conn, cik, concepts)
+        earlier = [
+            fact
+            for predecessor in await predecessors.predecessors_of(conn, cik)
+            for fact in await xbrl_facts.for_concepts(conn, predecessor, concepts)
+        ]
+    result = build_metrics(
+        cik,
+        facts,
+        fiscal_year_end=company.fiscal_year_end if company else None,
+        sic_code=company.sic_code if company else None,
+        calc_version=calc_version,
+        predecessor_facts=earlier,
+    )
+    async with connect() as conn, conn.transaction():
+        stored = await financial_metrics.stored(conn, cik)
+        changes = metric_changes(stored, result.rows)
+        written = await financial_metrics.upsert(conn, result.rows)
+        await value_changes.record_metric_changes(conn, cik, changes)
+    kept = sorted(set(stored) - {row.key for row in result.rows})
+    for metric, period_type, period_end in kept:
+        log.warning(
+            "metric_row_without_facts",
+            cik=cik,
+            metric=metric,
+            period_type=period_type,
+            period_end=period_end.isoformat(),
+        )
+    for change in changes:
+        log.info(
+            "metric_value_changed",
+            cik=cik,
+            **change.entity_key,
+            old=str(change.old_value),
+            new=str(change.new_value),
+            reason=change.reason,
+            detail=change.detail,
+        )
+    for note in result.notes:
+        log.debug("metric_period_left_out", cik=cik, note=note)
+    log.info(
+        "metrics_built",
+        cik=cik,
+        rows=len(result.rows),
+        written=written,
+        changes=len(changes),
+        kept=len(kept),
+    )
+    return MetricsBuilt(len(result.rows), written, len(changes), len(kept))

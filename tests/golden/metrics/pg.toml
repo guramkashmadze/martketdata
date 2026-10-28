@@ -1,0 +1,101 @@
+# The Procter & Gamble Company: values as its earnings releases print them, read by hand on
+# 2026-10-29 from the exhibits at `url`, in millions of dollars. A June year end. Its releases
+# print the cash-flow statement year to date, so most quarters are the difference of two
+# printed columns, given in the comment above them (E4b-S1).
+cik = 80424
+fiscal_year_end = "0630"
+sic_code = "2840"
+fixtures = ["PG-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2025-03-31
+fiscal = "2025 Q3"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000056/fy2526q3jfm8-kexhibit991.htm",
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000006/fy2526q2ond8-kexhibit991.htm",
+]
+# operating cash flow and capex: nine months 12,832 less six 9,127 (the prior-year columns); capex 2,777 less 1,918
+operating_cash_flow = "3,705"
+capex = "859"
+
+[[period]]
+type = "Q"
+period_end = 2025-06-30
+fiscal = "2025 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000093/fy2526q4amj8-kexhibit991.htm",
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000056/fy2526q3jfm8-kexhibit991.htm",
+]
+# operating cash flow and capex: the year 17,817 less nine months 12,832 (prior-year columns); capex 3,773 less 2,777
+operating_cash_flow = "4,985"
+capex = "996"
+
+[[period]]
+type = "FY"
+period_end = 2025-06-30
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000093/fy2526q4amj8-kexhibit991.htm"]
+operating_cash_flow = "17,817"
+capex = "3,773"
+
+[[period]]
+type = "Q"
+period_end = 2025-09-30
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000250/fy2627q1jas8-kexhibit991.htm"]
+# operating cash flow and capex: the 2027 first-quarter release's prior-year column
+operating_cash_flow = "5,408"
+capex = "1,200"
+
+[[period]]
+type = "Q"
+period_end = 2025-12-31
+fiscal = "2026 Q2"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000006/fy2526q2ond8-kexhibit991.htm",
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000250/fy2627q1jas8-kexhibit991.htm",
+]
+# operating cash flow and capex: six months 10,380 less three 5,408; capex 2,367 less 1,200
+operating_cash_flow = "4,972"
+capex = "1,167"
+
+[[period]]
+type = "Q"
+period_end = 2026-03-31
+fiscal = "2026 Q3"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000056/fy2526q3jfm8-kexhibit991.htm",
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000006/fy2526q2ond8-kexhibit991.htm",
+]
+# operating cash flow and capex: nine months 14,425 less six 10,380; capex 3,386 less 2,367
+operating_cash_flow = "4,045"
+capex = "1,019"
+
+[[period]]
+type = "Q"
+period_end = 2026-06-30
+fiscal = "2026 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000093/fy2526q4amj8-kexhibit991.htm",
+  "https://www.sec.gov/Archives/edgar/data/80424/000008042426000056/fy2526q3jfm8-kexhibit991.htm",
+]
+# operating cash flow and capex: the year 19,556 less nine months 14,425; capex 4,409 less 3,386
+operating_cash_flow = "5,131"
+capex = "1,023"
+
+[[period]]
+type = "FY"
+period_end = 2026-06-30
+fiscal = "2026 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000093/fy2526q4amj8-kexhibit991.htm"]
+operating_cash_flow = "19,556"
+capex = "4,409"
+
+[[period]]
+type = "Q"
+period_end = 2026-09-30
+fiscal = "2027 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000250/fy2627q1jas8-kexhibit991.htm"]
+operating_cash_flow = "5,767"
+capex = "1,366"

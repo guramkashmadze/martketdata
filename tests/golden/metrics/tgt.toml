@@ -11,19 +11,31 @@ fixtures = ["TGT-20261028.json"]
 type = "Q"
 period_end = 2024-11-02
 fiscal = "2025 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/27419/000002741924000177/a2024q3ex-99.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741924000177/a2024q3ex-99.htm",
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000115/a2025q2ex-99.htm",
+]
 revenue = "25,668"
 net_income = "854"
 eps_diluted = "1.85"
 total_assets = "58,531"
+# operating cash flow and capex: nine months 4,078 less six 3,339 (the 2025 second-quarter release's prior year); capex 1,968 less 1,313
+operating_cash_flow = "739"
+capex = "655"
 
 [[period]]
 type = "Q"
 period_end = 2025-02-01
 fiscal = "2025 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/27419/000002741925000008/a2024q4ex-99.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000008/a2024q4ex-99.htm",
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741924000177/a2024q3ex-99.htm",
+]
 net_income = "1,103"
 total_assets = "57,769"
+# operating cash flow and capex: twelve months 7,367 less nine 4,078; capex 2,891 less 1,968
+operating_cash_flow = "3,289"
+capex = "923"
 
 [[period]]
 type = "FY"
@@ -34,6 +46,8 @@ revenue = "106,566"
 net_income = "4,091"
 eps_diluted = "8.86"
 total_assets = "57,769"
+operating_cash_flow = "7,367"
+capex = "2,891"
 
 [[period]]
 type = "Q"
@@ -44,34 +58,54 @@ revenue = "23,846"
 net_income = "1,036"
 eps_diluted = "2.27"
 total_assets = "56,185"
+operating_cash_flow = "275"
+capex = "790"
 
 [[period]]
 type = "Q"
 period_end = 2025-08-02
 fiscal = "2026 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/27419/000002741925000115/a2025q2ex-99.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000115/a2025q2ex-99.htm",
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000096/a2025q1ex-99.htm",
+]
 revenue = "25,211"
 net_income = "935"
 eps_diluted = "2.05"
 total_assets = "57,851"
+# operating cash flow and capex: six months 2,358 less three 275; capex 1,864 less 790
+operating_cash_flow = "2,083"
+capex = "1,074"
 
 [[period]]
 type = "Q"
 period_end = 2025-11-01
 fiscal = "2026 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/27419/000002741925000123/a2025q3ex-99.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000123/a2025q3ex-99.htm",
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000115/a2025q2ex-99.htm",
+]
 revenue = "25,270"
 net_income = "689"
 eps_diluted = "1.51"
 total_assets = "59,991"
+# operating cash flow and capex: nine months 3,485 less six 2,358; capex 2,842 less 1,864
+operating_cash_flow = "1,127"
+capex = "978"
 
 [[period]]
 type = "Q"
 period_end = 2026-01-31
 fiscal = "2026 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/27419/000002741926000012/a2025q4ex-99.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741926000012/a2025q4ex-99.htm",
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741925000123/a2025q3ex-99.htm",
+]
 net_income = "1,046"
 total_assets = "59,490"
+# operating cash flow and capex: twelve months 6,562 less nine 3,485; capex 3,727 less 2,842
+operating_cash_flow = "3,077"
+capex = "885"
 
 [[period]]
 type = "FY"
@@ -82,6 +116,8 @@ revenue = "104,780"
 net_income = "3,705"
 eps_diluted = "8.13"
 total_assets = "59,490"
+operating_cash_flow = "6,562"
+capex = "3,727"
 
 [[period]]
 type = "Q"
@@ -92,13 +128,21 @@ revenue = "25,443"
 net_income = "781"
 eps_diluted = "1.71"
 total_assets = "58,010"
+operating_cash_flow = "716"
+capex = "1,035"
 
 [[period]]
 type = "Q"
 period_end = 2026-08-01
 fiscal = "2027 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/27419/000002741926000034/a2026q2ex-99.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741926000034/a2026q2ex-99.htm",
+  "https://www.sec.gov/Archives/edgar/data/27419/000002741926000020/a2026q1ex-99.htm",
+]
 revenue = "26,539"
 net_income = "1,877"
 eps_diluted = "4.11"
 total_assets = "61,235"
+# operating cash flow and capex: six months 4,519 less three 716; capex 2,404 less 1,035
+operating_cash_flow = "3,803"
+capex = "1,369"

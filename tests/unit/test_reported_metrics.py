@@ -208,12 +208,14 @@ def _row(value: int, accession: str, filed: date, calc_version: str = CALC_VERSI
             "restatement",
             "0000000001-27-000010, filed 2027-08-01, restates 0000000001-26-000010 of 2026-08-01",
         ),
-        (_row(8, "0000000001-26-000010", date(2026, 8, 1), "2.1"), "correction", "calc version"),
+        (_row(8, "0000000001-26-000010", date(2026, 8, 1), "9.9"), "correction", "calc version"),
         (_row(8, "0000000001-26-000010", date(2026, 8, 1)), "correction", "unchanged"),
     ],
 )
 def test_a_changed_value_says_why(new: MetricRow, reason: str, detail: str) -> None:
-    stored = {new.key: StoredMetric(Decimal(7), "0000000001-26-000010", date(2026, 8, 1), "1.1")}
+    stored = {
+        new.key: StoredMetric(Decimal(7), "0000000001-26-000010", date(2026, 8, 1), CALC_VERSION)
+    }
 
     [change] = metric_changes(stored, [new])
 
