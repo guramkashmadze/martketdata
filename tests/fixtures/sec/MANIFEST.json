@@ -226,6 +226,46 @@
     "sha256": "36570019131ba7202acef370bfc4bef9366c0d0852383bd3a24bc09872be021d",
     "raw_key": "raw/sec/1108524/0001108524-26-000187/crm-q2fy27xexhibit991.htm"
   },
+  "filings/1326801/0001628280-26-028364/0001628280-26-028364-index.htm": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828026028364/0001628280-26-028364-index.htm",
+    "fetched_at": "2026-10-25T22:20:21+00:00",
+    "original_size_bytes": 10290,
+    "original_sha256": "67172b5ecbc452c596e6e6454dc1db4a396656984349f4f08feff2689e866ae5",
+    "trim": null,
+    "size_bytes": 10290,
+    "sha256": "67172b5ecbc452c596e6e6454dc1db4a396656984349f4f08feff2689e866ae5",
+    "raw_key": "raw/sec/1326801/0001628280-26-028364/0001628280-26-028364-index.htm"
+  },
+  "filings/1326801/0001628280-26-028364/meta-03312026xexhibit991.htm.gz": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828026028364/meta-03312026xexhibit991.htm",
+    "fetched_at": "2026-10-25T22:20:21+00:00",
+    "original_size_bytes": 208261,
+    "original_sha256": "a52edf1df90601ae08073ec6e7b88d861b4ae9d8ce9a24a63c21463ea5b5adb9",
+    "trim": "gzip: every byte, compressed",
+    "size_bytes": 12918,
+    "sha256": "77778c00afc98bac325ef58ff3e38009452d305093263c3bae23b45a6b8f8f6f",
+    "raw_key": "raw/sec/1326801/0001628280-26-028364/meta-03312026xexhibit991.htm"
+  },
+  "filings/1392380/0001392380-26-000012/0001392380-26-000012-index.htm": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1392380/000139238026000012/0001392380-26-000012-index.htm",
+    "fetched_at": "2026-10-25T22:20:22+00:00",
+    "original_size_bytes": 9999,
+    "original_sha256": "2a3f82efec0b0fb689276f102323d19f159a8e32c1cf4e66633927348318c441",
+    "trim": null,
+    "size_bytes": 9999,
+    "sha256": "2a3f82efec0b0fb689276f102323d19f159a8e32c1cf4e66633927348318c441",
+    "raw_key": "raw/sec/1392380/0001392380-26-000012/0001392380-26-000012-index.htm"
+  },
+  "filings/1392380/0001392380-26-000012/gevo-20260507xex99d1.htm.gz": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1392380/000139238026000012/gevo-20260507xex99d1.htm",
+    "fetched_at": "2026-10-25T22:20:22+00:00",
+    "original_size_bytes": 459043,
+    "original_sha256": "d6b3b3d3cff27a88da8760cc9038bfd2756847cc61934fc9a734a3c3f5c8fde1",
+    "trim": "gzip: every byte, compressed",
+    "size_bytes": 20008,
+    "sha256": "a167742d073c96152713b4a4f269340aad4c2f19985ba132dae7eb0b6ad70fdf",
+    "raw_key": "raw/sec/1392380/0001392380-26-000012/gevo-20260507xex99d1.htm"
+  },
   "filings/1397187/0001397187-25-000054/0001397187-25-000054-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/1397187/000139718725000054/0001397187-25-000054-index.htm",
     "fetched_at": "2026-10-25T22:20:22+00:00",
@@ -336,6 +376,26 @@
     "sha256": "c56b78f17e19b6cd5ac1ff7301607ac0ab1d9d886940d1474aa942005c700231",
     "raw_key": "raw/sec/1403161/0001403161-26-000103/q32026earningsrelease.htm"
   },
+  "filings/1467373/0001467373-25-000221/0001467373-25-000221-index.htm": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1467373/000146737325000221/0001467373-25-000221-index.htm",
+    "fetched_at": "2026-10-25T22:20:24+00:00",
+    "original_size_bytes": 11091,
+    "original_sha256": "2f6f3c2696906d615d90d065fb87ee4522cb279f44f4e1ea33a9e9fade7413a1",
+    "trim": null,
+    "size_bytes": 11091,
+    "sha256": "2f6f3c2696906d615d90d065fb87ee4522cb279f44f4e1ea33a9e9fade7413a1",
+    "raw_key": "raw/sec/1467373/0001467373-25-000221/0001467373-25-000221-index.htm"
+  },
+  "filings/1467373/0001467373-25-000221/q1fy26earnings8-kexhibit.htm.gz": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1467373/000146737325000221/q1fy26earnings8-kexhibit.htm",
+    "fetched_at": "2026-10-25T22:20:25+00:00",
+    "original_size_bytes": 392915,
+    "original_sha256": "cb4d447d481dfd1e82649bfabaf21f43e8dda432ed61f153959be1f1d25712b6",
+    "trim": "gzip: every byte, compressed",
+    "size_bytes": 20194,
+    "sha256": "c7323192b26b831597456bbdd69f55c75a86df78d1c56474d6572e5c7f45c83e",
+    "raw_key": "raw/sec/1467373/0001467373-25-000221/q1fy26earnings8-kexhibit.htm"
+  },
   "filings/1594805/0001594805-26-000046/0001594805-26-000046-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/1594805/000159480526000046/0001594805-26-000046-index.htm",
     "fetched_at": "2026-10-25T22:20:30+00:00",
@@ -355,6 +415,36 @@
     "size_bytes": 12498,
     "sha256": "aa355f86a980386606221e3f2d895329cc2472f7bddd26577942b72402604b78",
     "raw_key": "raw/sec/1594805/0001594805-26-000046/exhibit991pressreleaseq220.htm"
+  },
+  "filings/1874178/0001874178-26-000053/0001874178-26-000053-index.htm": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1874178/000187417826000053/0001874178-26-000053-index.htm",
+    "fetched_at": "2026-10-25T22:20:50+00:00",
+    "original_size_bytes": 20376,
+    "original_sha256": "540f02219fb07b00646904181aa98a5d2f58e20e94f224db3ee8f1a1b77ebbe8",
+    "trim": null,
+    "size_bytes": 20376,
+    "sha256": "540f02219fb07b00646904181aa98a5d2f58e20e94f224db3ee8f1a1b77ebbe8",
+    "raw_key": "raw/sec/1874178/0001874178-26-000053/0001874178-26-000053-index.htm"
+  },
+  "filings/1874178/0001874178-26-000053/ex-9912q26rivianearningspr.htm.gz": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1874178/000187417826000053/ex-9912q26rivianearningspr.htm",
+    "fetched_at": "2026-10-25T22:20:51+00:00",
+    "original_size_bytes": 389936,
+    "original_sha256": "c391bfb3e0fb72fe440a1c0e19ca0b1bf8e3107564ec812fb47a682d01e1c940",
+    "trim": "gzip: every byte, compressed",
+    "size_bytes": 20514,
+    "sha256": "3a9594d70878b398df9a17456f2c1fce2e443e1c27ebd018c0bbaa46f1d76bfb",
+    "raw_key": "raw/sec/1874178/0001874178-26-000053/ex-9912q26rivianearningspr.htm"
+  },
+  "filings/1874178/0001874178-26-000053/ex-9922q26rivianearnings.htm.gz": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1874178/000187417826000053/ex-9922q26rivianearnings.htm",
+    "fetched_at": "2026-10-25T22:20:51+00:00",
+    "original_size_bytes": 57100,
+    "original_sha256": "f6cd2ffc97ee701a0cdc43d750e3e842663393ff18f5b58d408a3b8141044595",
+    "trim": "gzip: every byte, compressed",
+    "size_bytes": 15136,
+    "sha256": "e0557c4756fc9665f0e293b3bee1f736bf76b7bff587957f1b655bb49dbed5a3",
+    "raw_key": "raw/sec/1874178/0001874178-26-000053/ex-9922q26rivianearnings.htm"
   },
   "filings/19617/0001628280-26-001902/0001628280-26-001902-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/0001628280-26-001902-index.htm",

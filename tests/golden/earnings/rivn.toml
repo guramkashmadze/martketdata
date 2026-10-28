@@ -1,0 +1,18 @@
+# Rivian Automotive: condensed consolidated statements of operations in EX-99.1, "(in millions,
+# except per share amounts)"; columns three months 2025 and 2026, then six months 2025 and
+# 2026, with both period headings printed one column to the left of their years (rules
+# version 3). Net income is the line attributable to common stockholders.
+cik = 1874178
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0001874178-26-000053"
+url = "https://www.sec.gov/Archives/edgar/data/1874178/000187417826000053/ex-9912q26rivianearningspr.htm"
+status = "complete"
+period_end = 2026-06-30
+fiscal = "Q2 2026"
+scale = "millions"
+revenue = ["1,658", "1,303"]  # Total revenues
+operating_income = ["(836)", "(1,114)"]  # Loss from operations
+net_income = ["(833)", "(1,117)"]  # Net loss attributable to common stockholders
+eps_diluted = ["(0.63)", "(0.97)"]

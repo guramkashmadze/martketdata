@@ -150,3 +150,80 @@ def test_three_and_nine_months_in_a_title_names_both() -> None:
     periods = table_periods(_table([["2026", "2025"]]), [title])
 
     assert [column.duration for column in periods.columns] == ["unknown", "unknown"]
+
+
+def _rows(html: str) -> Table:
+    [table] = parse_html(f"<html><body><table>{html}</table></body></html>".encode()).tables
+    return table
+
+
+def test_period_headings_out_of_line_go_to_the_runs_of_years_in_order() -> None:
+    table = _rows(
+        # Rivian: the headings sit one column left of the years they head, "Three Months
+        # Ended" in the label column and "Six Months Ended" over the second and third columns.
+        "<tr><td>Three Months Ended June 30,</td><td></td><td>Six Months Ended June 30,</td>"
+        "<td>Six Months Ended June 30,</td><td></td></tr>"
+        "<tr><td></td><td>2025</td><td>2026</td><td>2025</td><td>2026</td></tr>"
+        "<tr><td>Total revenues</td><td>1,303</td><td>1,658</td><td>2,543</td><td>3,039</td></tr>"
+    )
+
+    periods = table_periods(table)
+
+    assert [column.duration for column in periods.columns] == [
+        "quarter",
+        "quarter",
+        "longer",
+        "longer",
+    ]
+    assert periods.current is not None and periods.prior is not None
+    assert (periods.current.index, periods.current.end) == (1, date(2026, 6, 30))
+    assert (periods.prior.index, periods.prior.end) == (0, date(2025, 6, 30))
+    assert periods.current.heading == "Three Months Ended June 30, 2026"
+    assert periods.note == (
+        "period headings out of line with the columns, read in order: "
+        "'Three Months Ended June 30,' over 2; 'Six Months Ended June 30,' over 2"
+    )
+
+
+def test_headings_out_of_line_with_more_runs_than_headings_give_no_quarter() -> None:
+    table = _rows(
+        "<tr><td>Three Months Ended June 30,</td><td></td><td>Six Months Ended June 30,</td>"
+        "<td>Six Months Ended June 30,</td><td></td><td></td><td></td></tr>"
+        "<tr><td></td>" + "".join(f"<td>{year}</td>" for year in (2025, 2026) * 3) + "</tr>"
+        "<tr><td>Total revenues</td>" + "".join(f"<td>{n}</td>" for n in range(1, 7)) + "</tr>"
+    )
+
+    periods = table_periods(table)
+
+    assert periods.current is None
+    assert periods.problem == (
+        "the period headings (2) don't line up with the 3 runs of years in the columns"
+    )
+
+
+def test_columns_naming_their_own_periods_are_read_as_placed() -> None:
+    headings = ["Fourth Quarter", "Full Year", "Fourth Quarter", "Full Year"]
+    table = _table([headings, ["2025", "2025", "2024", "2024"]])
+
+    periods = table_periods(table)
+
+    assert periods.current is not None and periods.prior is not None
+    assert (periods.current.index, periods.prior.index) == (0, 2)
+    assert periods.note is None
+
+
+def test_a_column_without_a_period_takes_its_runs() -> None:
+    table = _rows(
+        # Accenture: "Three Months Ended" spans only the 2025 amount and its percentage.
+        "<tr><td></td><td colspan='2'>Three Months Ended</td><td></td><td></td></tr>"
+        "<tr><td></td><td>November 30, 2025</td><td>% of Revenues</td><td>November 30, 2024</td>"
+        "<td>% of Revenues</td></tr>"
+        "<tr><td>Revenues</td><td>$ 18,742,125</td><td>100.0%</td><td>$ 17,689,545</td>"
+        "<td>100.0%</td></tr>"
+    )
+
+    periods = table_periods(table)
+
+    assert periods.current is not None and periods.prior is not None
+    assert (periods.current.end, periods.prior.end) == (date(2025, 11, 30), date(2024, 11, 30))
+    assert periods.prior.heading == "November 30, 2024"

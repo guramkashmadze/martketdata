@@ -35,6 +35,10 @@ FISCAL_YEAR_ENDS = {
     1067983: "1231",  # Berkshire Hathaway
     86312: "1231",  # Travelers
     200406: "0103",  # Johnson & Johnson
+    1874178: "1231",  # Rivian
+    1326801: "1231",  # Meta
+    1392380: "1231",  # Gevo
+    1467373: "0831",  # Accenture
 }
 
 

@@ -82,6 +82,16 @@ REAL = [
      ("4.81", "3.65"), date(2026, 6, 30), M),
     (1045810, "0001045810-26-000073", (96221, 46743), (63734, 28440), (59688, 26422),
      ("2.46", "1.08"), date(2026, 7, 26), M),
+    # Rivian: the period headings sit one column left of the years (rules version 3).
+    (1874178, "0001874178-26-000053", (1658, 1303), (-836, -1114), (-833, -1117),
+     ("-0.63", "-0.97"), date(2026, 6, 30), M),
+    # Meta: a non-GAAP sentence closes the page above its statement of income, and its
+    # highlights put the 2026 column under "2025" (rules version 3).
+    (1326801, "0001628280-26-028364", (56311, 42314), (22872, 17555), (26773, 16644),
+     ("10.44", "6.43"), date(2026, 3, 31), M),
+    # Accenture: "Three Months Ended" spans only the 2025 columns (rules version 3).
+    (1467373, "0001467373-25-000221", (18742125, 17689545), (2873698, 2948477),
+     (2211561, 2278894), ("3.54", "3.59"), date(2025, 11, 30), K),
 ]  # fmt: skip
 
 
@@ -255,6 +265,75 @@ def test_short_negatives_and_net_loss_with_comprehensive_loss() -> None:
 
     _check(result, "operating_income", (-89, 113), M)
     _check(result, "net_income", (-452, -51), M)
+
+
+def test_net_loss_attributed_to_the_company_wins_over_the_total() -> None:
+    release = _release(
+        HEAD + "<tr><td>Total revenues</td><td>$ 42,948</td><td>$ 29,109</td></tr>"
+        "<tr><td>Net loss</td><td>(21,351)</td><td>(21,773)</td></tr>"
+        "<tr><td>Net income (loss) attributable to redeemable non-controlling interest</td>"
+        "<td>346</td><td>(45)</td></tr>"
+        "<tr><td>Net loss attributed to Gevo, Inc.</td><td>$ (21,697)</td><td>$ (21,728)</td>"
+        "</tr>",
+        before=STATEMENT,
+    )  # Gevo
+
+    _check(RuleExtractor().extract(release), "net_income", (-21_697, -21_728), M)
+
+
+def test_the_tables_own_title_decides_over_a_sentence_above_it() -> None:
+    highlights = HEAD + (
+        "<tr><td>Revenue</td><td>56,311</td><td>42,314</td></tr>"
+        "<tr><td>Net income</td><td>26,773</td><td>16,644</td></tr>"
+    )
+    statement = (
+        "<tr><td>CONDENSED CONSOLIDATED STATEMENTS OF INCOME</td><td></td><td></td></tr>"
+        "<tr><td>(In millions, except per share amounts)</td><td></td><td></td></tr>" + highlights
+    )
+    sentence = (
+        "<p>For more information on our non-GAAP financial measures and a reconciliation of GAAP"
+        " to non-GAAP measures, see the table in this press release.</p><p>4</p>"
+    )
+    html = (
+        "<html><body><p>Financial Highlights</p><p>In millions</p>"
+        f"<table>{highlights}</table>{sentence}<table>{statement}</table></body></html>"
+    )  # Meta
+    parsed = parse_html(html.encode())
+    document = ReleaseDocument("ex991.htm", "EX-99.1", parsed.text, parsed.tables)
+    release = Release(1, "0000000001-26-000001", "8-K", (document,), {}, date(2026, 7, 28), "1231")
+
+    result = RuleExtractor().extract(release)
+
+    assert result.table_index == 1  # the statement, not the highlights above it
+    _check(result, "revenue", (56_311, 42_314), M)
+
+
+@pytest.mark.parametrize(
+    ("ends", "why"),
+    [
+        (("June 30, 2025", "June 30, 2024"), "ends 2025-06-30, 393 days before the filing"),
+        (
+            ("December 31, 2026", "December 31, 2025"),
+            "ends 2026-12-31, after the filing (2026-07-28)",
+        ),
+    ],
+    ids=["a year early", "an outlook"],
+)
+def test_a_quarter_far_from_the_filing_is_not_the_releases(ends: tuple[str, str], why: str) -> None:
+    release = _release(
+        "<tr><td></td><td>Three Months Ended</td><td>Three Months Ended</td></tr>"
+        f"<tr><td></td><td>{ends[0]}</td><td>{ends[1]}</td></tr>"
+        "<tr><td>Total revenues</td><td>100</td><td>90</td></tr>"
+        "<tr><td>Net income</td><td>15</td><td>12</td></tr>",
+        before=STATEMENT,
+    )  # filed 2026-07-28
+
+    result = RuleExtractor().extract(release)
+
+    # Meta's highlights put the 2026 column under the heading 2025: a quarter that ended more
+    # than 130 days before the filing is not the one it reports.
+    assert not result.statement_found and result.income_lines_found
+    assert result.notes == (f"ex991.htm table 0: its latest quarter column {why}",)
 
 
 def test_tables_titled_non_gaap_are_never_the_statement() -> None:

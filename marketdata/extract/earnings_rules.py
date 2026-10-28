@@ -7,8 +7,12 @@ Pure. For one release:
    and a prior-year quarter column (columns.py) whose rows have a revenue line (unless revenue
    doesn't apply) and a net income or diluted EPS line. A table titled as the statement of
    operations, income or earnings wins over one that only has those lines (a summary above it);
-   a table titled non-GAAP, adjusted or a reconciliation is never the statement. A table right
-   after it without a title of its own continues it (a statement split over two tables).
+   a table titled non-GAAP, adjusted or a reconciliation is never the statement. The table's
+   own title, when it names the statement, decides over the lines above it (a sentence about
+   non-GAAP measures at the foot of the page before, Meta). A table whose current quarter ended
+   after the filing, or more than RELEASE_LAG before it, is not the release's (an outlook, or
+   headings out of line with the columns). A table right after it without a title of its own
+   continues it (a statement split over two tables).
 2. The rows: each slot's label patterns, best first. An unlabeled row of values closes the
    section above it ("Revenues" … "| | 3,583 |" is total revenues, Shopify). "Diluted" rows
    are EPS under an "… per share" heading and share counts under a "shares" heading (Apple).
@@ -53,7 +57,10 @@ from marketdata.extract.interface import (
 from marketdata.extract.units import Scale, find_scale
 from marketdata.normalize.periods import fiscal_quarter
 
-RULES_VERSION = "2"  # 2: bullets are not titles; a paragraph note may state the scale
+# 2: bullets are not titles; a paragraph note may state the scale. 3: runs of years have one
+# period length; a table's own title decides; the current quarter ends near the filing; net
+# income "attributed to" the company.
+RULES_VERSION = "3"
 METHOD = "rule"
 
 # --- Labels -----------------------------------------------------------------------------------
@@ -84,10 +91,11 @@ OPERATING_INCOME = (
     r"loss from operations",
     r"operating profit(?: \(loss\))?",
 )
+_TO = r"attribut(?:able|ed) to "  # "Net loss attributed to Gevo, Inc."
 NET_INCOME = (
-    r"(?:consolidated )?net (?:income|earnings)(?: \(loss\))? attributable to " + _COMPANY + r".+",
-    r"net \(loss\) (?:income|earnings) attributable to " + _COMPANY + r".+",
-    r"net loss attributable to " + _COMPANY + r".+",
+    r"(?:consolidated )?net (?:income|earnings)(?: \(loss\))? " + _TO + _COMPANY + r".+",
+    r"net \(loss\) (?:income|earnings) " + _TO + _COMPANY + r".+",
+    r"net loss " + _TO + _COMPANY + r".+",
     r"(?:consolidated )?net (?:income|earnings)(?: \(loss\))?",
     r"net \(loss\) (?:income|earnings)",
     r"net loss(?: \(income\))?",
@@ -356,6 +364,8 @@ class RuleExtractor:
         prior_end = prior.end if prior is not None else None
         shares = _find_shares(statement.rows)
         to_common = _find_rows(statement.rows, NET_INCOME_TO_COMMON)
+        if statement.periods.note:
+            notes.append(statement.periods.note)
         if statement.periods.problem:
             notes.append(statement.periods.problem)
         return ExtractionResult(
@@ -394,8 +404,9 @@ def _statement(release: Release, pins: Sequence[Override]) -> tuple[_Statement |
             ):
                 continue
             context = _title_context(table)
-            title = " ".join([*context, *title_lines(table)])
-            if table_pin is None and _NOT_STATEMENT.search(title):
+            own = title_lines(table)
+            title = " ".join([*context, *own])
+            if table_pin is None and _not_statement(context, own):
                 continue
             periods = table_periods(table, context)
             if periods.current is None:
@@ -414,6 +425,10 @@ def _statement(release: Release, pins: Sequence[Override]) -> tuple[_Statement |
             )
             if table_pin is None and not qualifies:
                 continue
+            out_of_date = _out_of_date(periods.current, release.filed_at)
+            if out_of_date is not None:
+                notes.append(f"{document.doc_name} table {table.index}: {out_of_date}")
+                continue
             rows += _continuation(document.tables[position + 1 :], table, document)
             scale = find_scale([*context, *_heading_lines(table)])
             if scale.money is None:
@@ -425,6 +440,30 @@ def _statement(release: Release, pins: Sequence[Override]) -> tuple[_Statement |
         return None, notes
     statements = [candidate for candidate in candidates if candidate.titled]
     return (statements or candidates)[0], notes
+
+
+def _not_statement(context: Sequence[str], own: Sequence[str]) -> bool:
+    """A non-GAAP, adjusted, segment or percentage table (step 1). The table's own title, when
+    it names the statement, decides over the lines above it: "For more information on our
+    non-GAAP financial measures … see …" closes the page before Meta's statement of income."""
+    own_title = " ".join(own)
+    if _STATEMENT_TITLE.search(own_title) and not _NOT_STATEMENT.search(own_title):
+        return False
+    return bool(_NOT_STATEMENT.search(" ".join([*context, *own])))
+
+
+def _out_of_date(current: Column, filed: date | None) -> str | None:
+    """Why a table's current quarter can't be the release's: it ended after the filing (an
+    outlook) or more than RELEASE_LAG before it (Meta's highlights put the 2026 column under
+    the heading 2025). None when it can, or without both dates."""
+    if current.end is None or filed is None:
+        return None
+    if current.end > filed:
+        return f"its latest quarter column ends {current.end}, after the filing ({filed})"
+    if filed - current.end > RELEASE_LAG:
+        days = (filed - current.end).days
+        return f"its latest quarter column ends {current.end}, {days} days before the filing"
+    return None
 
 
 def _has_income_lines(release: Release) -> bool:

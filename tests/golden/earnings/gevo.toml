@@ -1,0 +1,17 @@
+# Gevo: consolidated statements of operations in EX-99.1, "(In thousands, except share and per
+# share amounts)". Net income is "Net loss attributed to Gevo, Inc.", after the redeemable
+# non-controlling interest's share, not the "Net loss" above it (rules version 3).
+cik = 1392380
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0001392380-26-000012"
+url = "https://www.sec.gov/Archives/edgar/data/1392380/000139238026000012/gevo-20260507xex99d1.htm"
+status = "complete"
+period_end = 2026-03-31
+fiscal = "Q1 2026"
+scale = "thousands"
+revenue = ["42,948", "29,109"]  # Total revenues
+operating_income = ["(4,898)", "(20,139)"]  # Loss from operations
+net_income = ["(21,697)", "(21,728)"]  # Net loss attributed to Gevo, Inc.
+eps_diluted = ["(0.09)", "(0.09)"]  # Net loss per share - basic and diluted

@@ -1,0 +1,18 @@
+# Meta Platforms: condensed consolidated statements of income in EX-99.1, "(In millions, except
+# per share amounts)", "Three Months Ended March 31," in the label column over 2026 and 2025.
+# A sentence about non-GAAP measures closes the page above it, and the highlights table before
+# it puts the 2026 column under the heading 2025 (rules version 3).
+cik = 1326801
+fiscal_year_end = "1231"
+
+[[release]]
+accession_no = "0001628280-26-028364"
+url = "https://www.sec.gov/Archives/edgar/data/1326801/000162828026028364/meta-03312026xexhibit991.htm"
+status = "complete"
+period_end = 2026-03-31
+fiscal = "Q1 2026"
+scale = "millions"
+revenue = ["56,311", "42,314"]
+operating_income = ["22,872", "17,555"]  # Income from operations
+net_income = ["26,773", "16,644"]
+eps_diluted = ["10.44", "6.43"]

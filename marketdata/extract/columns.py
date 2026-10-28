@@ -8,6 +8,12 @@ Pure. A column's headings say how long its period is and when it ended, in many 
   the 14-week fourth quarter of a 53-week year). Six, nine and twelve months, 18 weeks or more,
   years, year-to-date and full-year columns are never taken for quarterly slots.
 - Change columns ("% Change", "Y/Y", "O/(U)", "vs") hold no period.
+- Columns that compare years side by side ("2025 2026", then "2025 2026" again) are a run, and
+  a run has one period length, as one heading spans it (rules version 3). When a column that
+  took its length from the label column or the title has another than a column of its run
+  naming its own, the headings sit out of line with the columns: the period headings go to
+  the runs in the order printed (Rivian). A column of a run without a length takes the run's
+  (Accenture's "Three Months Ended" spans only the first of its two years).
 - The current quarter is the quarter column that ended last; the prior-year quarter is the
   quarter column that ended 350 to 380 days before it (52- and 53-week years). Without dates,
   the same quarter of the year before ("Q3 FY25" beside "Q3 FY26").
@@ -15,7 +21,7 @@ Pure. A column's headings say how long its period is and when it ended, in many 
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Literal
 
@@ -147,6 +153,7 @@ class Periods:
     current: Column | None  # the current quarter
     prior: Column | None  # the same quarter a year earlier
     problem: str | None  # why there is no current or prior column
+    note: str | None = None  # how the headings were read, when not as placed
 
 
 def table_periods(table: Table, context: Sequence[str] = ()) -> Periods:
@@ -158,12 +165,15 @@ def table_periods(table: Table, context: Sequence[str] = ()) -> Periods:
     headings = heading_rows(table)
     shared_text = " ".join([*context, *title_lines(table)]).strip()
     shared = _duration(shared_text) if shared_text else "unknown"
-    columns = []
-    for index in range(table.width):
-        heading = " ".join(row.cells[index] for row in headings if row.cells[index]).strip()
-        columns.append(_column(index, heading, shared, shared_text))
+    columns = [
+        _column(index, _own_heading(headings, index), shared, shared_text)
+        for index in range(table.width)
+    ]
+    columns, note, problem = _line_up(columns, headings, shared_text)
+    if problem is not None:
+        return Periods(tuple(columns), None, None, problem)
     current, prior, problem = _choose(columns)
-    return Periods(tuple(columns), current, prior, problem)
+    return Periods(tuple(columns), current, prior, problem, note)
 
 
 def heading_rows(table: Table) -> list[Row]:
@@ -200,6 +210,13 @@ def heading_date(text: str, year_hint: int | None = None) -> date | None:
     return _safe_date(year, _MONTHS[partial.group("month").lower()[:3]], int(partial.group("day")))
 
 
+def _own_heading(headings: Sequence[Row], index: int, *, periods: bool = True) -> str:
+    """A column's headings, top to bottom; without those naming a period length when not
+    `periods`."""
+    cells = [row.cells[index] for row in headings if row.cells[index]]
+    return " ".join(cell for cell in cells if periods or _duration(cell) == "unknown").strip()
+
+
 def _column(index: int, heading: str, shared: Duration, shared_text: str) -> Column:
     change = bool(_CHANGE.search(heading))
     duration = _duration(heading)
@@ -212,6 +229,77 @@ def _column(index: int, heading: str, shared: Duration, shared_text: str) -> Col
     if end is not None:
         year = end.year
     return Column(index, heading, duration, end, year, quarter, change)
+
+
+def _line_up(
+    columns: list[Column], headings: Sequence[Row], shared_text: str
+) -> tuple[list[Column], str | None, str | None]:
+    """Each run of years with one period length (module docstring): the columns, a note when
+    the headings were read in the order printed rather than as placed, and the problem when
+    the table's periods can't be told."""
+    runs = _runs(columns)
+    lined = list(columns)
+    if not any(_out_of_line(run) for run in runs):
+        for run in runs:
+            lengths = {column.duration for column in run} - {"unknown"}
+            if len(lengths) == 1:
+                length = lengths.pop()
+                for column in run:
+                    lined[column.index] = replace(column, duration=length)
+        return lined, None, None
+    named = _period_headings(headings)
+    if len(named) != len(runs):
+        problem = (
+            f"the period headings ({len(named)}) don't line up with the {len(runs)} runs of "
+            "years in the columns"
+        )
+        return lined, None, problem
+    for heading, run in zip(named, runs, strict=True):
+        for column in run:
+            own = _own_heading(headings, column.index, periods=False)
+            text = f"{heading} {own}".strip()
+            lined[column.index] = _column(column.index, text, "unknown", shared_text)
+    read = "; ".join(
+        f"{heading!r} over {len(run)}" for heading, run in zip(named, runs, strict=True)
+    )
+    return lined, f"period headings out of line with the columns, read in order: {read}", None
+
+
+def _out_of_line(run: Sequence[Column]) -> bool:
+    """A run with a quarter and a longer column, one of them taking its length from the label
+    column or the title. Columns that each name their own ("Fourth Quarter 2025", "Full Year
+    2025", "Fourth Quarter 2024") are read as placed."""
+    lengths = {column.duration for column in run}
+    taken = any(_duration(column.heading) == "unknown" for column in run)
+    return {"quarter", "longer"} <= lengths and taken
+
+
+def _runs(columns: Sequence[Column]) -> list[list[Column]]:
+    """Columns that compare years side by side: a new run starts where a year comes again.
+    Change columns and columns without a year are in none."""
+    runs: list[list[Column]] = []
+    for column in columns:
+        if column.change or column.year is None:
+            continue
+        if not runs or column.year in {other.year for other in runs[-1]}:
+            runs.append([])
+        runs[-1].append(column)
+    return runs
+
+
+def _period_headings(headings: Sequence[Row]) -> list[str]:
+    """The headings naming a period length, in the order printed: a heading row's label first,
+    then its cells left to right; one heading spanning several columns counts once."""
+    named: list[str] = []
+    for row in headings:
+        previous = None
+        for text in (row.label, *row.cells):
+            if not text:
+                continue
+            if text != previous and _duration(text) != "unknown":
+                named.append(text)
+            previous = text
+    return named
 
 
 def _shared_date(text: str, year: int) -> date | None:

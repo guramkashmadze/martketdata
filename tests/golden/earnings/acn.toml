@@ -1,0 +1,17 @@
+# Accenture: consolidated income statements in EX-99.1, "(In thousands of U.S. dollars, except
+# share and per share amounts)"; "Three Months Ended" spans only the November 30, 2025 amount
+# and its "% of Revenues" column, not the 2024 ones (rules version 3).
+cik = 1467373
+fiscal_year_end = "0831"
+
+[[release]]
+accession_no = "0001467373-25-000221"
+url = "https://www.sec.gov/Archives/edgar/data/1467373/000146737325000221/q1fy26earnings8-kexhibit.htm"
+status = "complete"
+period_end = 2025-11-30
+fiscal = "Q1 2026"
+scale = "thousands"
+revenue = ["18,742,125", "17,689,545"]  # Revenues
+operating_income = ["2,873,698", "2,948,477"]  # OPERATING INCOME
+net_income = ["2,211,561", "2,278,894"]  # NET INCOME ATTRIBUTABLE TO ACCENTURE PLC
+eps_diluted = ["3.54", "3.59"]  # Diluted
