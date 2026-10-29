@@ -18,6 +18,10 @@ url = [
 # operating cash flow and capex: nine months 12,832 less six 9,127 (the prior-year columns); capex 2,777 less 1,918
 operating_cash_flow = "3,705"
 capex = "859"
+revenue = "19,776"
+operating_income = "4,558"
+net_income = "3,769"
+eps_diluted = "1.54"
 
 [[period]]
 type = "Q"
@@ -30,6 +34,12 @@ url = [
 # operating cash flow and capex: the year 17,817 less nine months 12,832 (prior-year columns); capex 3,773 less 2,777
 operating_cash_flow = "4,985"
 capex = "996"
+# income: the three months the release prints (the quarter is derived from the 10-K)
+revenue = "20,889"
+operating_income = "4,355"
+net_income = "3,615"
+cash = "9,556"
+total_equity = "52,284"
 
 [[period]]
 type = "FY"
@@ -38,6 +48,12 @@ fiscal = "2025 FY"
 url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000093/fy2526q4amj8-kexhibit991.htm"]
 operating_cash_flow = "17,817"
 capex = "3,773"
+revenue = "84,284"
+operating_income = "20,451"
+net_income = "15,974"
+eps_diluted = "6.51"
+cash = "9,556"
+total_equity = "52,284"
 
 [[period]]
 type = "Q"
@@ -47,6 +63,10 @@ url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000250/fy2627q
 # operating cash flow and capex: the 2027 first-quarter release's prior-year column
 operating_cash_flow = "5,408"
 capex = "1,200"
+revenue = "22,386"
+operating_income = "5,856"
+net_income = "4,750"
+eps_diluted = "1.95"
 
 [[period]]
 type = "Q"
@@ -59,6 +79,12 @@ url = [
 # operating cash flow and capex: six months 10,380 less three 5,408; capex 2,367 less 1,200
 operating_cash_flow = "4,972"
 capex = "1,167"
+revenue = "22,208"
+operating_income = "5,366"
+net_income = "4,319"
+eps_diluted = "1.78"
+cash = "10,825"
+total_equity = "53,317"
 
 [[period]]
 type = "Q"
@@ -71,6 +97,14 @@ url = [
 # operating cash flow and capex: nine months 14,425 less six 10,380; capex 3,386 less 2,367
 operating_cash_flow = "4,045"
 capex = "1,019"
+# net margin: 3,932 / 21,235 = 18.52%
+revenue = "21,235"
+operating_income = "4,576"
+net_income = "3,932"
+eps_diluted = "1.63"
+cash = "12,306"
+total_equity = "54,731"
+net_margin = "18.5"
 
 [[period]]
 type = "Q"
@@ -83,6 +117,14 @@ url = [
 # operating cash flow and capex: the year 19,556 less nine months 14,425; capex 4,409 less 3,386
 operating_cash_flow = "5,131"
 capex = "1,023"
+# the three months the release prints (the quarter is derived from the 10-K)
+# rounding: the 10-K's year less the 10-Qs' nine months is a million more (PLAN.md §16)
+known_differences = { revenue = "87,032 less nine months 65,828 = 21,204", operating_income = "19,748 less nine months 15,798 = 3,950" }
+revenue = "21,203"
+operating_income = "3,949"
+net_income = "3,044"
+cash = "9,942"
+total_equity = "54,311"
 
 [[period]]
 type = "FY"
@@ -91,6 +133,15 @@ fiscal = "2026 FY"
 url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000093/fy2526q4amj8-kexhibit991.htm"]
 operating_cash_flow = "19,556"
 capex = "4,409"
+# free cash flow 19,556 - 4,409; revenue growth 87,032 / 84,284 - 1 = 3.26%
+revenue = "87,032"
+operating_income = "19,748"
+net_income = "16,046"
+eps_diluted = "6.62"
+cash = "9,942"
+total_equity = "54,311"
+free_cash_flow = "15,147"
+revenue_growth_yoy = "3.3"
 
 [[period]]
 type = "Q"
@@ -99,3 +150,22 @@ fiscal = "2027 Q1"
 url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000250/fy2627q1jas8-kexhibit991.htm"]
 operating_cash_flow = "5,767"
 capex = "1,366"
+# revenue growth: 23,276 / 22,386 - 1 = 3.98%
+revenue = "23,276"
+operating_income = "5,937"
+net_income = "4,731"
+eps_diluted = "1.97"
+cash = "15,365"
+total_equity = "55,337"
+revenue_growth_yoy = "4.0"
+
+[[period]]
+type = "Q"
+period_end = 2024-12-31
+fiscal = "2025 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/80424/000008042426000006/fy2526q2ond8-kexhibit991.htm"]
+# the 2026 second-quarter release's prior-year columns
+revenue = "21,882"
+operating_income = "5,741"
+net_income = "4,630"
+eps_diluted = "1.88"

@@ -22,6 +22,9 @@ total_assets = "58,531"
 # operating cash flow and capex: nine months 4,078 less six 3,339 (the 2025 second-quarter release's prior year); capex 1,968 less 1,313
 operating_cash_flow = "739"
 capex = "655"
+operating_income = "1,168"
+cash = "3,433"
+total_equity = "14,489"
 
 [[period]]
 type = "Q"
@@ -36,6 +39,11 @@ total_assets = "57,769"
 # operating cash flow and capex: twelve months 7,367 less nine 4,078; capex 2,891 less 1,968
 operating_cash_flow = "3,289"
 capex = "923"
+# revenue and operating income: the three months the release prints (net sales; the quarter is derived from the 10-K)
+revenue = "30,915"
+operating_income = "1,467"
+cash = "4,762"
+total_equity = "14,666"
 
 [[period]]
 type = "FY"
@@ -48,6 +56,9 @@ eps_diluted = "8.86"
 total_assets = "57,769"
 operating_cash_flow = "7,367"
 capex = "2,891"
+operating_income = "5,566"
+cash = "4,762"
+total_equity = "14,666"
 
 [[period]]
 type = "Q"
@@ -60,6 +71,9 @@ eps_diluted = "2.27"
 total_assets = "56,185"
 operating_cash_flow = "275"
 capex = "790"
+operating_income = "1,472"
+cash = "2,887"
+total_equity = "14,947"
 
 [[period]]
 type = "Q"
@@ -76,6 +90,9 @@ total_assets = "57,851"
 # operating cash flow and capex: six months 2,358 less three 275; capex 1,864 less 790
 operating_cash_flow = "2,083"
 capex = "1,074"
+operating_income = "1,317"
+cash = "4,341"
+total_equity = "15,420"
 
 [[period]]
 type = "Q"
@@ -92,6 +109,9 @@ total_assets = "59,991"
 # operating cash flow and capex: nine months 3,485 less six 2,358; capex 2,842 less 1,864
 operating_cash_flow = "1,127"
 capex = "978"
+operating_income = "948"
+cash = "3,822"
+total_equity = "15,501"
 
 [[period]]
 type = "Q"
@@ -106,6 +126,11 @@ total_assets = "59,490"
 # operating cash flow and capex: twelve months 6,562 less nine 3,485; capex 3,727 less 2,842
 operating_cash_flow = "3,077"
 capex = "885"
+# the three months the release prints (the quarter is derived from the 10-K)
+revenue = "30,453"
+operating_income = "1,380"
+cash = "5,488"
+total_equity = "16,165"
 
 [[period]]
 type = "FY"
@@ -118,6 +143,9 @@ eps_diluted = "8.13"
 total_assets = "59,490"
 operating_cash_flow = "6,562"
 capex = "3,727"
+operating_income = "5,117"
+cash = "5,488"
+total_equity = "16,165"
 
 [[period]]
 type = "Q"
@@ -130,6 +158,9 @@ eps_diluted = "1.71"
 total_assets = "58,010"
 operating_cash_flow = "716"
 capex = "1,035"
+operating_income = "1,135"
+cash = "3,534"
+total_equity = "16,395"
 
 [[period]]
 type = "Q"
@@ -146,3 +177,10 @@ total_assets = "61,235"
 # operating cash flow and capex: six months 4,519 less three 716; capex 2,404 less 1,035
 operating_cash_flow = "3,803"
 capex = "1,369"
+# free cash flow 3,803 - 1,369; net margin 1,877 / 26,539 = 7.07%; growth 26,539 / 25,211 - 1 = 5.27%
+operating_income = "2,560"
+cash = "5,411"
+total_equity = "17,843"
+free_cash_flow = "2,434"
+net_margin = "7.1"
+revenue_growth_yoy = "5.3"

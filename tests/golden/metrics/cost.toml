@@ -18,6 +18,8 @@ eps_diluted = "4.04"
 total_assets = "73,386"
 operating_cash_flow = "3,260"
 capex = "1,264"
+operating_income = "2,196"
+cash = "10,907"
 
 [[period]]
 type = "Q"
@@ -34,6 +36,8 @@ total_assets = "73,224"
 # operating cash flow and capex: 24 weeks 6,008 less 12 weeks 3,260; capex 2,401 less 1,264
 operating_cash_flow = "2,748"
 capex = "1,137"
+operating_income = "2,316"
+cash = "12,356"
 
 [[period]]
 type = "Q"
@@ -50,6 +54,8 @@ total_assets = "75,482"
 # operating cash flow and capex: 36 weeks 9,468 less 24 weeks 6,008; capex 3,532 less 2,401
 operating_cash_flow = "3,460"
 capex = "1,131"
+operating_income = "2,530"
+cash = "13,836"
 
 [[period]]
 type = "Q"
@@ -63,6 +69,10 @@ total_assets = "77,099"
 # operating cash flow and capex: 52 weeks 13,335 less 36 weeks 9,468; capex 5,498 less 3,532
 operating_cash_flow = "3,867"
 capex = "1,966"
+# revenue and operating income: the 16 weeks the release prints (derived from the 10-K)
+revenue = "86,156"
+operating_income = "3,341"
+cash = "14,161"
 
 [[period]]
 type = "FY"
@@ -75,6 +85,8 @@ eps_diluted = "18.21"
 total_assets = "77,099"
 operating_cash_flow = "13,335"
 capex = "5,498"
+operating_income = "10,383"
+cash = "14,161"
 
 [[period]]
 type = "Q"
@@ -87,6 +99,10 @@ eps_diluted = "4.50"
 total_assets = "82,790"
 operating_cash_flow = "4,688"
 capex = "1,526"
+# operating margin: 2,463 / 67,307 = 3.66%
+operating_income = "2,463"
+cash = "16,217"
+operating_margin = "3.7"
 
 [[period]]
 type = "Q"
@@ -103,6 +119,8 @@ total_assets = "83,639"
 # operating cash flow and capex: 24 weeks 7,684 less 12 weeks 4,688; capex 2,815 less 1,526
 operating_cash_flow = "2,996"
 capex = "1,289"
+operating_income = "2,606"
+cash = "17,383"
 
 [[period]]
 type = "Q"
@@ -119,6 +137,10 @@ total_assets = "86,430"
 # operating cash flow and capex: 36 weeks 11,133 less 24 weeks 7,684; capex 4,228 less 2,815
 operating_cash_flow = "3,449"
 capex = "1,413"
+# revenue growth: 70,527 / 63,205 - 1 = 11.58%
+operating_income = "2,815"
+cash = "18,946"
+revenue_growth_yoy = "11.6"
 
 [[period]]
 type = "Q"
@@ -135,6 +157,10 @@ total_assets = "89,045"
 known_differences = { operating_cash_flow = "the 10-K tags 15,817 for the year" }
 operating_cash_flow = "4,692"
 capex = "2,207"
+# the 16 weeks the release prints (derived from the 10-K)
+revenue = "95,723"
+operating_income = "3,801"
+cash = "20,207"
 
 [[period]]
 type = "FY"
@@ -150,3 +176,5 @@ total_assets = "89,045"
 known_differences = { operating_cash_flow = "the 10-K tags 15,817" }
 operating_cash_flow = "15,825"
 capex = "6,435"
+operating_income = "11,685"
+cash = "20,207"

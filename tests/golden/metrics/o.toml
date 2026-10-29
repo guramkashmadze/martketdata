@@ -1,0 +1,151 @@
+# Realty Income Corporation: values as its earnings releases print them, read by hand on
+# 2026-10-29 from the exhibits at `url`, in millions of dollars to the thousand (EPS as printed).
+# A REIT: net income is the amount available to common stockholders (D-082, flagged
+# net_income_to_common) and its diluted EPS line is "Net income per common share, basic and
+# diluted". Operating cash flow is printed year to date in the AFFO reconciliation, so most
+# quarters are the difference of two printed columns (in the comment above them); total equity is
+# the stockholders' equity line, without noncontrolling interests.
+cik = 726728
+fiscal_year_end = "1231"
+sic_code = "6798"
+fixtures = ["O-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-09-30
+fiscal = "2024 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/726728/000072672825000146/o-991q32025.htm"]
+# net income: the release prints the amount available to common stockholders (PLAN.md §16)
+known_differences = { net_income = "the 10-Q tags NetIncomeLoss before preferred dividends, first in the catalog: 269.485" }
+revenue = "1,330.915"
+net_income = "261.781"
+eps_diluted = "0.30"
+
+[[period]]
+type = "Q"
+period_end = 2024-12-31
+fiscal = "2024 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000009/o-991q42025.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672825000146/o-991q32025.htm",
+]
+# operating cash flow: the year 3,573.276 less nine months 2,601.313
+revenue = "1,340.299"
+net_income = "199.612"
+operating_cash_flow = "971.963"
+cash = "444.962"
+
+[[period]]
+type = "FY"
+period_end = 2024-12-31
+fiscal = "2024 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/726728/000072672826000009/o-991q42025.htm"]
+known_differences = { net_income = "the 10-K tags NetIncomeLoss before preferred dividends, first in the catalog: 860.772" }
+revenue = "5,271.142"
+net_income = "847.893"
+eps_diluted = "0.98"
+operating_cash_flow = "3,573.276"
+cash = "444.962"
+
+[[period]]
+type = "Q"
+period_end = 2025-03-31
+fiscal = "2025 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/726728/000072672826000028/o-991q12026.htm"]
+revenue = "1,380.505"
+net_income = "249.815"
+eps_diluted = "0.28"
+operating_cash_flow = "787.516"
+
+[[period]]
+type = "Q"
+period_end = 2025-06-30
+fiscal = "2025 Q2"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000044/o-991q22026.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000028/o-991q12026.htm",
+]
+# operating cash flow: six months 1,848.185 less three 787.516; net margin 196.919 / 1,410.378 = 13.96%
+revenue = "1,410.378"
+net_income = "196.919"
+eps_diluted = "0.22"
+operating_cash_flow = "1,060.669"
+net_margin = "14.0"
+
+[[period]]
+type = "Q"
+period_end = 2025-09-30
+fiscal = "2025 Q3"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672825000146/o-991q32025.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000044/o-991q22026.htm",
+]
+# operating cash flow: nine months 2,791.320 less six 1,848.185
+revenue = "1,470.552"
+net_income = "315.771"
+eps_diluted = "0.35"
+operating_cash_flow = "943.135"
+cash = "417.173"
+
+[[period]]
+type = "Q"
+period_end = 2025-12-31
+fiscal = "2025 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000009/o-991q42025.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672825000146/o-991q32025.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000028/o-991q12026.htm",
+]
+# operating cash flow: the year 3,994.754 less nine months 2,791.320; equity from the 2026 first-quarter release
+revenue = "1,487.942"
+net_income = "296.085"
+operating_cash_flow = "1,203.434"
+cash = "434.842"
+total_equity = "39,438.695"
+
+[[period]]
+type = "FY"
+period_end = 2025-12-31
+fiscal = "2025 FY"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000009/o-991q42025.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000028/o-991q12026.htm",
+]
+# revenue growth: 5,749.377 / 5,271.142 - 1 = 9.07%
+revenue = "5,749.377"
+net_income = "1,058.590"
+eps_diluted = "1.17"
+operating_cash_flow = "3,994.754"
+revenue_growth_yoy = "9.1"
+cash = "434.842"
+total_equity = "39,438.695"
+
+[[period]]
+type = "Q"
+period_end = 2026-03-31
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/726728/000072672826000028/o-991q12026.htm"]
+# revenue growth: 1,548.727 / 1,380.505 - 1 = 12.19%
+revenue = "1,548.727"
+net_income = "311.766"
+eps_diluted = "0.33"
+operating_cash_flow = "874.502"
+revenue_growth_yoy = "12.2"
+cash = "373.543"
+total_equity = "39,147.485"
+
+[[period]]
+type = "Q"
+period_end = 2026-06-30
+fiscal = "2026 Q2"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000044/o-991q22026.htm",
+  "https://www.sec.gov/Archives/edgar/data/726728/000072672826000028/o-991q12026.htm",
+]
+# operating cash flow: six months 2,019.585 less three 874.502
+revenue = "1,547.711"
+net_income = "343.955"
+eps_diluted = "0.37"
+operating_cash_flow = "1,145.083"
+cash = "552.648"
+total_equity = "39,549.557"

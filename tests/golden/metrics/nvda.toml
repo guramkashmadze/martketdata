@@ -1,0 +1,153 @@
+# NVIDIA Corporation: values as its earnings releases print them, read by hand on 2026-10-29 from
+# the exhibits at `url`, in millions of dollars (EPS as printed). A year ending on the last Sunday
+# of January (fiscal 2026 ended 2026-01-25). Its releases print each quarter's cash flows and its
+# capex is tagged as productive assets (D-082). A prior-year quarter comes from the next release's
+# prior-year column. Free cash flow and margins are computed by hand from the printed values.
+cik = 1045810
+fiscal_year_end = "0125"
+sic_code = "3674"
+fixtures = ["NVDA-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-10-27
+fiscal = "2025 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581025000228/q3fy26pr.htm"]
+# The release prints 17,629 for the three months; its 10-Qs' year-to-date facts give 17,627 (PLAN.md §16)
+known_differences = { operating_cash_flow = "the 10-Qs give nine months 47,460 less six 29,833 = 17,627" }
+revenue = "35,082"
+operating_income = "21,869"
+net_income = "19,309"
+eps_diluted = "0.78"
+operating_cash_flow = "17,629"
+capex = "813"
+
+[[period]]
+type = "Q"
+period_end = 2025-01-26
+fiscal = "2025 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581026000019/q4fy26pr.htm"]
+known_differences = { operating_cash_flow = "rounding: the release's quarterly column; its year-to-date columns give 64,089 less 47,460 = 16,629", free_cash_flow = "from the year-to-date columns 16,629 less 1,077 = 15,552" }
+revenue = "39,331"
+operating_income = "24,034"
+net_income = "22,091"
+operating_cash_flow = "16,628"
+capex = "1,077"
+free_cash_flow = "15,551"
+
+[[period]]
+type = "FY"
+period_end = 2025-01-26
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581026000019/q4fy26pr.htm"]
+revenue = "130,497"
+operating_income = "81,453"
+net_income = "72,880"
+eps_diluted = "2.94"
+operating_cash_flow = "64,089"
+capex = "3,236"
+free_cash_flow = "60,853"
+
+[[period]]
+type = "Q"
+period_end = 2025-04-27
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581026000051/q1fy27pr.htm"]
+revenue = "44,062"
+operating_income = "21,638"
+net_income = "18,775"
+eps_diluted = "0.76"
+operating_cash_flow = "27,414"
+capex = "1,227"
+
+[[period]]
+type = "Q"
+period_end = 2025-07-27
+fiscal = "2026 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581026000073/q2fy27pr.htm"]
+known_differences = { capex = "rounding: the release's quarterly column; its year-to-date columns give 1,895" }
+revenue = "46,743"
+operating_income = "28,440"
+net_income = "26,422"
+eps_diluted = "1.08"
+operating_cash_flow = "15,365"
+capex = "1,894"
+
+[[period]]
+type = "Q"
+period_end = 2025-10-26
+fiscal = "2026 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581025000228/q3fy26pr.htm"]
+# net margin: 31,910 / 57,006 = 55.98%
+known_differences = { operating_cash_flow = "rounding: the release's quarterly column; its year-to-date columns give 66,530 less 42,779 = 23,751", capex = "rounding: the release's quarterly column; its year-to-date columns give 1,636" }
+revenue = "57,006"
+operating_income = "36,010"
+net_income = "31,910"
+eps_diluted = "1.30"
+operating_cash_flow = "23,750"
+capex = "1,637"
+net_margin = "56.0"
+
+[[period]]
+type = "Q"
+period_end = 2026-01-25
+fiscal = "2026 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000019/q4fy26pr.htm",
+  "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000051/q1fy27pr.htm",
+]
+# cash: the 2027 first-quarter release's balance sheet at January 25, 2026
+known_differences = { operating_cash_flow = "rounding: the release's quarterly column; its year-to-date columns give 102,718 less 66,530 = 36,188" }
+revenue = "68,127"
+operating_income = "44,299"
+net_income = "42,960"
+operating_cash_flow = "36,190"
+capex = "1,284"
+cash = "10,605"
+
+[[period]]
+type = "FY"
+period_end = 2026-01-25
+fiscal = "2026 FY"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000019/q4fy26pr.htm",
+  "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000051/q1fy27pr.htm",
+]
+revenue = "215,938"
+operating_income = "130,387"
+net_income = "120,067"
+eps_diluted = "4.90"
+operating_cash_flow = "102,718"
+capex = "6,042"
+cash = "10,605"
+
+[[period]]
+type = "Q"
+period_end = 2026-04-26
+fiscal = "2027 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581026000051/q1fy27pr.htm"]
+# growth: 81,615 / 44,062 - 1 = 85.23%; operating margin: 53,536 / 81,615 = 65.60%
+revenue = "81,615"
+operating_income = "53,536"
+net_income = "58,321"
+eps_diluted = "2.39"
+operating_cash_flow = "50,344"
+capex = "1,757"
+operating_margin = "65.6"
+revenue_growth_yoy = "85.2"
+cash = "13,237"
+
+[[period]]
+type = "Q"
+period_end = 2026-07-26
+fiscal = "2027 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/1045810/000104581026000073/q2fy27pr.htm"]
+# free cash flow: 24,077 - 2,677
+revenue = "96,221"
+operating_income = "63,734"
+net_income = "59,688"
+eps_diluted = "2.46"
+operating_cash_flow = "24,077"
+capex = "2,677"
+free_cash_flow = "21,400"
+cash = "22,443"

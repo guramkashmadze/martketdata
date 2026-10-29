@@ -1,0 +1,165 @@
+# Deere & Company: values as its earnings releases print them, read by hand on 2026-10-29 from the
+# exhibits at `url`, in millions of dollars (EPS as printed). A 52/53-week year ending on the last
+# Sunday of October or the first of November (fiscal 2025 ended 2025-11-02). Net income and equity
+# are Deere & Company's (attributable). The releases print cash flows year to date, so most
+# quarters are the difference of two printed columns (in the comment above them); a first quarter
+# is "Net cash used for operating activities".
+cik = 315189
+fiscal_year_end = "1101"
+sic_code = "3523"
+fixtures = ["DE-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-10-27
+fiscal = "2024 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/315189/000110465925116130/de-20251126xex99d1.htm"]
+# revenue: the 2025 fourth-quarter release's prior-year column (PLAN.md §16)
+known_differences = { revenue = "rounding: the year 51,716 less the 10-Q's nine months 40,572 = 11,144" }
+revenue = "11,143"
+net_income = "1,245"
+cash = "7,324"
+total_equity = "22,836"
+
+[[period]]
+type = "FY"
+period_end = 2024-10-27
+fiscal = "2024 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/315189/000110465925116130/de-20251126xex99d1.htm"]
+# free cash flow: 9,231 - 1,640
+revenue = "51,716"
+net_income = "7,100"
+eps_diluted = "25.62"
+operating_cash_flow = "9,231"
+capex = "1,640"
+free_cash_flow = "7,591"
+cash = "7,324"
+total_equity = "22,836"
+
+[[period]]
+type = "Q"
+period_end = 2025-01-26
+fiscal = "2025 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/315189/000110465926017239/de-20260219xex99d1.htm"]
+revenue = "8,508"
+net_income = "869"
+eps_diluted = "3.19"
+operating_cash_flow = "(1,132)"
+capex = "352"
+cash = "6,601"
+total_equity = "22,479"
+
+[[period]]
+type = "Q"
+period_end = 2025-04-27
+fiscal = "2025 Q2"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926064747/de-20260521xex99d1.htm",
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926017239/de-20260219xex99d1.htm",
+]
+# six months 568 less three (1,132); capex 555 less 352
+revenue = "12,763"
+net_income = "1,804"
+eps_diluted = "6.64"
+operating_cash_flow = "1,700"
+capex = "203"
+cash = "7,991"
+total_equity = "24,287"
+
+[[period]]
+type = "Q"
+period_end = 2025-07-27
+fiscal = "2025 Q3"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926098904/de-20260820xex99d1.htm",
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926064747/de-20260521xex99d1.htm",
+]
+# nine months 3,464 less six 568; capex 852 less 555
+revenue = "12,018"
+net_income = "1,289"
+eps_diluted = "4.75"
+operating_cash_flow = "2,896"
+capex = "297"
+cash = "8,580"
+total_equity = "25,175"
+
+[[period]]
+type = "Q"
+period_end = 2025-11-02
+fiscal = "2025 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465925116130/de-20251126xex99d1.htm",
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926098904/de-20260820xex99d1.htm",
+]
+# the year 7,459 less nine months 3,464; capex 1,360 less 852; net margin 1,065 / 12,394 = 8.59%
+revenue = "12,394"
+net_income = "1,065"
+operating_cash_flow = "3,995"
+capex = "508"
+net_margin = "8.6"
+cash = "8,276"
+total_equity = "25,950"
+
+[[period]]
+type = "FY"
+period_end = 2025-11-02
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/315189/000110465925116130/de-20251126xex99d1.htm"]
+# revenue growth: 45,684 / 51,716 - 1 = -11.66%
+revenue = "45,684"
+net_income = "5,027"
+eps_diluted = "18.50"
+operating_cash_flow = "7,459"
+capex = "1,360"
+revenue_growth_yoy = "-11.7"
+cash = "8,276"
+total_equity = "25,950"
+
+[[period]]
+type = "Q"
+period_end = 2026-02-01
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/315189/000110465926017239/de-20260219xex99d1.htm"]
+revenue = "9,611"
+net_income = "656"
+eps_diluted = "2.42"
+operating_cash_flow = "(890)"
+capex = "256"
+cash = "6,798"
+total_equity = "26,300"
+
+[[period]]
+type = "Q"
+period_end = 2026-05-03
+fiscal = "2026 Q2"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926064747/de-20260521xex99d1.htm",
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926017239/de-20260219xex99d1.htm",
+]
+# six months 1,042 less three (890); capex 451 less 256
+revenue = "13,369"
+net_income = "1,773"
+eps_diluted = "6.55"
+operating_cash_flow = "1,932"
+capex = "195"
+cash = "7,905"
+total_equity = "27,406"
+
+[[period]]
+type = "Q"
+period_end = 2026-08-02
+fiscal = "2026 Q3"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926098904/de-20260820xex99d1.htm",
+  "https://www.sec.gov/Archives/edgar/data/315189/000110465926064747/de-20260521xex99d1.htm",
+]
+# nine months 3,250 less six 1,042; capex 716 less 451; growth 12,608 / 12,018 - 1 = 4.91%
+revenue = "12,608"
+net_income = "1,379"
+eps_diluted = "5.10"
+operating_cash_flow = "2,208"
+capex = "265"
+free_cash_flow = "1,943"
+revenue_growth_yoy = "4.9"
+cash = "8,928"
+total_equity = "27,990"

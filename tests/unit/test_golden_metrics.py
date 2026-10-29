@@ -72,12 +72,15 @@ def test_golden_metrics(path: Path) -> None:
         known = period.get("known_differences", {})
         for metric in set(period) - PERIOD_KEYS:
             row = rows.get((period["type"], period["period_end"], metric))
+            if metric in known:
+                # Listed in PLAN.md §16: the filings give another value, or none; still true?
+                assert row is None or row.value != _value(metric, period[metric]), (
+                    period["period_end"],
+                    metric,
+                )
+                continue
             assert row is not None, (period["period_end"], metric)
             assert f"{row.fiscal_year} {row.fiscal_period}" == period["fiscal"]
-            if metric in known:
-                # Listed in PLAN.md §16: the release and the filing differ; still true?
-                assert row.value != _value(metric, period[metric]), (period["period_end"], metric)
-                continue
             assert row.value == _value(metric, period[metric]), (period["period_end"], metric)
             checked += 1
         for metric in period.get("not_applicable", ()):

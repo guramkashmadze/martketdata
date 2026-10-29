@@ -23,6 +23,7 @@ total_assets = "461,916"
 # operating cash flow and capex: printed for 3Q24; nine months 42,793 less six 25,224; capex 17,469 less 11,309
 operating_cash_flow = "17,569"
 capex = "6,160"
+cash = "26,926"
 
 [[period]]
 type = "Q"
@@ -33,6 +34,11 @@ total_assets = "453,475"
 # operating cash flow and capex: printed for 4Q24; the year 55,022 less nine months 42,793; capex 24,306 less 17,469
 operating_cash_flow = "12,229"
 capex = "6,837"
+# revenue: the three months the release prints (the quarter is derived from the 10-K)
+revenue = "83,426"
+# cash: the release prints cash and cash equivalents; the company's own row wins (D-084, PLAN.md §16)
+known_differences = { cash = "the successor's joint 10-Q tags cash including restricted cash: 23,187" }
+cash = "23,029"
 
 [[period]]
 type = "FY"
@@ -45,6 +51,9 @@ eps_diluted = "7.84"
 total_assets = "453,475"
 operating_cash_flow = "55,022"
 capex = "24,306"
+# cash: the release prints cash and cash equivalents; the company's own row wins (D-084, PLAN.md §16)
+known_differences = { cash = "the successor's joint 10-Q tags cash including restricted cash: 23,187" }
+cash = "23,029"
 
 [[period]]
 type = "Q"
@@ -57,6 +66,7 @@ eps_diluted = "1.76"
 total_assets = "451,908"
 operating_cash_flow = "12,953"
 capex = "5,898"
+cash = "17,036"
 
 [[period]]
 type = "Q"
@@ -70,6 +80,9 @@ total_assets = "447,597"
 # operating cash flow and capex: printed for 2Q25; six months 24,503 less three 12,953; capex 12,181 less 5,898
 operating_cash_flow = "11,550"
 capex = "6,283"
+# cash: the release prints cash and cash equivalents; the company's own row wins (D-084, PLAN.md §16)
+known_differences = { cash = "the successor's joint 10-Q tags cash including restricted cash: 15,711" }
+cash = "14,352"
 
 [[period]]
 type = "Q"
@@ -83,6 +96,7 @@ total_assets = "454,340"
 # operating cash flow and capex: printed for 3Q25; nine months 39,291 less six 24,503; capex 20,908 less 12,181
 operating_cash_flow = "14,788"
 capex = "8,727"
+cash = "13,814"
 
 [[period]]
 type = "Q"
@@ -93,6 +107,10 @@ total_assets = "448,980"
 # operating cash flow and capex: printed for 4Q25; the year 51,970 less nine months 39,291; capex 28,358 less 20,908
 operating_cash_flow = "12,679"
 capex = "7,450"
+# the three months the release prints; free cash flow 12,679 - 7,450
+revenue = "82,308"
+cash = "10,681"
+free_cash_flow = "5,229"
 
 [[period]]
 type = "FY"
@@ -105,6 +123,9 @@ eps_diluted = "6.70"
 total_assets = "448,980"
 operating_cash_flow = "51,970"
 capex = "28,358"
+# revenue growth: 332,238 / 349,585 - 1 = -4.96%
+cash = "10,681"
+revenue_growth_yoy = "-5.0"
 
 [[period]]
 type = "Q"
@@ -117,6 +138,7 @@ eps_diluted = "1.00"
 total_assets = "464,410"
 operating_cash_flow = "8,705"
 capex = "6,470"
+cash = "8,435"
 
 [[period]]
 type = "Q"
@@ -133,3 +155,4 @@ total_assets = "464,482"
 # operating cash flow and capex: printed for 2Q26; six months 32,260 less three 8,705; capex 12,997 less 6,470
 operating_cash_flow = "23,555"
 capex = "6,527"
+cash = "10,588"

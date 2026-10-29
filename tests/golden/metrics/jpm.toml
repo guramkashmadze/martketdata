@@ -21,48 +21,80 @@ not_applicable = ["revenue"]
 type = "Q"
 period_end = 2024-12-31
 fiscal = "2024 Q4"
-url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm",
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm",
+]
 total_assets = "4,002,814"
+# equity and long-term debt: the supplement's balance sheet columns
+total_equity = "344,758"
+# long-term debt: JPMorgan tags a concept the catalog doesn't list (PLAN.md §16)
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "401,418"
 
 [[period]]
 type = "FY"
 period_end = 2024-12-31
 fiscal = "2024 FY"
-url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfex992supplement.htm",
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm",
+]
 net_income = "58,471"
 eps_diluted = "19.75"
 total_assets = "4,002,814"
 not_applicable = ["revenue"]
+total_equity = "344,758"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "401,418"
 
 [[period]]
 type = "Q"
 period_end = 2025-03-31
 fiscal = "2025 Q1"
-url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000332/a1q25erfex992supplement.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/19617/000001961725000332/a1q25erfex992supplement.htm",
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm",
+]
 net_income = "14,643"
 eps_diluted = "5.07"
 total_assets = "4,357,856"
 not_applicable = ["revenue"]
+total_equity = "351,420"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "407,224"
 
 [[period]]
 type = "Q"
 period_end = 2025-06-30
 fiscal = "2025 Q2"
-url = ["https://www.sec.gov/Archives/edgar/data/19617/000001961725000518/a2q25erfex992supplement.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/19617/000001961725000518/a2q25erfex992supplement.htm",
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm",
+]
 net_income = "14,987"
 eps_diluted = "5.24"
 total_assets = "4,552,482"
 not_applicable = ["revenue"]
+total_equity = "356,924"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "419,802"
 
 [[period]]
 type = "Q"
 period_end = 2025-09-30
 fiscal = "2025 Q3"
-url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828025044845/a3q25erfex992supplement.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828025044845/a3q25erfex992supplement.htm",
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm",
+]
 net_income = "14,393"
 eps_diluted = "5.07"
 total_assets = "4,560,205"
 not_applicable = ["revenue"]
+total_equity = "360,212"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "427,203"
 
 [[period]]
 type = "Q"
@@ -70,6 +102,9 @@ period_end = 2025-12-31
 fiscal = "2025 Q4"
 url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828026001902/a4q25erfex992supplement.htm"]
 total_assets = "4,424,900"
+total_equity = "362,438"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "435,206"
 
 [[period]]
 type = "FY"
@@ -80,16 +115,25 @@ net_income = "57,048"
 eps_diluted = "20.02"
 total_assets = "4,424,900"
 not_applicable = ["revenue"]
+total_equity = "362,438"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "435,206"
 
 [[period]]
 type = "Q"
 period_end = 2026-03-31
 fiscal = "2026 Q1"
-url = ["https://www.sec.gov/Archives/edgar/data/19617/000162828026024990/a1q26erfex992supplement.htm"]
+url = [
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026024990/a1q26erfex992supplement.htm",
+  "https://www.sec.gov/Archives/edgar/data/19617/000162828026048078/a2q26erfex992supplement.htm",
+]
 net_income = "16,494"
 eps_diluted = "5.94"
 total_assets = "4,900,475"
 not_applicable = ["revenue"]
+total_equity = "364,038"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "448,764"
 
 [[period]]
 type = "Q"
@@ -100,3 +144,6 @@ net_income = "21,155"
 eps_diluted = "7.70"
 total_assets = "5,015,069"
 not_applicable = ["revenue"]
+total_equity = "374,598"
+known_differences = { long_term_debt = "tagged LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities, not in the catalog" }
+long_term_debt = "460,523"

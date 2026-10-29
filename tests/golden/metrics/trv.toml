@@ -1,0 +1,121 @@
+# The Travelers Companies, Inc.: values as its earnings releases' financial supplements print them,
+# read by hand on 2026-10-29 from the exhibits at `url`, in millions of dollars (EPS as printed).
+# An insurer (SIC 6331: revenue applies). Each supplement prints eight quarters side by side,
+# including the statement of cash flows, so every quarter is printed. Travelers tags no operating
+# income.
+cik = 86312
+fiscal_year_end = "1231"
+sic_code = "6331"
+fixtures = ["TRV-20261028.json"]
+
+[[period]]
+type = "Q"
+period_end = 2024-12-31
+fiscal = "2024 Q4"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000008/a992finsupp123125.htm"]
+revenue = "12,008"
+net_income = "2,082"
+operating_cash_flow = "2,064"
+total_equity = "27,864"
+
+[[period]]
+type = "FY"
+period_end = 2024-12-31
+fiscal = "2024 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000008/a992finsupp123125.htm"]
+revenue = "46,423"
+net_income = "4,999"
+eps_diluted = "21.47"
+operating_cash_flow = "9,074"
+total_equity = "27,864"
+
+[[period]]
+type = "Q"
+period_end = 2025-03-31
+fiscal = "2025 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm"]
+revenue = "11,810"
+net_income = "395"
+eps_diluted = "1.70"
+operating_cash_flow = "1,360"
+
+[[period]]
+type = "Q"
+period_end = 2025-06-30
+fiscal = "2025 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm"]
+revenue = "12,116"
+net_income = "1,509"
+eps_diluted = "6.53"
+operating_cash_flow = "2,334"
+
+[[period]]
+type = "Q"
+period_end = 2025-09-30
+fiscal = "2025 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm"]
+# net margin: 1,888 / 12,470 = 15.14%
+revenue = "12,470"
+net_income = "1,888"
+eps_diluted = "8.24"
+operating_cash_flow = "4,227"
+net_margin = "15.1"
+
+[[period]]
+type = "Q"
+period_end = 2025-12-31
+fiscal = "2025 Q4"
+url = [
+  "https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm",
+  "https://www.sec.gov/Archives/edgar/data/86312/000008631226000008/a992finsupp123125.htm",
+]
+revenue = "12,432"
+net_income = "2,496"
+operating_cash_flow = "2,685"
+total_equity = "32,894"
+
+[[period]]
+type = "FY"
+period_end = 2025-12-31
+fiscal = "2025 FY"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000008/a992finsupp123125.htm"]
+# revenue growth: 48,828 / 46,423 - 1 = 5.18%
+revenue = "48,828"
+net_income = "6,288"
+eps_diluted = "27.43"
+operating_cash_flow = "10,606"
+revenue_growth_yoy = "5.2"
+total_equity = "32,894"
+
+[[period]]
+type = "Q"
+period_end = 2026-03-31
+fiscal = "2026 Q1"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm"]
+revenue = "11,924"
+net_income = "1,711"
+eps_diluted = "7.78"
+operating_cash_flow = "2,198"
+
+[[period]]
+type = "Q"
+period_end = 2026-06-30
+fiscal = "2026 Q2"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm"]
+revenue = "12,153"
+net_income = "2,208"
+eps_diluted = "10.26"
+operating_cash_flow = "1,916"
+
+[[period]]
+type = "Q"
+period_end = 2026-09-30
+fiscal = "2026 Q3"
+url = ["https://www.sec.gov/Archives/edgar/data/86312/000008631226000180/a992finsupp93026.htm"]
+# revenue growth: 12,412 / 12,470 - 1 = -0.47%
+revenue = "12,412"
+net_income = "1,917"
+eps_diluted = "9.04"
+operating_cash_flow = "3,878"
+revenue_growth_yoy = "-0.5"
+total_equity = "28,995"
