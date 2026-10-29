@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from marketdata.db.repositories import filings
 from marketdata.db.repositories.filings import Filing
-from marketdata.normalize.filing_events import Importance, filing_events
+from marketdata.normalize.filing_events import SUBJECT_FILE_NUMBER, Importance, filing_events
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, resolve_ticker
 from marketdata.service.errors import InvalidParameter
@@ -29,16 +29,21 @@ from marketdata.service.pages import (
 from marketdata.service.served import Served, newest, sources_of
 
 MAX_LIMIT = 100
-# The forms a company snapshot shows as its latest filings: results, annual and quarterly
-# reports, current reports and 5% stakes, leaving out prospectuses and insider forms (JPMorgan
-# files over 26,000 424B2 notes a year; D-098).
-SNAPSHOT_FORMS: tuple[str, ...] = tuple(
-    form + amendment
-    for form in (
-        "10-K", "10-KT", "10-Q", "10-QT", "8-K", "20-F", "40-F", "6-K",
-        "SC 13D", "SC 13G", "SCHEDULE 13D", "SCHEDULE 13G",
-    )  # fmt: skip
-    for amendment in ("", "/A")
+# What a company snapshot shows as its latest filings (D-098): annual, quarterly and current
+# reports, and 5% stakes in the company, leaving out prospectuses and insider forms (JPMorgan
+# files over 26,000 424B2 notes a year). A stake filing counts only on the listing of the
+# company it is about (D-061), so a company's own stakes in others are left out, and 13G
+# amendments are, as §9.6 hides them.
+STAKE_FORMS: tuple[str, ...] = (
+    "SC 13D", "SC 13D/A", "SC 13G", "SCHEDULE 13D", "SCHEDULE 13D/A", "SCHEDULE 13G",
+)  # fmt: skip
+SNAPSHOT_FORMS: tuple[str, ...] = (
+    *(
+        form + amendment
+        for form in ("10-K", "10-KT", "10-Q", "10-QT", "8-K", "20-F", "40-F", "6-K")
+        for amendment in ("", "/A")
+    ),
+    *STAKE_FORMS,
 )
 
 
@@ -116,17 +121,26 @@ async def filings_page(
     group: Sequence[int],
     *,
     forms: Sequence[str] | None = None,
+    subject_forms: Sequence[str] | None = None,
     since: date | None = None,
     limit: int = DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> tuple[list[Filing], str | None]:
     """A page of a company group's filings (the company first in `group`), each filing once:
-    a filing listed under two of the group's CIKs comes with the company's own listing. Returns
-    the page and the cursor of the next one."""
+    a filing listed under two of the group's CIKs comes with the company's own listing. Forms
+    in `subject_forms` count only on the listing of the company they are about. Returns the
+    page and the cursor of the next one."""
     check_limit(limit)
     after = _after(cursor) if cursor else None
     rows = await filings.page(
-        conn, group, forms=forms, since=since, after=after, limit=(limit + 1) * len(group)
+        conn,
+        group,
+        forms=forms,
+        subject_forms=subject_forms,
+        subject_file_number=SUBJECT_FILE_NUMBER,
+        since=since,
+        after=after,
+        limit=(limit + 1) * len(group),
     )
     kept: dict[str, Filing] = {}
     for row in rows:

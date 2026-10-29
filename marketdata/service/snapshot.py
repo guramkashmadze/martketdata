@@ -14,7 +14,13 @@ from marketdata.normalize.security_master import FilerType
 from marketdata.service.companies import company_profile, group_of, require, resolve_ticker
 from marketdata.service.earnings import EarningsRelease, latest_earnings
 from marketdata.service.errors import NotFound
-from marketdata.service.filings import SNAPSHOT_FORMS, FilingView, filing_view, filings_page
+from marketdata.service.filings import (
+    SNAPSHOT_FORMS,
+    STAKE_FORMS,
+    FilingView,
+    filing_view,
+    filings_page,
+)
 from marketdata.service.financials import (
     CORE_METRICS,
     MetricView,
@@ -86,6 +92,7 @@ async def company_snapshot(
         conn,
         await group_of(conn, security.cik),
         forms=SNAPSHOT_FORMS,
+        subject_forms=STAKE_FORMS,
         limit=SNAPSHOT_FILINGS,
     )
     current = await securities.list_current_for_cik(conn, security.cik)

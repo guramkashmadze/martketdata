@@ -109,6 +109,8 @@ _PAGE = f"""
     select {_COLUMNS} from filings
     where cik = any(%(ciks)s)
       and (%(forms)s::text[] is null or form = any(%(forms)s))
+      and (%(subject_forms)s::text[] is null or form <> all(%(subject_forms)s)
+           or starts_with(file_number, %(subject_file_number)s))
       and (%(since)s::date is null or filed_at >= %(since)s)
       and (%(after_filed)s::date is null
            or (filed_at, coalesce(accepted_at, filed_at::timestamp at time zone 'UTC'),
@@ -230,17 +232,22 @@ async def page(
     ciks: Sequence[int],
     *,
     forms: Sequence[str] | None = None,
+    subject_forms: Sequence[str] | None = None,
+    subject_file_number: str = "",
     since: date | None = None,
     after: tuple[date, datetime, str] | None = None,
     limit: int = 20,
 ) -> list[Filing]:
     """These companies' listings, newest first, from after `after` (filing date, acceptance
-    time or the start of the filing day in UTC, accession number). A filing listed under two
-    of the companies comes twice, next to each other."""
+    time or the start of the filing day in UTC, accession number). Listings of `subject_forms`
+    are kept only when their file number starts with `subject_file_number`. A filing listed
+    under two of the companies comes twice, next to each other."""
     after_filed, after_accepted, after_accession = after or (None, None, None)
     params = {
         "ciks": list(ciks),
         "forms": list(forms) if forms is not None else None,
+        "subject_forms": list(subject_forms) if subject_forms is not None else None,
+        "subject_file_number": subject_file_number,
         "since": since,
         "after_filed": after_filed,
         "after_accepted": after_accepted,

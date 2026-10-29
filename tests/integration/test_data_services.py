@@ -236,6 +236,28 @@ async def test_the_snapshot(seeded: Conn) -> None:
     assert {Q2_10Q, OLD_Q1_10Q, Q3_RELEASE} <= {s.accession_no for s in served.sources}
 
 
+async def test_the_snapshot_shows_stakes_in_the_company_only(seeded: Conn) -> None:
+    # ACME's own stake in another company (no 005- file number, D-061), a 13D about ACME and a
+    # 13G amendment about ACME, which §9.6 hides.
+    own, about, amended = "0001001000-26-000050", "0000999999-26-000001", "0000999999-26-000002"
+    await seeded.execute(
+        "insert into filings (accession_no, cik, form, filed_at, accepted_at, file_number) "
+        "values (%s, %s, 'SCHEDULE 13G/A', '2026-10-29', '2026-10-29T12:00:00Z', null), "
+        "(%s, %s, 'SCHEDULE 13D', '2026-10-29', '2026-10-29T13:00:00Z', '005-12345'), "
+        "(%s, %s, 'SCHEDULE 13G/A', '2026-10-29', '2026-10-29T14:00:00Z', '005-12345')",
+        [own, ACME, about, ACME, amended, ACME],
+    )
+
+    snapshot = (await company_snapshot(seeded, "ACME", today=TODAY)).data
+
+    assert [f.accession_no for f in snapshot.recent_filings] == [about, Q3_RELEASE, Q2_10Q]
+    assert [e.label for e in snapshot.recent_filings[0].events] == [
+        "An investor crossed 5% and may seek to influence the company"
+    ]
+    every = (await recent_filings(seeded, "ACME", limit=3)).data.filings
+    assert [f.accession_no for f in every] == [amended, about, own]  # the filings list keeps all
+
+
 async def test_compare(seeded: Conn) -> None:
     served = await compare(seeded, ["acme", "beta"], metrics=["revenue", "net_income"])
 
