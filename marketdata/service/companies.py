@@ -1,20 +1,24 @@
-"""Company lookup (E2): ticker resolution and what data applies. Snapshot and coverage (E5a)
-build on these.
+"""Company lookup (E2): ticker resolution and what data applies; coverage and the company a
+served value belongs to (E5a). The snapshot builds on these (service/snapshot.py).
 
 Service functions take a database connection and read clean tables only (CLAUDE.md).
 """
 
+from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import Any, Literal
 
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.db.repositories import companies, securities
+from marketdata.db.repositories import companies, predecessors, securities
 from marketdata.db.repositories.companies import Company
+from marketdata.db.repositories.securities import Security
 from marketdata.normalize.security_master import FilerType
 from marketdata.normalize.tickers import SecurityType, TickerError, canonical_ticker
 from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.service.pages import DEFAULT_LIMIT, check_limit, decode_cursor, encode_cursor
+from marketdata.service.served import Served, newest
 
 
 class ResolvedSecurity(BaseModel):
@@ -211,3 +215,104 @@ async def _company(conn: AsyncConnection[Any], cik: int) -> Company:
     if company is None:
         raise NotFound(f"No company has CIK {cik} in the security master.")
     return company
+
+
+# --- E5a: the company a served value belongs to, and coverage.
+
+
+class CompanyRef(BaseModel):
+    """A company as a client knows it: its ticker, CIK and name."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str | None  # null when it has no current ticker
+    cik: int
+    name: str | None
+
+
+def primary_ticker(listed: Sequence[Security]) -> str | None:
+    """The ticker a company is shown under when none was asked for: common stock first, then
+    the shortest, then the first in order (GOOG before GOOGL, BRK-A before BRK-B)."""
+    ranked = sorted(
+        listed, key=lambda row: (row.security_type != "common", len(row.ticker), row.ticker)
+    )
+    return ranked[0].ticker if ranked else None
+
+
+async def group_of(conn: AsyncConnection[Any], cik: int) -> list[int]:
+    """The company and its predecessors (data/predecessors.csv), the company first."""
+    return [cik, *await predecessors.predecessors_of(conn, cik)]
+
+
+async def company_refs(conn: AsyncConnection[Any], ciks: Iterable[int]) -> dict[int, CompanyRef]:
+    """For each CIK, the company it belongs to now: a predecessor's CIK gives its successor
+    (D-068), with the successor's primary ticker and name."""
+    wanted = set(ciks)
+    successor = await predecessors.successors(conn, list(wanted))
+    heads = {cik: successor.get(cik, cik) for cik in wanted}
+    found = {company.cik: company for company in await companies.get_many(conn, [*heads.values()])}
+    listed: dict[int, list[Security]] = {}
+    for row in await securities.list_current_for_ciks(conn, [*heads.values()]):
+        listed.setdefault(row.cik, []).append(row)
+    return {
+        cik: CompanyRef(
+            ticker=primary_ticker(listed.get(head, [])),
+            cik=head,
+            name=found[head].name if head in found else None,
+        )
+        for cik, head in heads.items()
+    }
+
+
+class CoveredTicker(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    security_type: SecurityType
+    cik: int
+    name: str | None
+    filer_type: FilerType
+    kinds: tuple[Capability, ...]  # earnings and fundamentals: whether each applies, and why
+
+
+class Coverage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    tickers: tuple[CoveredTicker, ...]
+    next_cursor: str | None  # pass it as `cursor` for the next page; null on the last
+
+
+async def coverage(
+    conn: AsyncConnection[Any], *, limit: int = DEFAULT_LIMIT, cursor: str | None = None
+) -> Served[Coverage]:
+    """The covered tickers (PLAN.md §10.2): every current ticker of a universe company, by
+    ticker, with its class and the data kinds that apply (§9.1). Funds and foreign issuers are
+    listed with the reason their data doesn't apply."""
+    check_limit(limit)
+    (after,) = decode_cursor(cursor, 1) if cursor else (None,)
+    rows = await securities.covered(conn, after=after, limit=limit + 1)
+    page = rows[:limit]
+    found = {
+        company.cik: company
+        for company in await companies.get_many(conn, sorted({row.cik for row in page}))
+    }
+    listed = tuple(
+        CoveredTicker(
+            ticker=row.ticker,
+            security_type=row.security_type,
+            cik=row.cik,
+            name=found[row.cik].name,
+            filer_type=found[row.cik].filer_type,
+            kinds=capabilities_for(found[row.cik]).kinds,
+        )
+        for row in page
+    )
+    return Served(
+        data=Coverage(
+            tickers=listed,
+            next_cursor=encode_cursor(page[-1].ticker) if len(rows) > limit else None,
+        ),
+        sources=(),
+        as_of=newest(company.updated_at for company in found.values()),
+        quality_flags=(),
+    )

@@ -58,7 +58,7 @@ from marketdata.service.companies import (
 from marketdata.service.earnings import FactView, ReleaseView, latest_release
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.extraction import ExtractionReport, SlotCounts, extraction_report
-from marketdata.service.filings import FilingView, recent_filings
+from marketdata.service.filings import CompanyFilings, recent_filings
 from marketdata.service.financials import MetricView, metric_series
 from marketdata.service.quality import QualityReport, quality_report
 from marketdata.service.universe import suggest
@@ -738,32 +738,29 @@ def filings_list(
     """
     settings = _settings()
 
-    async def work(conn: AsyncConnection[Any]) -> tuple[ResolvedSecurity, list[FilingView]]:
-        security = await resolve_ticker(conn, ticker)
-        return security, await recent_filings(conn, security.cik, form=form, limit=limit)
+    async def work(conn: AsyncConnection[Any]) -> CompanyFilings:
+        return (await recent_filings(conn, ticker, form=form, limit=limit)).data
 
     try:
-        security, listed = _in_transaction(settings, work)
+        listed = _in_transaction(settings, work)
     except InvalidParameter as exc:
         raise _fail(str(exc), 2) from None
     except NotFound as exc:
         raise _fail(str(exc)) from None
-    for line in _filing_lines(security, listed, form):
+    for line in _filing_lines(listed, form):
         typer.echo(line)
 
 
-def _filing_lines(
-    security: ResolvedSecurity, listed: list[FilingView], form: str | None
-) -> list[str]:
-    name = security.name or "(no name)"
+def _filing_lines(listed: CompanyFilings, form: str | None) -> list[str]:
+    name = listed.company or "(no name)"
     what = f"{form} filings" if form else "filings"
-    if not listed:
+    if not listed.filings:
         return [
-            f"{name} ({security.ticker}, CIK {security.cik}): no {what} stored yet. The watcher "
+            f"{name} ({listed.ticker}, CIK {listed.cik}): no {what} stored yet. The watcher "
             "and `marketdata backfill filings` load them."
         ]
-    lines = [f"{name} ({security.ticker}, CIK {security.cik}): the {len(listed)} latest {what}"]
-    for filing in listed:
+    lines = [f"{name} ({listed.ticker}, CIK {listed.cik}): the {len(listed.filings)} latest {what}"]
+    for filing in listed.filings:
         events = "; ".join(
             event.label + (" [high]" if event.importance == "high" else "")
             for event in filing.events

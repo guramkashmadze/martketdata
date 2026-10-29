@@ -151,6 +151,19 @@ _LATEST = f"""
     limit 1
 """
 
+# E5a: verified releases (complete or partial), newest first, a page at a time after the last
+# one served (acceptance time, accession number).
+_VERIFIED_PAGE = f"""
+    select {_RELEASE_COLUMNS} from earnings_releases
+    where status in ('complete', 'partial')
+      and (%(ciks)s::bigint[] is null or cik = any(%(ciks)s))
+      and (%(since)s::timestamptz is null or accepted_at >= %(since)s)
+      and (%(after_accepted)s::timestamptz is null
+           or (accepted_at, accession_no) < (%(after_accepted)s, %(after_accession)s))
+    order by accepted_at desc nulls last, accession_no desc
+    limit %(limit)s
+"""
+
 _EVERY_RELEASE = f"""
     select {_RELEASE_COLUMNS} from earnings_releases order by cik, accepted_at, accession_no
 """
@@ -277,6 +290,29 @@ async def latest_release(conn: AsyncConnection[Any], ciks: Sequence[int]) -> Sto
     async with conn.cursor(row_factory=class_row(StoredRelease)) as cur:
         await cur.execute(_LATEST, {"ciks": list(ciks)})
         return await cur.fetchone()
+
+
+async def verified_page(
+    conn: AsyncConnection[Any],
+    ciks: Sequence[int] | None = None,
+    *,
+    since: datetime | None = None,
+    after: tuple[datetime, str] | None = None,
+    limit: int = 20,
+) -> list[StoredRelease]:
+    """Complete and partial releases (of these companies, or all), newest first, accepted at
+    or after `since` and after `after` (acceptance time, accession number)."""
+    after_accepted, after_accession = after or (None, None)
+    params = {
+        "ciks": list(ciks) if ciks is not None else None,
+        "since": since,
+        "after_accepted": after_accepted,
+        "after_accession": after_accession,
+        "limit": limit,
+    }
+    async with conn.cursor(row_factory=class_row(StoredRelease)) as cur:
+        await cur.execute(_VERIFIED_PAGE, params)
+        return await cur.fetchall()
 
 
 async def every_release(conn: AsyncConnection[Any]) -> list[StoredRelease]:

@@ -61,6 +61,16 @@ _SELECT_LATEST_BY_TICKERS = f"""
     order by ticker, valid_to desc nulls first, valid_from desc
 """
 
+# E5a: the current tickers of universe companies, a page at a time after the last one served.
+_COVERED = f"""
+    select {_COLUMNS} from securities s
+    where s.valid_to is null
+      and exists (select 1 from companies c where c.cik = s.cik and c.in_universe)
+      and (%(after)s::text is null or s.ticker > %(after)s)
+    order by s.ticker
+    limit %(limit)s
+"""
+
 _COPY = "copy securities (cik, ticker, security_type, exchange, share_class, valid_from) from stdin"
 
 _UPDATE = """
@@ -105,6 +115,15 @@ async def list_current_for_cik(conn: AsyncConnection[Any], cik: int) -> list[Sec
 async def list_current_for_ciks(conn: AsyncConnection[Any], ciks: Sequence[int]) -> list[Security]:
     async with conn.cursor(row_factory=class_row(Security)) as cur:
         await cur.execute(_SELECT_CURRENT_BY_CIKS, {"ciks": list(ciks)})
+        return await cur.fetchall()
+
+
+async def covered(
+    conn: AsyncConnection[Any], *, after: str | None = None, limit: int = 20
+) -> list[Security]:
+    """Current tickers of universe companies, by ticker, from after `after`."""
+    async with conn.cursor(row_factory=class_row(Security)) as cur:
+        await cur.execute(_COVERED, {"after": after, "limit": limit})
         return await cur.fetchall()
 
 

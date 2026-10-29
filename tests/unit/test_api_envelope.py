@@ -61,7 +61,9 @@ def test_the_envelope_carries_the_disclaimer() -> None:
         data={"value": Decimal("1.50")},
         sources=(Source(accession_no="0000320193-26-000018", form="8-K", filed_at=None, url="u"),),
         as_of=datetime(2026, 10, 29, 12, tzinfo=UTC),
-        quality_flags=(FlagRef(code="stale_data", metric="revenue", period_end=None),),
+        quality_flags=(
+            FlagRef(code="stale_data", metric="revenue", period_end=None, ticker="AAPL"),
+        ),
     )
 
     body = json.loads(respond(served).body, parse_float=Decimal)

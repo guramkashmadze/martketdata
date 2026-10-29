@@ -50,6 +50,13 @@ _COUNT = "select count(*) from xbrl_facts where cik = %(cik)s"
 
 _CIKS = "select distinct cik from xbrl_facts order by cik"
 
+# E5a: the form and filing date of filings known from their facts.
+_FILINGS = """
+    select distinct on (accession_no) accession_no, cik, form, filed_at
+    from xbrl_facts where accession_no = any(%(accessions)s)
+    order by accession_no, cik
+"""
+
 _FOR_CONCEPTS = """
     select cik, taxonomy, concept, unit, period_start, period_end, value, fy, fp, form, frame,
            filed_at, accession_no
@@ -155,3 +162,23 @@ def _params(facts: Sequence[XbrlFact]) -> dict[str, list[Any]]:
         "filed_at": [fact.filed_at for fact in facts],
         "accession_no": [fact.accession_no for fact in facts],
     }
+
+
+@dataclass(frozen=True)
+class FactFiling:
+    accession_no: str
+    cik: int
+    form: str | None
+    filed_at: date
+
+
+async def filings_of_facts(
+    conn: AsyncConnection[Any], accessions: Sequence[str]
+) -> list[FactFiling]:
+    """The filing each of these accession numbers names in the stored facts, by accession."""
+    async with conn.cursor() as cur:
+        await cur.execute(_FILINGS, {"accessions": list(accessions)})
+        return [
+            FactFiling(str(accession), int(cik), form, filed)
+            for accession, cik, form, filed in await cur.fetchall()
+        ]

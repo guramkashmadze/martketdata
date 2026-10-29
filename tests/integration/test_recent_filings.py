@@ -1,6 +1,6 @@
 """E3-S6: `service.filings.recent_filings` returns each filing with its events. The same
 Schedule 13D (Disney's on FuboTV) is listed under both companies; only FuboTV's listing gets
-the activist label (D-061)."""
+the activist label (D-061). E5a: by ticker, a page at a time."""
 
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,7 @@ from marketdata.ingest.watcher import FilingsWatcher
 from marketdata.sec import urls
 from marketdata.sec.raw_store import LocalRawStore
 from marketdata.service.errors import InvalidParameter
-from marketdata.service.filings import recent_filings
+from marketdata.service.filings import FilingView, recent_filings
 
 Conn = psycopg.AsyncConnection[Any]
 FUBO, DIS = 1484769, 1744489
@@ -33,12 +33,26 @@ async def watched(conn: Conn, tmp_path: Path) -> Conn:
         watcher = FilingsWatcher(fetcher, connect_to(conn), frozenset())
         await watcher.watch(FUBO)
         await watcher.watch(DIS)
+    for cik, name, ticker in ((FUBO, "FuboTV Inc.", "FUBO"), (DIS, "Walt Disney Co", "DIS")):
+        await conn.execute(
+            "insert into companies (cik, name, filer_type, in_universe) "
+            "values (%s, %s, 'domestic', true) on conflict (cik) do nothing",
+            [cik, name],
+        )
+        await conn.execute(
+            "insert into securities (cik, ticker, valid_from) values (%s, %s, '2026-10-25')",
+            [cik, ticker],
+        )
     return conn
 
 
+async def _filings(conn: Conn, ticker: str, **options: Any) -> tuple[FilingView, ...]:
+    return (await recent_filings(conn, ticker, **options)).data.filings
+
+
 async def test_a_13d_gets_the_activist_label_on_the_subjects_listing_only(watched: Conn) -> None:
-    [subject] = await recent_filings(watched, FUBO, form="SCHEDULE 13D")
-    [filer] = await recent_filings(watched, DIS, form="SCHEDULE 13D")
+    [subject] = await _filings(watched, "FUBO", form="SCHEDULE 13D")
+    [filer] = await _filings(watched, "dis", form="schedule 13d")
 
     assert subject.accession_no == filer.accession_no == THIRTEEN_D
     assert [(e.item_or_form, e.label, e.importance) for e in subject.events] == [
@@ -49,7 +63,7 @@ async def test_a_13d_gets_the_activist_label_on_the_subjects_listing_only(watche
 
 
 async def test_8k_items_are_labelled_in_order_without_hidden_ones(watched: Conn) -> None:
-    listed = await recent_filings(watched, FUBO, form="8-K", limit=100)
+    listed = await _filings(watched, "FUBO", form="8-K", limit=100)
 
     [filing] = [f for f in listed if f.accession_no == CHANGE_IN_CONTROL]
     assert [(e.item_or_form, e.importance) for e in filing.events] == [
@@ -66,9 +80,31 @@ async def test_8k_items_are_labelled_in_order_without_hidden_ones(watched: Conn)
 
 
 async def test_filings_come_newest_first_within_the_limit(watched: Conn) -> None:
-    listed = await recent_filings(watched, FUBO, limit=10)
+    listed = await _filings(watched, "FUBO", limit=10)
 
     assert len(listed) == 10
     assert [f.filed_at for f in listed] == sorted((f.filed_at for f in listed), reverse=True)
     with pytest.raises(InvalidParameter, match="limit must be from 1 to 100"):
-        await recent_filings(watched, FUBO, limit=101)
+        await recent_filings(watched, "FUBO", limit=101)
+
+
+async def test_pages_follow_one_another_without_gaps(watched: Conn) -> None:
+    first = (await recent_filings(watched, "FUBO", limit=7)).data
+    assert first.next_cursor is not None
+    second = (await recent_filings(watched, "FUBO", limit=7, cursor=first.next_cursor)).data
+    both = (await recent_filings(watched, "FUBO", limit=14)).data
+
+    assert [f.accession_no for f in (*first.filings, *second.filings)] == [
+        f.accession_no for f in both.filings
+    ]
+    with pytest.raises(InvalidParameter, match="cursor is not one this endpoint returned"):
+        await recent_filings(watched, "FUBO", cursor="bm90IGEgY3Vyc29y")
+
+
+async def test_sources_name_each_filing_listed(watched: Conn) -> None:
+    served = await recent_filings(watched, "FUBO", form="SCHEDULE 13D")
+
+    [source] = served.sources
+    assert (source.accession_no, source.form) == (THIRTEEN_D, "SCHEDULE 13D")
+    assert source.url == urls.filing_folder(FUBO, THIRTEEN_D)
+    assert served.as_of is not None and served.quality_flags == ()

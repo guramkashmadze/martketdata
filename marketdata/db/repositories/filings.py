@@ -96,6 +96,29 @@ _OF_FORMS = f"""
     order by accession_no, cik
 """
 
+# E5a: every listing of these filings (a joint filing or a 13D is listed under two companies).
+_BY_ACCESSION = f"""
+    select {_COLUMNS} from filings where accession_no = any(%(accessions)s)
+    order by accession_no, cik
+"""
+
+# E5a: a company group's filings, newest first, a page at a time after the last one served
+# (filing date, acceptance time, accession number). A filing without an acceptance time sorts
+# at the start of its day.
+_PAGE = f"""
+    select {_COLUMNS} from filings
+    where cik = any(%(ciks)s)
+      and (%(forms)s::text[] is null or form = any(%(forms)s))
+      and (%(since)s::date is null or filed_at >= %(since)s)
+      and (%(after_filed)s::date is null
+           or (filed_at, coalesce(accepted_at, filed_at::timestamp at time zone 'UTC'),
+               accession_no)
+              < (%(after_filed)s, %(after_accepted)s, %(after_accession)s))
+    order by filed_at desc, coalesce(accepted_at, filed_at::timestamp at time zone 'UTC') desc,
+             accession_no desc, cik
+    limit %(limit)s
+"""
+
 
 async def insert_new(conn: AsyncConnection[Any], rows: Sequence[FilingRow]) -> list[str]:
     """Insert listings not stored yet; returns the accession numbers inserted."""
@@ -193,3 +216,37 @@ async def of_forms(
         await cur.execute(_OF_FORMS, {"ciks": list(ciks), "forms": list(forms)})
         listed = await cur.fetchall()
     return sorted(listed, key=lambda filing: (filing.filed_at, filing.accession_no))
+
+
+async def listings(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list[Filing]:
+    """Every listing of these filings, by accession number and CIK."""
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_BY_ACCESSION, {"accessions": list(accessions)})
+        return await cur.fetchall()
+
+
+async def page(
+    conn: AsyncConnection[Any],
+    ciks: Sequence[int],
+    *,
+    forms: Sequence[str] | None = None,
+    since: date | None = None,
+    after: tuple[date, datetime, str] | None = None,
+    limit: int = 20,
+) -> list[Filing]:
+    """These companies' listings, newest first, from after `after` (filing date, acceptance
+    time or the start of the filing day in UTC, accession number). A filing listed under two
+    of the companies comes twice, next to each other."""
+    after_filed, after_accepted, after_accession = after or (None, None, None)
+    params = {
+        "ciks": list(ciks),
+        "forms": list(forms) if forms is not None else None,
+        "since": since,
+        "after_filed": after_filed,
+        "after_accepted": after_accepted,
+        "after_accession": after_accession,
+        "limit": limit,
+    }
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_PAGE, params)
+        return await cur.fetchall()

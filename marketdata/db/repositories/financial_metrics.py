@@ -103,6 +103,22 @@ _SERIES = f"""
     order by period_end desc, cik
 """
 
+# E5a: several metrics' rows at once (the financials, the snapshot, a comparison).
+_SERIES_OF = f"""
+    select {_COLUMNS} from financial_metrics
+    where cik = any(%(ciks)s) and metric = any(%(metrics)s) and period_type = %(period_type)s
+    order by metric, period_end desc, cik
+"""
+
+# E5a: the fiscal labels of quarters ending on these days (for releases that state no period
+# end, whose quarter comes from the filing).
+_FISCAL_LABELS = """
+    select distinct on (cik, period_end) cik, period_end, fiscal_year, fiscal_period
+    from financial_metrics
+    where cik = any(%(ciks)s) and period_type = 'Q' and period_end = any(%(ends)s)
+    order by cik, period_end, metric
+"""
+
 _COUNT = "select count(*) from financial_metrics where cik = %(cik)s"
 
 # The quality report (E4b-S3): flags by company, metric and code, and each company's latest
@@ -169,6 +185,29 @@ async def series(
     async with conn.cursor(row_factory=class_row(StoredRow)) as cur:
         await cur.execute(_SERIES, params)
         return await cur.fetchall()
+
+
+async def series_of(
+    conn: AsyncConnection[Any], ciks: Sequence[int], metrics: Sequence[str], period_type: str
+) -> list[StoredRow]:
+    """These metrics' rows of these companies, by metric, newest period first."""
+    params = {"ciks": list(ciks), "metrics": list(metrics), "period_type": period_type}
+    async with conn.cursor(row_factory=class_row(StoredRow)) as cur:
+        await cur.execute(_SERIES_OF, params)
+        return await cur.fetchall()
+
+
+async def fiscal_labels(
+    conn: AsyncConnection[Any], ciks: Sequence[int], period_ends: Sequence[date]
+) -> dict[tuple[int, date], tuple[int, str]]:
+    """(fiscal year, fiscal period) of each quarter these companies have rows for ending on one
+    of these days, by (cik, period end)."""
+    async with conn.cursor() as cur:
+        await cur.execute(_FISCAL_LABELS, {"ciks": list(ciks), "ends": list(period_ends)})
+        return {
+            (int(cik), end): (int(year), str(period))
+            for cik, end, year, period in await cur.fetchall()
+        }
 
 
 async def count(conn: AsyncConnection[Any], cik: int) -> int:
