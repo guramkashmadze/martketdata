@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 from marketdata.db.repositories import securities
 from marketdata.normalize.security_master import FilerType
-from marketdata.service.companies import company_profile, group_of, resolve_ticker
+from marketdata.service.companies import company_profile, group_of, require, resolve_ticker
 from marketdata.service.earnings import EarningsRelease, latest_earnings
 from marketdata.service.errors import NotFound
 from marketdata.service.filings import SNAPSHOT_FORMS, FilingView, filing_view, filings_page
@@ -73,6 +73,7 @@ async def company_snapshot(
     conn: AsyncConnection[Any], ticker: str, *, today: date | None = None
 ) -> Served[CompanySnapshot]:
     security = await resolve_ticker(conn, ticker)
+    require(security, "fundamentals")
     profile = await company_profile(conn, security.cik)
     series = await metric_rows(conn, security.cik, CORE_METRICS, "TTM", limit=1, today=today)
     ttm = tuple(each.rows[0] for each in series if each.rows)

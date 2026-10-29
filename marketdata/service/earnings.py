@@ -25,7 +25,13 @@ from marketdata.db.repositories import earnings, filings, financial_metrics, pre
 from marketdata.db.repositories.earnings import StoredFact, StoredRelease
 from marketdata.extract.interface import SLOTS
 from marketdata.sec import urls
-from marketdata.service.companies import CompanyRef, company_refs, group_of, resolve_ticker
+from marketdata.service.companies import (
+    CompanyRef,
+    company_refs,
+    group_of,
+    require,
+    resolve_ticker,
+)
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.pages import (
     BAD_CURSOR,
@@ -255,6 +261,7 @@ async def latest_earnings(conn: AsyncConnection[Any], ticker: str) -> Served[Ear
     """A company's latest results release (its predecessors' included), whatever its status:
     one that failed verification is served with null values and their reasons (D-097)."""
     security = await resolve_ticker(conn, ticker)
+    require(security, "earnings")
     group = await group_of(conn, security.cik)
     stored = await earnings.latest_release(conn, group)
     if stored is None:
@@ -298,6 +305,7 @@ async def earnings_feed(
     known: dict[int, CompanyRef] = {}
     if ticker is not None:
         security = await resolve_ticker(conn, ticker)
+        require(security, "earnings")
         ciks = await group_of(conn, security.cik)
         known = dict.fromkeys(
             ciks, CompanyRef(ticker=security.ticker, cik=security.cik, name=security.name)

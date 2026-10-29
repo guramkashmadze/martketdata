@@ -21,7 +21,7 @@ from marketdata.db.repositories.financial_metrics import StoredRow
 from marketdata.normalize.metric_catalog import COMPUTED, METRICS, UNITS
 from marketdata.normalize.quality import STALE_DATA, is_stale
 from marketdata.sec import urls
-from marketdata.service.companies import group_of, resolve_ticker
+from marketdata.service.companies import group_of, require, resolve_ticker
 from marketdata.service.errors import InvalidParameter
 from marketdata.service.served import (
     FlagRef,
@@ -188,6 +188,7 @@ async def get_financials(
     if not 1 <= limit <= MAX_PERIODS:
         raise InvalidParameter(f"limit must be from 1 to {MAX_PERIODS} periods, got {limit}")
     security = await resolve_ticker(conn, ticker)
+    require(security, "fundamentals")
     series = await metric_rows(conn, security.cik, wanted, period, limit=limit, today=today)
     rows = tuple(row for each in series for row in each.rows)
     return Served(

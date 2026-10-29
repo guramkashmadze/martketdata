@@ -14,7 +14,7 @@ from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
 from marketdata.normalize.metric_catalog import UNITS
-from marketdata.service.companies import CompanyRef, resolve_ticker
+from marketdata.service.companies import CompanyRef, require, resolve_ticker
 from marketdata.service.errors import InvalidParameter
 from marketdata.service.financials import (
     CORE_METRICS,
@@ -67,6 +67,7 @@ async def compare(
     resolved = [await resolve_ticker(conn, ticker) for ticker in tickers]
     seen: dict[int, str] = {}
     for security in resolved:
+        require(security, "fundamentals")
         if security.cik in seen:
             raise InvalidParameter(
                 f"{seen[security.cik]} and {security.ticker} are the same company; name it once"

@@ -6,7 +6,7 @@ Service functions take a database connection and read clean tables only (CLAUDE.
 
 from collections.abc import Iterable, Sequence
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
@@ -16,7 +16,7 @@ from marketdata.db.repositories.companies import Company
 from marketdata.db.repositories.securities import Security
 from marketdata.normalize.security_master import FilerType
 from marketdata.normalize.tickers import SecurityType, TickerError, canonical_ticker
-from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.service.errors import InvalidParameter, NotApplicable, NotFound
 from marketdata.service.pages import DEFAULT_LIMIT, check_limit, decode_cursor, encode_cursor
 from marketdata.service.served import Served, newest
 
@@ -126,7 +126,18 @@ _NOT_APPLICABLE: dict[FilerType, tuple[str, str]] = {
 }
 
 
-def capabilities_for(company: Company) -> Capabilities:
+class Classified(Protocol):
+    """A company's class: what decides which data kinds apply."""
+
+    @property
+    def cik(self) -> int: ...
+    @property
+    def filer_type(self) -> FilerType: ...
+    @property
+    def in_universe(self) -> bool: ...
+
+
+def capabilities_for(company: Classified) -> Capabilities:
     """In the MVP, earnings and fundamentals apply to domestic filers in the universe only."""
     if company.filer_type in _NOT_APPLICABLE:
         earnings, fundamentals = _NOT_APPLICABLE[company.filer_type]
@@ -150,6 +161,16 @@ def capabilities_for(company: Company) -> Capabilities:
             Capability(kind="fundamentals", applies=applies, reason=fundamentals),
         ),
     )
+
+
+def require(security: ResolvedSecurity, kind: DataKind) -> None:
+    """Raises NotApplicable (422) with the §9.1 reason when `kind` doesn't apply to the
+    security's company: a fund, a foreign private issuer, a company outside the universe
+    (E5a-S4, D-099)."""
+    capability = capabilities_for(security).of(kind)
+    if not capability.applies:
+        who = f"{security.ticker} ({security.name})" if security.name else security.ticker
+        raise NotApplicable(f"{who}: {capability.reason}")
 
 
 async def capabilities(conn: AsyncConnection[Any], cik: int) -> Capabilities:
