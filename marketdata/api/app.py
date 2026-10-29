@@ -31,12 +31,14 @@ Information from public filings. Not investment advice.
 
 
 def create_app(settings: Settings | None = None, *, connect: Connect | None = None) -> FastAPI:
-    """The app; `connect` replaces the pool's connections (the tests pass their own)."""
+    """The app; `connect` replaces the pool's connections (the tests pass their own). Logging
+    is set up when the server starts, not when the app is built, so building one in a test
+    leaves the process's logging as it was."""
     settings = settings or load_settings()
-    configure_logging(settings.env, settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        configure_logging(settings.env, settings.log_level)
         # Opens without waiting for the database (see db/pool.py) and closes on shutdown.
         async with create_pool(str(settings.database_url)) as pool:
             app.state.pool = pool

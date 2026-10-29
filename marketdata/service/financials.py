@@ -11,7 +11,6 @@ days ago says so (`stale_data`, decided when read).
 
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
-from decimal import Decimal
 from typing import Any, Literal
 
 from psycopg import AsyncConnection
@@ -24,7 +23,14 @@ from marketdata.normalize.quality import STALE_DATA, is_stale
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, resolve_ticker
 from marketdata.service.errors import InvalidParameter
-from marketdata.service.served import FlagRef, Served, newest, sources_of, unique_flags
+from marketdata.service.served import (
+    FlagRef,
+    Number,
+    Served,
+    newest,
+    sources_of,
+    unique_flags,
+)
 
 type Period = Literal["Q", "FY", "TTM"]
 PERIODS: tuple[Period, ...] = ("Q", "FY", "TTM")
@@ -60,7 +66,7 @@ class MetricView(BaseModel):
     fiscal_period: str
     period_start: date | None
     period_end: date
-    value: Decimal | None
+    value: Number | None
     unit: str  # USD, shares, USD/shares or percent
     filed_at: date | None
     quality_flags: tuple[str, ...]

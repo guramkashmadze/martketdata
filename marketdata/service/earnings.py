@@ -36,6 +36,7 @@ from marketdata.service.pages import (
 )
 from marketdata.service.served import (
     FlagRef,
+    Number,
     Served,
     Source,
     newest,
@@ -51,7 +52,7 @@ class CrossCheck(BaseModel):
 
     status: str  # pending, matched, mismatch, not_comparable
     filing_accession_no: str | None
-    filing_value: Decimal | None
+    filing_value: Number | None
 
 
 class FactView(BaseModel):
@@ -221,10 +222,10 @@ class EarningsFact(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     slot: str  # revenue, operating_income, net_income, eps_diluted
-    value: Decimal | None  # null unless it passed every check
+    value: Number | None  # null unless it passed every check
     unit: str  # USD or USD/shares
-    prior_value: Decimal | None  # the same quarter a year earlier, from the same table
-    change_pct: Decimal | None  # percent, one decimal
+    prior_value: Number | None  # the same quarter a year earlier, from the same table
+    change_pct: Number | None  # percent, one decimal
     basis: str  # GAAP
     check_status: str  # passed, failed, not_found or not_applicable
     reasons: tuple[str, ...]  # why a value is null
