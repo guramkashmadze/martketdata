@@ -15,6 +15,8 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Worker: pdm run marketdata worker
 - Scheduler: pdm run marketdata scheduler
 - Extraction hit rate: pdm run marketdata extract report
+- Rebuild metrics from stored facts: pdm run marketdata normalize --all
+- Quality report: pdm run marketdata quality report
 - Accuracy report: pdm run marketdata quality accuracy
 
 ## Rules
