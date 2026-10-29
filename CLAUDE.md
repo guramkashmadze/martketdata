@@ -18,6 +18,7 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Rebuild metrics from stored facts: pdm run marketdata normalize --all
 - Quality report: pdm run marketdata quality report
 - Accuracy report: pdm run marketdata quality accuracy
+- API keys: pdm run marketdata clients create NAME, then pdm run marketdata keys create NAME (shown once)
 
 ## Rules
 - Layers: api/, mcp_server/ and web/ → service/ → db/repositories/; ingest/ and webhooks/ → db/repositories/. Never skip a layer. SQL only in db/repositories/.

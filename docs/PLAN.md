@@ -76,7 +76,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E7c | Live run and track record | 6 | E7a, OD-1 | Not started | Starts the track record during the Q3 2026 season |
 | E4a | XBRL facts and reported metrics | 7 | E3 | Done | 2026-10-28. Built before E7c (Guram's choice: E7c needs the server of OD-1). S1: `xbrl_facts` (migration `0007`), every us-gaap and dei fact from per-company companyfacts, each response kept, predecessors loaded too; `facts_refresh` routed with force (D-081). S2: catalog version 1, §9.3 plus four concepts from a survey of the 60 companies against E7a's verified releases (D-082). S3: durations widened for Costco, the latest filing wins among the 10-K and 10-Q family, year ends from each company's 10-Ks and transition reports (D-083). S4: `financial_metrics` (migration `0008`), reported quarters, years and instants, banks' revenue not applicable, restatement and correction value changes, predecessors merged in the service layer, `metrics show`; golden set of 5 companies × 4 metrics × 8 quarters, every value equal to its press release (D-084). S5: public float from the frames API with a share-count check, `frame_facts` (migration `0009`), `universe suggest` (D-085). Dev database: 1,149,093 facts and 69,121 metric rows for 61 CIKs; 500 candidates ranked, 309 suspect floats listed apart. The survey found two wrong E7a releases (Rivian, Meta) and companyfacts files missing 10-Qs (KO, V, NEE) (§16). Lint gate and 1,033 tests green on local PostgreSQL 18. 21 edge cases logged. CI on main is green ([run 40637015310](https://github.com/guramkashmadze/martketdata/actions/runs/40637015310), commit `f7f20ec`) |
 | E4b | Derived metrics, quality checks, cross-checks | 8 | E4a, E7a | Done | 2026-10-29. S1: quarters derived from year-to-date facts (§9.4 rules 3–5): six months less three, nine less six, the year less nine months or less its first three quarters, one concept per derivation, a reported three-month quarter always first, no derived EPS or average shares (D-087); a predecessor's facts fill the periods the company's own filings don't report (D-088). S2: TTM and §9.3's computed metrics, catalog version 2, calc version 2.2, unit `percent` (migration `0010`, D-089). S3: every §9.5 check with a triggering test, `stale_data` decided when read, `marketdata quality report` (D-090). S5: `marketdata normalize --all` with no SEC request (D-091). S6: release-vs-filing cross-check after every facts refresh, stored release and rebuild; releases without a stated period end take it from the filing (migration `0011`, D-092). S4: golden set of 10 companies (a bank, a January retailer, a September year end), core set first: 658 values equal their releases, 26 known differences listed in §16 (D-093). Dev database at migration `0011`: 178,054 metric rows for 61 CIKs rebuilt from stored facts in about 6 s with no SEC request and no value changed (reported 90,711, of them 21,530 instants' TTM; derived quarters 13,275; TTM sums 39,040; computed 35,028); the 262 releases cross-checked: 703 slots matched, 2 mismatched (CoreWeave's 10-K in millions; indie Semiconductor's 10-K changing its year), 319 not comparable, 24 pending, a match rate of 99.7%. Quality report: 15,176 flagged rows; KO, NEE and V stale (companyfacts gaps). Lint gate and 1,159 tests green on local PostgreSQL 18. 13 edge cases logged. CI on main is green ([run 40822815612](https://github.com/guramkashmadze/martketdata/actions/runs/40822815612), commit `dba6f3a`) |
-| E5a | Data API | 9 | E4b | Not started | Clients, keys, envelope, all M1 data endpoints |
+| E5a | Data API | 9 | E4b | Done | 2026-10-29. First `outlier_jump` was kept to revenue, total assets, total equity and shares outstanding (rules version 3, calc version 2.3; 4,311 flagged rows became 291, D-094). S1: `marketdata clients create\|list` and `keys create\|list\|revoke`, a key shown once and stored as its sha256; `X-API-Key` on the /v1 router: 401, 403, and 429 with Retry-After over the key's requests of the last minute; an `api_requests` row per /v1 request; the §10.1 envelope with numbers written from `Decimal` digit for digit (D-095, D-096); migration `0012`. S2: eight service functions returning data with sources, `as_of` and flags: the latest release whatever its status, the feed of verified releases, the 11 releases without a stated period end dated from their 10-Q or 10-K, predecessors merged, sources older than the filings backfill found through their facts (D-096 to D-098). S3: the §10.2 routes, `/docs` with examples from Apple's filings, a contract test per route on a hand-made dataset and on Apple's real filings loaded from the fixtures. S4: `not_applicable` (422) with the §9.1 reason for funds, foreign issuers and companies outside the universe (D-099). Demo on the dev database: client `demo`; `/v1/companies/AAPL/earnings/latest` and `…/financials?period=Q` (128 rows of the 16 core metrics, 9 sources, 20 ms); JPMorgan's snapshot led to listing only stake filings about the company. Lint gate and 1,242 tests green on local PostgreSQL 18. 5 edge cases logged. The commits are local: CI hasn't run on them |
 | E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Not started | |
 | E6 | MCP server | 11 | E5a | Not started | Milestone M1 |
 | E10 | Prices, end-of-day and licensed | 12 | E5a, OD-4 | Not started | D-031 |
@@ -264,8 +264,10 @@ marketdata/
   llm/                   E12/E13 only: client.py, anthropic_client.py, prompts/
   tasks/                 queue.py, registry.py, worker.py, scheduler.py
   service/               companies.py, earnings.py, financials.py, filings.py, compare.py, changes.py,
-                         prices.py, status.py, clients.py, insiders.py, funds.py, quality.py (E4b)
-  api/                   app.py, auth.py, envelope.py, errors.py, routes/, proof_pages/
+                         prices.py, status.py, clients.py, insiders.py, funds.py, quality.py (E4b),
+                         served.py, pages.py, snapshot.py (E5a)
+  api/                   app.py, auth.py, envelope.py, errors.py, routes/, proof_pages/; E5a: deps.py
+                         (a connection per request), params.py, examples.py (/docs), request_log.py
   mcp_server/            server.py, tools.py
   web/                   E15: routes.py, templates/, static/ (vendored htmx and Chart.js)
 data/                    universe.csv, security_overrides.csv, extraction_overrides.yaml, managers.csv
@@ -366,6 +368,9 @@ create table api_requests (
   status       int not null,
   duration_ms  int not null
 );
+-- E5a (migration 0012, D-095): key_hash is 64 lowercase hex digits and rate_per_min above 0;
+-- the rate limit counts a key's requests of the last minute
+create index api_requests_by_key on api_requests (key_id, at);
 
 -- E1
 create table raw_objects (
@@ -470,6 +475,8 @@ create table earnings_releases (
   verified_at        timestamptz,
   updated_at         timestamptz not null default now()
 );
+create index earnings_releases_by_acceptance                 -- E5a (0012): the feed (D-097)
+  on earnings_releases (accepted_at desc, accession_no desc);
 
 create table earnings_facts (
   accession_no       text not null references earnings_releases(accession_no),
@@ -560,6 +567,7 @@ create table xbrl_facts (
   unique nulls not distinct (cik, taxonomy, concept, unit, period_start, period_end, accession_no)
 );
 create index xbrl_facts_lookup on xbrl_facts (cik, concept, period_end);
+create index xbrl_facts_by_accession on xbrl_facts (accession_no);  -- E5a (0012): sources (D-096)
 
 create table financial_metrics (
   cik                bigint not null references companies(cik),
@@ -881,7 +889,7 @@ Checks write flag codes into `quality_flags` and are returned by the API. **A fl
 | --- | --- |
 | `balance_mismatch` | \|Assets − LiabilitiesAndStockholdersEquity\| / Assets > 1%; set on total assets, liabilities and equity (E4b) |
 | `quarters_dont_sum` | For flows with all four quarters reported: \|Q1+Q2+Q3+Q4 − FY\| / \|FY\| > 0.5%; per-share and average-share metrics left out (D-090) |
-| `outlier_jump` | Absolute value changes more than 5× against the previous period of the same type; a zero isn't compared, percentages are left out (D-090) |
+| `outlier_jump` | Revenue, total assets, total equity or shares outstanding whose absolute value changes more than 5× against the previous period of the same type; a zero isn't compared (D-090, D-094) |
 | `concept_mismatch` | See §9.4 rule 3 |
 | `ttm_gap` | See §9.4 rule 8 |
 | `stale_data` | Latest 10-Q or 10-K is older than 120 days: the latest filing among the company's metric rows, decided when read (the quality report, the newest value of a series; D-090) |
@@ -1062,15 +1070,16 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
      "url": "https://www.sec.gov/Archives/edgar/data/<cik>/<accession_nodash>/"}
   ],
   "as_of": "<ISO 8601 UTC timestamp of the newest data used>",
-  "quality_flags": [{"code": "<flag>", "metric": "<metric or slot>", "period_end": "<YYYY-MM-DD>"}],
+  "quality_flags": [{"code": "<flag>", "metric": "<metric or slot>", "period_end": "<YYYY-MM-DD>",
+                     "ticker": "<TICKER>"}],
   "disclaimer": "Information from public filings. Not investment advice."
 }
 ```
 
-- Every value inside `data` carries a `proof` object (§9.10).
-- Errors: `{"error": {"code": "<code>", "message": "<human-readable>"}}` with codes `invalid_parameter` (400), `unauthorized` (401), `forbidden` (403, wrong key scope), `not_found` (404), `not_applicable` (422), `rate_limited` (429), `internal` (500). Messages say how to fix the request where possible.
-- Lists: `limit` (default 20, max 100) and opaque `cursor`.
-- Numbers are JSON numbers serialized from `Decimal`; units are always stated next to them.
+- Every value inside `data` carries a `proof` object (§9.10). `sources` are the filings the values came from, each once, newest first; `as_of` is when the newest row used was last written; each flag names its value's metric or slot, period and ticker (E5a, D-096).
+- Errors: `{"error": {"code": "<code>", "message": "<human-readable>"}}` with codes `invalid_parameter` (400), `unauthorized` (401), `forbidden` (403, wrong key scope), `not_found` (404), `method_not_allowed` (405), `not_applicable` (422), `rate_limited` (429, with `Retry-After`), `internal` (500). Messages say how to fix the request where possible. A parameter that fails validation is `invalid_parameter`, so 422 always means `not_applicable` (D-096).
+- Lists: `limit` (default 20, max 100) and opaque `cursor`; `data.next_cursor` is the next page's, null on the last (D-098).
+- Numbers are JSON numbers written from the stored `Decimal` digit for digit, never through a float (D-096); units are always stated next to them.
 - Ticker parameters follow §9.2 normalization.
 
 ### 10.2 Endpoints
@@ -1079,14 +1088,14 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
 | --- | --- | --- | --- |
 | `GET /health` | E0 | none | Process and database status |
 | `GET /v1/status` | E7c (basic), E5b (accuracy), E11 (full) | none | Freshness, track record, accuracy report, queue depth |
-| `GET /v1/coverage` | E5a | api | Covered tickers with class and available data kinds |
+| `GET /v1/coverage?limit=&cursor=` | E5a | api | Covered tickers with class and available data kinds |
 | `GET /v1/companies/{ticker}?price=&price_date=` | E5a (E10 adds prices) | api | Snapshot: identity, class, latest period, TTM core metrics, latest release, latest three filings; from E10, latest close, market cap and P/E where licensed, or computed from a `price` the client passes |
 | `GET /v1/companies/{ticker}/earnings/latest` | E5a | api | Latest verified release with proof and cross-check status |
 | `GET /v1/earnings?since=&ticker=&limit=&cursor=` | E5a | api | Verified releases, newest first |
 | `GET /v1/earnings/{accession_no}` | E5a | api | One release |
-| `GET /v1/companies/{ticker}/financials?metrics=&period=&limit=` | E5a | api | Metric rows with proof; `period` is Q, FY or TTM; default metrics: the core set (§9.3) |
-| `GET /v1/companies/{ticker}/filings?form=&since=` | E5a | api | Filings with plain-language events, including 13D/13G labels |
-| `GET /v1/compare?tickers=&metrics=&period=&price=` | E5a | api | 2–5 companies side by side |
+| `GET /v1/companies/{ticker}/financials?metrics=&period=&limit=` | E5a | api | Metric rows with proof; `period` is Q, FY or TTM; default metrics: the core set (§9.3); `limit` periods per metric, 8 by default, at most 40 (D-098) |
+| `GET /v1/companies/{ticker}/filings?form=&since=&limit=&cursor=` | E5a | api | Filings with plain-language events, including 13D/13G labels; a predecessor's included (D-098) |
+| `GET /v1/compare?tickers=&metrics=&period=&price=` | E5a (E10 adds `price`) | api | 2–5 companies side by side: each metric's newest value of the period type, TTM by default (D-098) |
 | `GET /v1/companies/{ticker}/prices?start=&end=` | E10 | api | End-of-day prices, only if the vendor license includes `api` (§9.12) |
 | `GET /v1/changes?since=&ticker=&reason=` | E5b | api | Value changes with old value, new value, reason and proof |
 | `GET /proof/earnings/{accession_no}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a release |
@@ -1764,6 +1773,12 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-091 | 2026-10-29 | `marketdata normalize --all` (or `--ticker`, with the company's predecessors) is a command, not a group: it rebuilds each company with stored facts (`ingest/facts.py rebuild_all`) in its own transaction with its value changes, makes no SEC request and needs no SEC settings, prints its duration, then cross-checks the releases | §12 names `normalize --all`, which a Typer group can't take. Dev database: 61 CIKs, 178,054 rows in 6 to 11 s; the rebuild from calc version 1.1 to 2.2 changed no stored value, and a second run writes nothing |
 | D-092 | 2026-10-29 | Release-vs-filing cross-check (E4b-S6, D-028, §9.10): a release's quarter is its stated period end, matched within 7 days to a filing's period, or, when it states none, the latest period a 10-Q or 10-K reports that ended at most 90 days before the release and whose fiscal quarter its label names (the release row keeps its null period end). The value is the quarter as the first filing reporting it gave it: the metric rules over the facts filed up to that day (a Q4 is the 10-K's year less nine months). `not_comparable` when either side has no value or the filing is listed without facts in companyfacts; `pending` while none is listed; the filing's value is kept on a not-comparable slot for investigation. A company is checked with its predecessors after every facts refresh, every stored release and in `normalize --all`, and only changed slots are written; migration `0011` checks the columns | The first filing, not the latest, so that a restatement a year later isn't counted against the release. The 11 releases without a stated end (J&J, Berkshire, lululemon) all match where both sides have a value. On the 262 stored releases: 703 matched, 2 mismatched (EDGE_CASES.md), 319 not comparable (205 slots the release doesn't serve, 44 of 8-Ks without a statement, 45 fourth-quarter EPS the 10-K doesn't report, 10 of KO's and V's 10-Qs missing from companyfacts and Visa's EPS per class, 15 failed), 24 pending; match rate 99.7%. Rivian's, Meta's and Gevo's releases (D-086) match their 10-Qs exactly |
 | D-093 | 2026-10-29 | Golden set of 10 (E4b-S4): AAPL, TGT, COST, JPM, XOM (E4a's), PG, NVDA, O, TRV, DE, the last 8 quarters and the years between, core set first (D-020), each value read from the release text stored in `documents` and each derived quarter given as the difference of two printed columns. A period's `known_differences` names values the filings give otherwise, or not at all, with the reason; each is in §16, and the test checks that it still differs. The trimmed companyfacts fixtures copied from the raw store count as E4's share of the fixture budget (2 MB) | 658 values equal their releases; 26 known differences: companies' rounding between quarterly and year-to-date columns (NVDA, DE, PG), Costco's year in its 10-K, Realty Income's 2024 net income before preferred dividends, the XOM successor's cash including restricted cash, JPMorgan's long-term debt concept. The fixtures total 7.3 MB |
+| D-094 | 2026-10-29 | `outlier_jump` (§9.5) compares only revenue, total assets, total equity and shares outstanding, each with the previous period of the same type; a zero isn't compared. Rules version 3 (calc version 2.3). Supersedes the metric scope in D-090; resolves the §16 E4b-S3 follow-up (Guram chose this option at the E5a kickoff) | On every metric the check flagged 4,311 of 178,054 rows on the dev database (2,748 quarters, 803 years, 760 TTM), mostly flows that swing around zero. Comparing a quarter with the same quarter a year earlier flagged more quarterly rows (3,194), so seasons weren't the cause. On the four metrics where a jump points to a scale error it flags 291 rows (equity 123, shares 75, revenue 54, assets 39). The rebuild changed no stored value |
+| D-095 | 2026-10-29 | API access (E5a-S1): a key is `mdk_` and 32 random bytes (URL-safe base64), printed once by `marketdata keys create` and stored as its sha256 in lowercase hex (checked by migration `0012`, with `rate_per_min` above 0). Every /v1 data route depends on the key check through its router, so none can be added without it; `/v1/status` (E7c, E5b) will have a router of its own. No key, an unknown key and a revoked key are 401; a key whose scope isn't `api` is 403; a key that made `rate_per_min` requests in the minute before is 429 with `Retry-After`: the window is the key's `api_requests` rows of the last 60 seconds, those answered 429 left out (index `api_requests_by_key`). Every /v1 request writes one `api_requests` row after the response, on its own connection: the key when it was found (also for a revoked or refused one), the start time, method, path without the query string, status and duration. `clients create` twice changes nothing; `keys revoke` keeps the first revocation time | A random key needs no salt or slow hash; a prefix makes leaked keys easy to find. A router-level dependency documents the header in `/docs`. Counting in the request log works across API processes and restarts without a new table; refused requests left out let a client recover by waiting a minute. The log carries tickers and parameters only (guardrail 2) |
+| D-096 | 2026-10-29 | The envelope (E5a-S1, S2): service functions return `Served` (data, sources, `as_of`, quality flags) and the API adds the disclaimer, so the MCP server (E6) can return the same. Sources are the filings behind the values, each once, newest first, with the folder URL of §10.1; form and filing date come from `filings`, or from the facts of filings older than the five-year filings backfill (index `xbrl_facts_by_accession`). `as_of` is the newest `updated_at` among the rows used. A flag names its metric or slot, period end and ticker. Numbers are written from `Decimal` digit for digit by the API's own JSON writer, never through a float, and the schema describes them as numbers (pydantic would say string). A parameter that fails validation is 400 `invalid_parameter` (FastAPI's default is 422, which §10.1 keeps for `not_applicable`); an unknown path is 404 `not_found`, a wrong method 405 `method_not_allowed` (a code §10.1 lacked); a server error is 500 `internal` with no details. Logging is set up when the API server starts, not when the app object is built | 1,214 of the 2,974 filings metric rows cite are older than the filings table. The rows' `updated_at` moves only when a row changes, so `as_of` says when the data last changed. A comparison or a feed holds several companies, so a flag needs its ticker. Building apps in tests reconfigured structlog under loggers other tests capture; three tests failed only in the full run |
+| D-097 | 2026-10-29 | Earnings in the API (E5a-S2, §10.2): the release object is the company (`ticker`, `cik`, `company`), `period`, `release` and `facts`, each fact with its value, `check_status`, the reasons a value is null, flags and the §9.10 proof. `earnings/latest` is the company's newest results release whatever its status: a release that failed verification is served with null values and their reasons, `release.status` saying so (Guram's choice at the kickoff). `/v1/earnings` lists complete and partial releases, newest first by acceptance time. A release that states no period end takes the period of the 10-Q or 10-K its values were cross-checked with (`filings.period_of_report`) and that quarter's fiscal labels, with `period_end_source: filing` and the filing's accession number (11 releases: J&J, Berkshire, lululemon); otherwise `period_end_source` is `release`. A predecessor's release belongs to the company now, under its primary ticker; `release.cik` keeps the filer. A release asked for by accession number is served whatever its status. Resolves the §16 E4b-S6 and E7a-S5 follow-ups on releases without a stated period end | Serving only verified releases as the latest would answer 404 for the 8 domestic companies with none (NextEra, Tesla, MercadoLibre, Roblox, Aurora, NuScale, Trilogy Metals, Microbot) and show an older quarter as the latest wherever the newest release failed. The feed matches the `earnings.verified` webhook (E5b). A period end from the filing is the quarter the cross-check matched, not an estimate, and its source is named |
+| D-098 | 2026-10-29 | Lists and company data (E5a-S2, S3): lists take `limit` (1 to 100, default 20) and an opaque cursor, URL-safe base64 of the last item's sort key, returned as `data.next_cursor`. Financials: `limit` is periods per metric (1 to 40, default 8), metrics comma-separated, the core set (D-020) by default, rows by metric as asked, each newest first. Snapshot: identity and class, every current ticker, the latest quarter with metrics, the newest TTM value of each core metric (`not_reported` names core metrics no filing reports), the latest release, and the three latest annual, quarterly and current reports (10-K, 10-Q, 8-K, 20-F, 40-F, 6-K and amendments) and 5% stakes about the company: a 13D or 13G only on the listing it is about (D-061), 13G amendments not at all. Compare: 2 to 5 tickers, TTM by default, each metric's newest value per company by ticker, null where none of its filings reports it; one company named twice is refused. Coverage: every current ticker of a universe company, by ticker, with its class and data kinds. Filings and financials merge predecessors (D-084). With no ticker asked for, a company is shown under its primary ticker: common stock first, then the shortest, then the first in order. `price` and `price_date` come with E10 | JPMorgan's newest filings are 424B2 notes (over 26,000 a year) and its own 13G amendments on other companies, so a plain "latest three filings" said nothing about JPMorgan. Keyset cursors keep pages stable while filings arrive. TTM compares companies whose fiscal years end in different months |
+| D-099 | 2026-10-29 | Not applicable (E5a-S4): earnings (the latest release and the feed of one company), the snapshot, financials and comparisons answer 422 `not_applicable` with the capability's reason (§9.1) when the data kind doesn't apply: a fund, a foreign private issuer, a company outside the universe or one not classified yet. The message names the ticker and company. Filings, coverage and a release asked for by accession number answer for every class | A client asking about SPY or TSM learns why there is no data rather than getting a 404; coverage lists every class with its reasons; filings apply to all filers |
 
 ---
 
@@ -1872,6 +1887,15 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-29 | E4b | Not done: the Planning follow-up to cross-check golden sets with Financial Datasets (its account has no credits), and FuboTV's labels after its first September 10-K (E4a-S3 follow-up: that 10-K is expected in December 2026) | Later; E7c |
 | 2026-10-29 | E4b | E4b's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 | 2026-10-29 | E4b | Done: E4b pushed to `origin` with Guram's OK; CI on main is green ([run 40822815612](https://github.com/guramkashmadze/martketdata/actions/runs/40822815612), commit `dba6f3a`) | — |
+| 2026-10-29 | E5a | Done: `outlier_jump` decided before the API serves flags (E4b-S3 follow-up, D-094); releases without a stated period end are served with the period of the filing they were cross-checked with (E4b-S6 and E7a-S5 follow-ups, D-097) | — |
+| 2026-10-29 | E5a (from the E7a fix follow-up) | Not done in E5a: `period.label` with the label column's heading. The API must not parse documents, so it needs the extractor to store the whole label. J&J's four stored labels also carry the amount column's heading ("THIRD QUARTER 2026 Amount"). Both belong in the next E7a rules version | Next E7a rules version |
+| 2026-10-29 | E5a (from the E3-S6 follow-up) | Not done: a label for a company's own stake filings (Disney's 13D on FuboTV) needs the subject's name from the filing's header, which isn't stored. Until then the snapshot leaves them out (D-098) and `/filings` lists them without a label | E8 or later |
+| 2026-10-29 | E5a-S1 | `api_requests` grows by one row per request with no retention; usage reports and a retention rule (or monthly partitions) come with metering | E11 |
+| 2026-10-29 | E5a-S1 | The rate limit counts requests once they are logged, after the response, so concurrent requests can pass the limit by the number in flight; a counter updated before the handler would close that if clients abuse it | E11 |
+| 2026-10-29 | E5a | `/v1/status` doesn't exist yet: the key check leaves it out by design (D-095), and E7c (basic) or E5b (accuracy) adds it | E7c, E5b |
+| 2026-10-29 | E5a | E6 should call the same service functions: each returns `Served`, whose sources give the MCP tools their SEC links (D-096) | E6 |
+| 2026-10-29 | E5a demo | The dev database has the client `demo` with its two demo keys revoked; `marketdata keys create demo` gives a new one | Guram |
+| 2026-10-29 | E5a | E5a's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 
 ---
 
@@ -1914,6 +1938,7 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Rebuild metrics from stored facts: pdm run marketdata normalize --all
 - Quality report: pdm run marketdata quality report
 - Accuracy report: pdm run marketdata quality accuracy
+- API keys: pdm run marketdata clients create NAME, then pdm run marketdata keys create NAME (shown once)
 
 ## Rules
 - Layers: api/, mcp_server/ and web/ → service/ → db/repositories/; ingest/ and webhooks/ → db/repositories/. Never skip a layer. SQL only in db/repositories/.
