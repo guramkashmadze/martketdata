@@ -17,15 +17,19 @@ import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
 from psycopg import sql
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from marketdata.api.app import create_app
+from marketdata.config import Settings
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.ingest.security_master import LoadReport, SecurityMasterLoader
 from marketdata.normalize.universe import Predecessor, SecurityOverride, parse_universe
 from marketdata.sec import urls
 from marketdata.sec.client import SecClient, TokenBucket
 from marketdata.sec.raw_store import LocalRawStore
+from marketdata.service.clients import create_client, create_key
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -189,3 +193,27 @@ def load_master(conn: psycopg.AsyncConnection[Any], tmp_path: Path) -> LoadMaste
             )
 
     return load
+
+
+# --- E5a: the API in the test's event loop, reading and logging through the test's connection.
+
+
+@pytest.fixture
+def api_app(conn: psycopg.AsyncConnection[Any], migrated_database: str) -> FastAPI:
+    settings = Settings(_env_file=None, database_url=migrated_database)  # type: ignore[call-arg]
+    return create_app(settings, connect=connect_to(conn))
+
+
+@pytest.fixture
+async def api(api_app: FastAPI) -> AsyncIterator[httpx2.AsyncClient]:
+    """A client of the app; a server error is answered 500 rather than raised in the test."""
+    transport = httpx2.ASGITransport(app=api_app, raise_app_exceptions=False)
+    async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+@pytest.fixture
+async def api_key(conn: psycopg.AsyncConnection[Any]) -> str:
+    """A new `api`-scope key of the client "test client"."""
+    await create_client(conn, "test client")
+    return (await create_key(conn, "test client")).key

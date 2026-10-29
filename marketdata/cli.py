@@ -21,6 +21,7 @@ from psycopg import AsyncConnection
 from marketdata.config import Settings, SettingsError, load_settings
 from marketdata.db.pool import create_pool
 from marketdata.db.repositories import predecessors
+from marketdata.db.repositories.clients import ApiKey, Client
 from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
 from marketdata.ingest.cross_check import (
     CrossCheckReport,
@@ -46,6 +47,7 @@ from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError, SecurityOverride, UniverseEntry
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
+from marketdata.service import clients as api_clients
 from marketdata.service.companies import (
     CompanyProfile,
     ListedSecurity,
@@ -1110,6 +1112,149 @@ def _quality_lines(report: QualityReport) -> list[str]:
             lines.append(f"    {metric:<26}{', '.join(listed)}")
     lines.append("Information from public filings. Not investment advice.")
     return lines
+
+
+class ScopeOption(StrEnum):
+    api = "api"
+    review = "review"
+
+
+@groups["clients"].command("create")
+def clients_create(
+    name: Annotated[str, typer.Argument(help="The company or app the keys are for.")],
+) -> None:
+    """Create an API client. Creating one that exists changes nothing."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> tuple[Client, bool]:
+        return await api_clients.create_client(conn, name)
+
+    try:
+        client, created = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    if created:
+        typer.echo(f"Created client {client.client_id}: {client.name}.")
+    else:
+        typer.echo(f"Client {client.client_id} ({client.name}) exists already; nothing changed.")
+    typer.echo(f"Give it a key with `marketdata keys create {_quoted(client.name)}`.")
+
+
+@groups["clients"].command("list")
+def clients_list() -> None:
+    """List API clients with their number of active (not revoked) keys."""
+    settings = _settings()
+    listed = _in_transaction(settings, api_clients.list_clients)
+    for line in _client_lines(listed):
+        typer.echo(line)
+
+
+def _client_lines(listed: list[Client]) -> list[str]:
+    if not listed:
+        return ["No clients yet. `marketdata clients create NAME` adds one."]
+    lines = [f"  {'ID':>4}  {'NAME':<30} {'CREATED (UTC)':<19}  ACTIVE KEYS"]
+    for client in listed:
+        lines.append(
+            f"  {client.client_id:>4}  {client.name:<30} {_utc(client.created_at):<19}  "
+            f"{client.active_keys}"
+        )
+    return lines
+
+
+@groups["keys"].command("create")
+def keys_create(
+    client: Annotated[str, typer.Argument(help="The client's name (`marketdata clients list`).")],
+    scope: Annotated[
+        ScopeOption, typer.Option(help="api for /v1; review for review pages (E7b).")
+    ] = ScopeOption.api,
+    rate_per_min: Annotated[
+        int, typer.Option(min=1, help="Requests a minute before the API answers 429.")
+    ] = api_clients.DEFAULT_RATE_PER_MIN,
+) -> None:
+    """Create an API key for a client. The key is printed once: only its sha256 is stored."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> api_clients.NewKey:
+        return await api_clients.create_key(
+            conn, client, scope=scope.value, rate_per_min=rate_per_min
+        )
+
+    try:
+        new = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    stored = new.stored
+    typer.echo(
+        f"Key {stored.key_id} for client {stored.client_name} (scope {stored.scope}, "
+        f"{stored.rate_per_min} requests a minute):"
+    )
+    typer.echo("")
+    typer.echo(f"    {new.key}")
+    typer.echo("")
+    typer.echo(
+        "Copy it now: it is shown only once. The database keeps only its sha256 hash. Send it "
+        "in the X-API-Key header."
+    )
+
+
+@groups["keys"].command("list")
+def keys_list(
+    client: Annotated[str | None, typer.Option(help="Only this client's keys.")] = None,
+) -> None:
+    """List API keys (never the keys themselves): client, scope, rate, when created, revoked
+    and last used."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> list[ApiKey]:
+        return await api_clients.list_keys(conn, client)
+
+    try:
+        listed = _in_transaction(settings, work)
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _key_lines(listed):
+        typer.echo(line)
+
+
+def _key_lines(listed: list[ApiKey]) -> list[str]:
+    if not listed:
+        return ["No keys yet. `marketdata keys create CLIENT` adds one."]
+    lines = [
+        f"  {'ID':>4}  {'CLIENT':<24} {'SCOPE':<6} {'PER MIN':>7}  {'CREATED (UTC)':<19}  "
+        f"{'REVOKED (UTC)':<19}  LAST USED (UTC)"
+    ]
+    for key in listed:
+        revoked = _utc(key.revoked_at) if key.revoked_at else "—"
+        used = _utc(key.last_used_at) if key.last_used_at else "never"
+        lines.append(
+            f"  {key.key_id:>4}  {key.client_name:<24} {key.scope:<6} {key.rate_per_min:>7}  "
+            f"{_utc(key.created_at):<19}  {revoked:<19}  {used}"
+        )
+    return lines
+
+
+@groups["keys"].command("revoke")
+def keys_revoke(
+    key_id: Annotated[int, typer.Argument(help="The key's ID (`marketdata keys list`).")],
+) -> None:
+    """Revoke an API key: its next request is answered 401. Revoking it again changes nothing."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> ApiKey:
+        return await api_clients.revoke_key(conn, key_id)
+
+    try:
+        key = _in_transaction(settings, work)
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    revoked_at = _utc(key.revoked_at) if key.revoked_at else "—"
+    typer.echo(f"Key {key.key_id} of client {key.client_name} is revoked (since {revoked_at} UTC).")
+
+
+def _quoted(text: str) -> str:
+    return text if text.replace("-", "").replace("_", "").isalnum() else f"'{text}'"
 
 
 @app.command("normalize")

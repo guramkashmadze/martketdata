@@ -15,6 +15,11 @@ EARNINGS_TABLES = {"earnings_releases", "earnings_facts", "value_changes"}
 FACTS_TABLES = {"xbrl_facts"}
 METRICS_TABLES = {"financial_metrics"}
 FRAMES_TABLES = {"frame_facts"}
+E5A_INDEXES = {
+    "api_requests_by_key",
+    "xbrl_facts_by_accession",
+    "earnings_releases_by_acceptance",
+}
 
 
 def _tables(url: str) -> set[str]:
@@ -33,8 +38,16 @@ def _columns(url: str, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0011(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0011"
+def _indexes(url: str) -> set[str]:
+    with psycopg.connect(url) as conn:
+        rows = conn.execute(
+            "select indexname from pg_indexes where schemaname = 'public'"
+        ).fetchall()
+    return {row[0] for row in rows}
+
+
+def test_head_is_0012(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0012"
 
 
 def _units(url: str) -> str:
@@ -53,6 +66,10 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES
     assert "priority" in _columns(migrated_database, "tasks")
     assert "percent" in _units(migrated_database)
+    assert _indexes(migrated_database) >= E5A_INDEXES
+
+    command.downgrade(alembic_config, "-1")
+    assert _indexes(migrated_database) & E5A_INDEXES == set()
 
     command.downgrade(alembic_config, "-1")
     assert "percent" in _units(migrated_database)
@@ -109,10 +126,28 @@ async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> Non
 async def test_api_key_defaults(conn: psycopg.AsyncConnection[Any]) -> None:
     cur = await conn.execute("""
         with client as (insert into clients (name) values ('operator test') returning client_id)
-        insert into api_keys (client_id, key_hash) select client_id, 'sha256-of-key' from client
+        insert into api_keys (client_id, key_hash) select client_id, repeat('a', 64) from client
         returning scope, rate_per_min, revoked_at
         """)
     assert await cur.fetchone() == ("api", 120, None)
+
+
+@pytest.mark.parametrize(
+    ("key_hash", "rate_per_min"),
+    [("sha256-of-key", 120), ("A" * 64, 120), ("a" * 64, 0)],
+)
+async def test_api_keys_are_checked(
+    conn: psycopg.AsyncConnection[Any], key_hash: str, rate_per_min: int
+) -> None:
+    # E5a (migration 0012): the sha256 of the key in lowercase hex; at least one request a minute.
+    client = await conn.execute("insert into clients (name) values ('checks') returning client_id")
+    row = await client.fetchone()
+    assert row is not None
+    with pytest.raises(psycopg.errors.CheckViolation):
+        await conn.execute(
+            "insert into api_keys (client_id, key_hash, rate_per_min) values (%s, %s, %s)",
+            [row[0], key_hash, rate_per_min],
+        )
 
 
 async def test_filings_are_keyed_by_accession_and_listing_company(
