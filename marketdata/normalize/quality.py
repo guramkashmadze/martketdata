@@ -12,9 +12,11 @@ value. The other §9.5 codes are set where the value is made: `concept_mismatch`
   derived) and add up to more than 0.5% off the year; set on the year and its quarters. Per-
   share and average-share metrics are left out: a year's earnings per share is no sum of its
   quarters'.
-- `outlier_jump`: a value whose absolute size is more than five times, or less than a fifth
-  of, the previous period's of the same type (a zero on either side is not compared); set on
-  the later period. Percentages (margins, growth) are left out.
+- `outlier_jump`: revenue, total assets, total equity or shares outstanding whose absolute
+  size is more than five times, or less than a fifth of, the previous period's of the same type
+  (a zero on either side is not compared); set on the later period. Other metrics are left out
+  (D-094): flows such as net income and cash flows swing around zero, and on all metrics the
+  check flagged 4,311 rows, too many to find a scale error among.
 - `stale_data`: the company's latest 10-Q or 10-K that we have facts of is more than 120 days
   old. It depends on the day it is read, so it is decided when values are read
   (`is_stale`), not stored.
@@ -60,6 +62,8 @@ SUM_TOLERANCE = Decimal("0.005")
 JUMP = Decimal(5)
 STALE_AFTER = timedelta(days=120)
 BALANCE_METRICS = ("total_assets", "total_liabilities", "total_equity")
+# The metrics whose jumps point to a scale error rather than a season or a swing around zero.
+JUMP_METRICS = frozenset({"revenue", "total_assets", "total_equity", "shares_outstanding"})
 
 
 def check(
@@ -126,7 +130,7 @@ def quarters_dont_sum(rows: Sequence[MetricRow]) -> list[MetricKey]:
 def outlier_jumps(rows: Sequence[MetricRow]) -> list[MetricKey]:
     series: dict[tuple[str, str], list[MetricRow]] = defaultdict(list)
     for row in rows:
-        if row.unit != "percent":
+        if row.metric in JUMP_METRICS:
             series[(row.metric, row.period_type)].append(row)
     keys: list[MetricKey] = []
     for listed in series.values():

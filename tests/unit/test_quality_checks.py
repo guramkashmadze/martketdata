@@ -172,16 +172,44 @@ def test_outlier_jump() -> None:
 
 def test_outlier_jump_skips_zero_and_percentages() -> None:
     facts = [
-        _fact("Revenues", QUARTERS[0], 100),
-        _fact("Revenues", QUARTERS[1], 100),
-        _fact("NetIncomeLoss", QUARTERS[0], 0),
-        _fact("NetIncomeLoss", QUARTERS[1], 30),  # from zero: not compared
+        _fact("Revenues", QUARTERS[0], 0),
+        _fact("Revenues", QUARTERS[1], 100),  # from zero: not compared
+        _fact("Revenues", QUARTERS[2], 100),
+        _fact("NetIncomeLoss", QUARTERS[1], 1),
+        _fact("NetIncomeLoss", QUARTERS[2], 30),
     ]
     rows = _rows(facts)
 
-    assert not rows[("net_income", "Q", QUARTERS[1][1])].quality_flags
-    # The net margin goes from 0% to 30%: percentages are not compared.
-    assert not rows[("net_margin", "Q", QUARTERS[1][1])].quality_flags
+    assert not rows[("revenue", "Q", QUARTERS[1][1])].quality_flags
+    # The net margin goes from 1% to 30%: percentages are not compared.
+    assert not rows[("net_margin", "Q", QUARTERS[2][1])].quality_flags
+
+
+def test_outlier_jump_is_kept_to_revenue_assets_equity_and_shares() -> None:
+    # D-094: flows such as net income and cash flows swing around zero; only the metrics whose
+    # jumps point to a scale error are compared.
+    ends = [end for _, end in QUARTERS[:2]]
+    facts = [
+        _fact("NetIncomeLoss", QUARTERS[0], 100),
+        _fact("NetIncomeLoss", QUARTERS[1], 2100),
+        _fact("NetCashProvidedByUsedInOperatingActivities", QUARTERS[0], 100),
+        _fact("NetCashProvidedByUsedInOperatingActivities", QUARTERS[1], -2100),
+        *(_fact("Assets", end, value) for end, value in zip(ends, (100, 2100), strict=True)),
+        *(
+            _fact("StockholdersEquity", end, value)
+            for end, value in zip(ends, (100, 19), strict=True)
+        ),
+        *(
+            _fact("CommonStockSharesOutstanding", end, value, unit="shares")
+            for end, value in zip(ends, (100, 501), strict=True)
+        ),
+    ]
+    rows = _rows(facts)
+
+    for metric in ("total_assets", "total_equity", "shares_outstanding"):
+        assert OUTLIER_JUMP in rows[(metric, "Q", ends[1])].quality_flags, metric
+    for metric in ("net_income", "operating_cash_flow"):
+        assert OUTLIER_JUMP not in rows[(metric, "Q", ends[1])].quality_flags, metric
 
 
 def test_stale_data() -> None:

@@ -55,7 +55,9 @@ from marketdata.normalize.periods import (
     latest_facts,
 )
 
-RULES_VERSION = "2"
+# 1: reported rows (E4a). 2: derived quarters, TTM and the quality checks (E4b). 3: outlier_jump
+# on revenue, total assets, total equity and shares outstanding only (E5a, D-094).
+RULES_VERSION = "3"
 CALC_VERSION = f"{CATALOG_VERSION}.{RULES_VERSION}"
 
 NOT_APPLICABLE_FINANCIALS = "not_applicable_financials"
