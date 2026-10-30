@@ -168,6 +168,14 @@ _VERIFIED_PAGE = f"""
     limit %(limit)s
 """
 
+# E5b: seconds from SEC acceptance to the first verification, of releases routed live.
+_LIVE_LATENCIES = """
+    select extract(epoch from verified_at - accepted_at)
+    from earnings_releases
+    where live and verified_at is not null and accepted_at is not null
+    order by 1
+"""
+
 _EVERY_RELEASE = f"""
     select {_RELEASE_COLUMNS} from earnings_releases order by cik, accepted_at, accession_no
 """
@@ -383,3 +391,11 @@ async def cross_checks(
     async with conn.cursor(row_factory=class_row(CrossChecked)) as cur:
         await cur.execute(_CROSS_CHECKS, {"ciks": list(ciks) if ciks is not None else None})
         return await cur.fetchall()
+
+
+async def live_latencies(conn: AsyncConnection[Any]) -> list[Decimal]:
+    """Seconds from SEC acceptance to the first verified value, for each release the watcher
+    routed when it was filed, shortest first."""
+    async with conn.cursor() as cur:
+        await cur.execute(_LIVE_LATENCIES)
+        return [Decimal(row[0]) for row in await cur.fetchall()]

@@ -6,11 +6,20 @@ metrics). They are built from the response models, so they keep the shape the AP
 """
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from marketdata.sec import urls
+from marketdata.service.accuracy import (
+    AccuracyReport,
+    ChangeCounts,
+    CrossCheckAccuracy,
+    ExtractionAccuracy,
+    GoldenAccuracy,
+    Latency,
+    rate,
+)
 from marketdata.service.changes import ChangeFeed, ValueChange
 from marketdata.service.companies import Capability, CompanyRef, Coverage, CoveredTicker
 from marketdata.service.compare import ComparedMetric, Comparison
@@ -27,8 +36,10 @@ from marketdata.service.filings import CompanyFilings, FilingEventView, FilingVi
 from marketdata.service.financials import Financials, MetricProof, MetricView
 from marketdata.service.json_text import dumps
 from marketdata.service.pages import encode_cursor
+from marketdata.service.quality import Mismatch
 from marketdata.service.served import DISCLAIMER, Served, Source
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
+from marketdata.service.status import Freshness, StatusReport
 
 AAPL, GOOGL = 320193, 1652044
 RELEASE, TEN_Q = "0000320193-26-000018", "0000320193-26-000020"
@@ -441,6 +452,71 @@ CHANGES: Served[ChangeFeed] = Served(
         _source(RIVN, RIVN_RELEASE, "8-K", date(2026, 7, 30)),
     ),
     as_of=datetime(2026, 10, 28, 6, 22, 35, tzinfo=UTC),
+    quality_flags=(),
+)
+
+
+# E5b: the status as the dev database gave it on 2026-10-30, before the live run (shortened: one
+# slot, one metric, one of the two mismatches).
+STATUS_AT = datetime(2026, 10, 30, 16, 48, 8, tzinfo=UTC)
+STATUS: Served[StatusReport] = Served(
+    data=StatusReport(
+        freshness=Freshness(
+            release_accepted_at=datetime(2026, 10, 22, 20, 9, 31, tzinfo=UTC),
+            release_verified_at=datetime(2026, 10, 28, 3, 14, 56, tzinfo=UTC),
+            metrics_updated_at=datetime(2026, 10, 29, 17, 18, 57, tzinfo=UTC),
+            filing_discovered_at=datetime(2026, 10, 28, 3, 14, 48, tzinfo=UTC),
+            watched_at=datetime(2026, 10, 28, 6, 22, 29, tzinfo=UTC),
+            live_releases=0,
+        ),
+        accuracy=AccuracyReport(
+            generated_at=STATUS_AT,
+            golden=GoldenAccuracy(
+                values=848,
+                loaded_at=STATUS_AT,
+                earnings=rate(135, 138),
+                slots={"revenue": rate(34, 34)},
+                metrics_total=rate(658, 684),
+                metrics={"revenue": rate(88, 90)},
+                known_differences=29,
+                not_applicable=26,
+                not_stored=0,
+            ),
+            cross_check=CrossCheckAccuracy(
+                statuses={"matched": 703, "mismatch": 2, "not_comparable": 319, "pending": 24},
+                rate=Decimal("99.7"),
+                mismatches=(
+                    Mismatch(
+                        cik=1769628,
+                        ticker="CRWV",
+                        accession_no="0001769628-26-000094",
+                        period_end=date(2025, 12, 31),
+                        slot="operating_income",
+                        unit="USD",
+                        release_value=Decimal(-89000000),
+                        filing_value=Decimal(-89589000),
+                        filing_accession="0001769628-26-000104",
+                        difference_pct=Decimal("0.7"),
+                    ),
+                ),
+            ),
+            extraction=ExtractionAccuracy(
+                releases=262,
+                statuses={"complete": 206, "partial": 8, "failed": 37, "no_statement": 11},
+                rules_versions=("3",),
+                total=rate(766, 928),
+                slots={"revenue": rate(201, 239)},
+            ),
+            latency=Latency(releases=0, median_minutes=None, p90_minutes=None),
+            changes=ChangeCounts(
+                since=STATUS_AT - timedelta(days=90),
+                earnings_facts={"correction": 30, "restatement": 0, "amendment": 0},
+                financial_metrics={"correction": 0, "restatement": 0, "amendment": 0},
+            ),
+        ),
+    ),
+    sources=(),
+    as_of=datetime(2026, 10, 29, 17, 18, 57, tzinfo=UTC),
     quality_flags=(),
 )
 

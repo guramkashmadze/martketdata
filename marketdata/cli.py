@@ -31,6 +31,7 @@ from marketdata.ingest.cross_check import (
 )
 from marketdata.ingest.facts import RebuildReport, rebuild_all
 from marketdata.ingest.fetch import RawFetcher
+from marketdata.ingest.golden import GoldenLoad, load_golden
 from marketdata.ingest.sec_lock import SecProcessBusy, sec_process_lock
 from marketdata.ingest.security_master import (
     LoadReport,
@@ -41,6 +42,7 @@ from marketdata.ingest.security_master import (
     read_predecessors,
 )
 from marketdata.log import configure_logging
+from marketdata.normalize.golden import GoldenFileError
 from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.normalize.public_float import Suggestion
 from marketdata.normalize.quality import DESCRIPTIONS
@@ -50,6 +52,7 @@ from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
 from marketdata.service import clients as api_clients
 from marketdata.service import webhooks as webhook_service
+from marketdata.service.accuracy import AccuracyReport, Rate, accuracy_report
 from marketdata.service.companies import (
     CompanyProfile,
     ListedSecurity,
@@ -62,7 +65,7 @@ from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.extraction import ExtractionReport, SlotCounts, extraction_report
 from marketdata.service.filings import CompanyFilings, recent_filings
 from marketdata.service.financials import MetricView, metric_series
-from marketdata.service.quality import QualityReport, quality_report
+from marketdata.service.quality import Mismatch, QualityReport, quality_report
 from marketdata.service.universe import suggest
 from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
@@ -1082,14 +1085,7 @@ def _quality_lines(report: QualityReport) -> list[str]:
         f"Earnings releases against their 10-Qs and 10-Ks (D-028), slots: {counts}; "
         f"match rate {rate}",
     ]
-    for mismatch in checks.mismatches:
-        unit = mismatch.unit if mismatch.unit == "USD" else "USD per share"
-        difference = f"{mismatch.difference_pct:+}%" if mismatch.difference_pct is not None else ""
-        lines.append(
-            f"  {mismatch.ticker or '—':<7} {mismatch.accession_no}  {mismatch.period_end or '—'}  "
-            f"{mismatch.slot:<17} release {_number(mismatch.release_value)}, filing "
-            f"{_number(mismatch.filing_value)} {unit} ({mismatch.filing_accession}) {difference}"
-        )
+    lines += [_mismatch_line(mismatch) for mismatch in checks.mismatches]
     lines += ["", "By company and metric (rows flagged, the latest period flagged):"]
     for company in report.companies:
         if not company.flags:
@@ -1111,6 +1107,115 @@ def _quality_lines(report: QualityReport) -> list[str]:
         for metric, listed in by_metric.items():
             lines.append(f"    {metric:<26}{', '.join(listed)}")
     lines.append("Information from public filings. Not investment advice.")
+    return lines
+
+
+def _mismatch_line(mismatch: Mismatch) -> str:
+    unit = mismatch.unit if mismatch.unit == "USD" else "USD per share"
+    difference = f"{mismatch.difference_pct:+}%" if mismatch.difference_pct is not None else ""
+    return (
+        f"  {mismatch.ticker or '—':<7} {mismatch.accession_no}  {mismatch.period_end or '—'}  "
+        f"{mismatch.slot:<17} release {_number(mismatch.release_value)}, filing "
+        f"{_number(mismatch.filing_value)} {unit} ({mismatch.filing_accession}) {difference}"
+    )
+
+
+@groups["quality"].command("accuracy")
+def quality_accuracy(
+    load: Annotated[
+        bool,
+        typer.Option(
+            "--load/--no-load", help="Load the golden files (GOLDEN_DIR) first; default yes."
+        ),
+    ] = True,
+) -> None:
+    """The accuracy report (PLAN.md §9.10) from the data as stored now: the golden-set match
+    rate per earnings slot and per metric, the cross-check match rate against the 10-Q and
+    10-K, the extraction pass rate, the minutes from SEC acceptance to verified for releases
+    processed live, and value changes by reason over 90 days. GET /v1/status publishes the
+    same report. Makes no SEC request."""
+    settings = _settings()
+
+    async def run() -> tuple[GoldenLoad | None, AccuracyReport]:
+        async with create_pool(str(settings.database_url), max_size=1) as pool:
+            loaded = await load_golden(pool.connection, settings.golden_dir) if load else None
+            async with pool.connection() as conn:
+                return loaded, await accuracy_report(conn)
+
+    try:
+        loaded, report = asyncio.run(run())
+    except GoldenFileError as exc:
+        raise _fail(str(exc), 2) from None
+    for line in _accuracy_lines(report, loaded):
+        typer.echo(line)
+
+
+def _rate_text(counted: Rate) -> str:
+    share = f" ({counted.rate}%)" if counted.rate is not None else ""
+    return f"{counted.matched:,} of {counted.checked:,}{share}"
+
+
+def _accuracy_lines(report: AccuracyReport, loaded: GoldenLoad | None) -> list[str]:
+    golden = report.golden
+    lines = [f"Accuracy report, {_utc(report.generated_at)} UTC, from the data as stored now", ""]
+    if not golden.values:
+        lines.append("Golden set: none loaded (run without --no-load).")
+    else:
+        source = f"from {loaded.files} files, " if loaded else ""
+        lines += [
+            f"Golden set: {golden.values:,} hand-checked values {source}loaded "
+            f"{_utc(golden.loaded_at) if golden.loaded_at else '—'} UTC",
+            f"  Earnings release slots served exactly: {_rate_text(golden.earnings)}",
+            *(f"    {slot:<26}{_rate_text(counted)}" for slot, counted in golden.slots.items()),
+            f"  Metric values served exactly: {_rate_text(golden.metrics_total)}",
+            *(
+                f"    {metric:<26}{_rate_text(counted)}"
+                for metric, counted in golden.metrics.items()
+            ),
+            f"  Known differences, each with its reason in the golden files: "
+            f"{golden.known_differences}; not applicable: {golden.not_applicable}; not stored "
+            f"in this database: {golden.not_stored}",
+        ]
+    checks = report.cross_check
+    counts = ", ".join(
+        f"{count:,} {status.replace('_', ' ')}" for status, count in checks.statuses.items()
+    )
+    lines += [
+        "",
+        f"Earnings releases against their 10-Qs and 10-Ks (D-028), slots: {counts}; match rate "
+        f"{checks.rate if checks.rate is not None else '—'}%",
+        *(_mismatch_line(mismatch) for mismatch in checks.mismatches),
+    ]
+    extraction = report.extraction
+    versions = ", ".join(extraction.rules_versions) or "—"
+    with_statement = extraction.releases - extraction.statuses.get("no_statement", 0)
+    lines += [
+        "",
+        f"Extraction (rules version {versions}): {_rate_text(extraction.total)} slots that apply "
+        f"passed every check, in {with_statement:,} releases with a statement",
+        *(f"    {slot:<26}{_rate_text(counted)}" for slot, counted in extraction.slots.items()),
+    ]
+    latency = report.latency
+    lines += [
+        "",
+        "Minutes from SEC acceptance to verified, releases processed live: "
+        + (
+            f"median {latency.median_minutes}, 90th percentile {latency.p90_minutes}, over "
+            f"{latency.releases:,} releases"
+            if latency.releases
+            else "none yet; backfilled releases don't count (the live run is E7c)"
+        ),
+    ]
+    changes = report.changes
+    lines += [
+        "",
+        f"Value changes since {_utc(changes.since)} UTC (90 days): earnings values "
+        + ", ".join(f"{reason} {count}" for reason, count in changes.earnings_facts.items())
+        + "; metric values "
+        + ", ".join(f"{reason} {count}" for reason, count in changes.financial_metrics.items()),
+        "",
+        "Information from public filings. Not investment advice.",
+    ]
     return lines
 
 

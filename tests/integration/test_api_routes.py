@@ -37,9 +37,13 @@ async def headers(conn: Conn, api_key: str) -> dict[str, str]:
 
 
 def test_every_v1_route_has_a_contract_test(api_app: FastAPI) -> None:
-    documented = {path for path in api_app.openapi()["paths"] if path.startswith("/v1")}
+    paths = api_app.openapi()["paths"]
+    keyed = {
+        path for path in paths if path.startswith("/v1") and paths[path]["get"].get("security")
+    }
 
-    assert documented == {path for path, _, _ in ROUTES}
+    assert keyed == {path for path, _, _ in ROUTES}
+    assert "security" not in paths["/v1/status"]["get"]  # E5b: no key (D-095)
 
 
 @pytest.mark.parametrize(("declared", "path", "params"), ROUTES, ids=[r[0] for r in ROUTES])

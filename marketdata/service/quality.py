@@ -121,12 +121,7 @@ async def quality_report(
     successors = await predecessors.successors(conn, listed)
     labelled = sorted({*listed, *successors.values()})
     names = {company.cik: company.name for company in await companies.get_many(conn, labelled)}
-    tickers: dict[int, str] = {}
-    for security in sorted(
-        await securities.list_current_for_ciks(conn, labelled),
-        key=lambda row: (row.security_type != "common", row.ticker),
-    ):
-        tickers.setdefault(security.cik, security.ticker)
+    tickers = await _tickers(conn, labelled)
     return tally(
         counts,
         rows,
@@ -183,8 +178,31 @@ def tally(
                 flags=tuple(by_company.get(cik, ())),
             )
         )
+    return QualityReport(
+        today=today,
+        rows=sum(count for count, _, _ in rows.values()),
+        flagged=sum(flagged for _, flagged, _ in rows.values()),
+        by_flag=dict(by_flag.most_common()),
+        cross_checks=summarize(checked, tickers, successors),
+        companies=tuple(
+            sorted(
+                listed,
+                key=lambda company: (
+                    company.ticker or "~",
+                    company.successor_cik is not None,
+                    company.cik,
+                ),
+            )
+        ),
+    )
+
+
+def summarize(
+    checked: Sequence[CrossChecked], tickers: Mapping[int, str], successors: Mapping[int, int]
+) -> CrossChecks:
+    """The cross-check's slots by status and every mismatch, with both values (D-028)."""
     statuses = Counter(slot.cross_check_status for slot in checked)
-    mismatches = tuple(
+    mismatches = [
         Mismatch(
             cik=slot.cik,
             ticker=tickers.get(slot.cik) or tickers.get(successors.get(slot.cik, 0)),
@@ -199,30 +217,33 @@ def tally(
         )
         for slot in checked
         if slot.cross_check_status == "mismatch"
+    ]
+    return CrossChecks(
+        statuses={
+            status: statuses[status]
+            for status in ("matched", "mismatch", "not_comparable", "pending")
+        },
+        mismatches=tuple(sorted(mismatches, key=lambda m: (m.ticker or "~", m.accession_no))),
     )
-    return QualityReport(
-        today=today,
-        rows=sum(count for count, _, _ in rows.values()),
-        flagged=sum(flagged for _, flagged, _ in rows.values()),
-        by_flag=dict(by_flag.most_common()),
-        cross_checks=CrossChecks(
-            statuses={
-                status: statuses[status]
-                for status in ("matched", "mismatch", "not_comparable", "pending")
-            },
-            mismatches=tuple(sorted(mismatches, key=lambda m: (m.ticker or "~", m.accession_no))),
-        ),
-        companies=tuple(
-            sorted(
-                listed,
-                key=lambda company: (
-                    company.ticker or "~",
-                    company.successor_cik is not None,
-                    company.cik,
-                ),
-            )
-        ),
-    )
+
+
+async def cross_check_summary(conn: AsyncConnection[Any]) -> CrossChecks:
+    """Every release's cross-check, for the accuracy report (E5b-S4)."""
+    checked = await earnings.cross_checks(conn, None)
+    ciks = sorted({slot.cik for slot in checked})
+    successors = await predecessors.successors(conn, ciks)
+    return summarize(checked, await _tickers(conn, [*ciks, *successors.values()]), successors)
+
+
+async def _tickers(conn: AsyncConnection[Any], ciks: Sequence[int]) -> dict[int, str]:
+    """Each company's ticker for a report: its common stock's first."""
+    tickers: dict[int, str] = {}
+    for security in sorted(
+        await securities.list_current_for_ciks(conn, sorted(set(ciks))),
+        key=lambda row: (row.security_type != "common", row.ticker),
+    ):
+        tickers.setdefault(security.cik, security.ticker)
+    return tickers
 
 
 def _difference(release: Decimal | None, filing: Decimal | None) -> Decimal | None:

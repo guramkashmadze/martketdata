@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     # start with PUBLIC_BASE_URL; without it they are null.
     webhook_encryption_key: Annotated[SecretStr, AfterValidator(check_fernet_key)] | None = None
     public_base_url: HttpUrl | None = None
+    # E5b. The golden sets `marketdata quality accuracy` loads (tests/golden/ in the repository).
+    golden_dir: Path = Path("tests/golden")
 
     @property
     def base_url(self) -> str | None:

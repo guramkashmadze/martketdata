@@ -13,7 +13,7 @@ from marketdata.api import errors
 from marketdata.api.deps import Connect
 from marketdata.api.proof_pages import routes as proof_pages
 from marketdata.api.request_log import RequestLog
-from marketdata.api.routes import health, v1
+from marketdata.api.routes import health, status, v1
 from marketdata.config import Settings, load_settings
 from marketdata.db.pool import create_pool
 from marketdata.log import configure_logging
@@ -57,6 +57,7 @@ def create_app(settings: Settings | None = None, *, connect: Connect | None = No
         app.state.connect = connect
     app.include_router(health.router)
     app.include_router(v1.router)
+    app.include_router(status.router)
     app.include_router(proof_pages.router)
     errors.install(app)
     app.add_middleware(RequestLog)
