@@ -19,9 +19,10 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Quality report: pdm run marketdata quality report
 - Accuracy report: pdm run marketdata quality accuracy
 - API keys: pdm run marketdata clients create NAME, then pdm run marketdata keys create NAME (shown once)
+- Webhooks: pdm run marketdata webhooks create CLIENT URL (the secret is shown once), then webhooks test ID; the worker delivers
 
 ## Rules
-- Layers: api/, mcp_server/ and web/ → service/ → db/repositories/; ingest/ and webhooks/ → db/repositories/. Never skip a layer. SQL only in db/repositories/.
+- Layers: api/, mcp_server/, web/ and webhooks/ → service/ → db/repositories/; ingest/ → db/repositories/ (it writes webhook events in the transaction that changes the data). Never skip a layer. SQL only in db/repositories/.
 - extract/, verify/ and normalize/ (and content/ in E7b) are pure: no I/O. verify/ never imports extract/.
 - The API, MCP server, web UI, proof pages and webhooks read clean tables only. They never call the SEC or the price vendor, and never read raw files.
 - All SEC calls go through marketdata/sec/client.py (User-Agent, max 8 requests/second).

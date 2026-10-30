@@ -77,7 +77,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E4a | XBRL facts and reported metrics | 7 | E3 | Done | 2026-10-28. Built before E7c (Guram's choice: E7c needs the server of OD-1). S1: `xbrl_facts` (migration `0007`), every us-gaap and dei fact from per-company companyfacts, each response kept, predecessors loaded too; `facts_refresh` routed with force (D-081). S2: catalog version 1, §9.3 plus four concepts from a survey of the 60 companies against E7a's verified releases (D-082). S3: durations widened for Costco, the latest filing wins among the 10-K and 10-Q family, year ends from each company's 10-Ks and transition reports (D-083). S4: `financial_metrics` (migration `0008`), reported quarters, years and instants, banks' revenue not applicable, restatement and correction value changes, predecessors merged in the service layer, `metrics show`; golden set of 5 companies × 4 metrics × 8 quarters, every value equal to its press release (D-084). S5: public float from the frames API with a share-count check, `frame_facts` (migration `0009`), `universe suggest` (D-085). Dev database: 1,149,093 facts and 69,121 metric rows for 61 CIKs; 500 candidates ranked, 309 suspect floats listed apart. The survey found two wrong E7a releases (Rivian, Meta) and companyfacts files missing 10-Qs (KO, V, NEE) (§16). Lint gate and 1,033 tests green on local PostgreSQL 18. 21 edge cases logged. CI on main is green ([run 40637015310](https://github.com/guramkashmadze/martketdata/actions/runs/40637015310), commit `f7f20ec`) |
 | E4b | Derived metrics, quality checks, cross-checks | 8 | E4a, E7a | Done | 2026-10-29. S1: quarters derived from year-to-date facts (§9.4 rules 3–5): six months less three, nine less six, the year less nine months or less its first three quarters, one concept per derivation, a reported three-month quarter always first, no derived EPS or average shares (D-087); a predecessor's facts fill the periods the company's own filings don't report (D-088). S2: TTM and §9.3's computed metrics, catalog version 2, calc version 2.2, unit `percent` (migration `0010`, D-089). S3: every §9.5 check with a triggering test, `stale_data` decided when read, `marketdata quality report` (D-090). S5: `marketdata normalize --all` with no SEC request (D-091). S6: release-vs-filing cross-check after every facts refresh, stored release and rebuild; releases without a stated period end take it from the filing (migration `0011`, D-092). S4: golden set of 10 companies (a bank, a January retailer, a September year end), core set first: 658 values equal their releases, 26 known differences listed in §16 (D-093). Dev database at migration `0011`: 178,054 metric rows for 61 CIKs rebuilt from stored facts in about 6 s with no SEC request and no value changed (reported 90,711, of them 21,530 instants' TTM; derived quarters 13,275; TTM sums 39,040; computed 35,028); the 262 releases cross-checked: 703 slots matched, 2 mismatched (CoreWeave's 10-K in millions; indie Semiconductor's 10-K changing its year), 319 not comparable, 24 pending, a match rate of 99.7%. Quality report: 15,176 flagged rows; KO, NEE and V stale (companyfacts gaps). Lint gate and 1,159 tests green on local PostgreSQL 18. 13 edge cases logged. CI on main is green ([run 40822815612](https://github.com/guramkashmadze/martketdata/actions/runs/40822815612), commit `dba6f3a`) |
 | E5a | Data API | 9 | E4b | Done | 2026-10-29. First `outlier_jump` was kept to revenue, total assets, total equity and shares outstanding (rules version 3, calc version 2.3; 4,311 flagged rows became 291, D-094). S1: `marketdata clients create\|list` and `keys create\|list\|revoke`, a key shown once and stored as its sha256; `X-API-Key` on the /v1 router: 401, 403, and 429 with Retry-After over the key's requests of the last minute; an `api_requests` row per /v1 request; the §10.1 envelope with numbers written from `Decimal` digit for digit (D-095, D-096); migration `0012`. S2: eight service functions returning data with sources, `as_of` and flags: the latest release whatever its status, the feed of verified releases, the 11 releases without a stated period end dated from their 10-Q or 10-K, predecessors merged, sources older than the filings backfill found through their facts (D-096 to D-098). S3: the §10.2 routes, `/docs` with examples from Apple's filings, a contract test per route on a hand-made dataset and on Apple's real filings loaded from the fixtures. S4: `not_applicable` (422) with the §9.1 reason for funds, foreign issuers and companies outside the universe (D-099). Demo on the dev database: client `demo`; `/v1/companies/AAPL/earnings/latest` and `…/financials?period=Q` (128 rows of the 16 core metrics, 9 sources, 20 ms); JPMorgan's snapshot led to listing only stake filings about the company. Lint gate and 1,242 tests green on local PostgreSQL 18. 5 edge cases logged. CI on main is green ([run 40930722018](https://github.com/guramkashmadze/martketdata/actions/runs/40930722018), commit `d698656`) |
-| E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Not started | |
+| E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Done | 2026-10-30. S1: webhooks through an outbox: the code that changes the data writes the event in the same transaction, `webhook_publish` builds the §9.11 envelope around the API's own object and `webhook_deliver` sends it signed to a checked public address, three attempts about 1 and 10 minutes apart, 50 failed deliveries in a row switching the destination off; `earnings.verified` only for releases routed live (`earnings_releases.live`), `financials.updated` when a facts refresh adds rows or changes values, `data.changed` per value change, `filing.event` per new filing with a high-importance label (D-100 to D-102); `marketdata webhooks create|list|disable|enable|test`, the secret printed once and stored encrypted (Fernet); `scripts/webhook_receiver.py`, the reference receiver the tests check deliveries with; migration `0013`. S2: `GET /v1/changes`, newest first, each change with the value served now and its proof (D-103). S3: proof pages for releases and metric values, Jinja2, HTTP Basic auth with an `api` key (D-104). S4: `marketdata quality accuracy` and `GET /v1/status` (no key) from golden values loaded into the database (migration `0014`), the time to verified over live releases only, D-028's tolerance kept (D-105). S5: `docs/DEMO.md`, run on the dev database: Apple's Q3 2026 release matched its 10-Q on all four slots; a webhook of each type delivered to the reference receiver, the first after one retry; accuracy: golden release slots 135 of 138, golden metric values 658 of 684, cross-check 99.7%, extraction 82.5%, no live release yet. The demo found the decrypted signing secret in a logged traceback: tracebacks carry no local values now (D-106). Lint gate and 1,334 tests green on local PostgreSQL 18. 4 edge cases logged. Not pushed yet: waits for Guram's OK |
 | E6 | MCP server | 11 | E5a | Not started | Milestone M1 |
 | E10 | Prices, end-of-day and licensed | 12 | E5a, OD-4 | Not started | D-031 |
 | E15 | Web UI | 13–14 | E5b, E6; E10 for price fields | Not started | Milestone M2 |
@@ -190,7 +190,8 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | 4, 4/A on the issuer's listing (no file number, D-063) | `form4_parse` (key: accession_no) | E8 |
 | 13F-HR, 13F-HR/A from a curated manager | `f13_parse` (key: accession_no) | E9 |
 | Scheduler, after the US close | `prices_eod` (key: trade date) | E10 |
-| (internal) | `webhook_deliver` (key: `event_id:dest_id`) | E5b |
+| (internal) | `webhook_publish` (key: event id), queued with the event in the transaction that changes the data (D-100) | E5b |
+| (internal) | `webhook_deliver` (key: `event_id:dest_id`), one per active destination that takes the event's type, after live work and the watches (D-101) | E5b |
 
 Only tasks whose handler is registered are enqueued, so early epics don't fill the queue with work nobody can do yet. A company's first watch stores its filings and routes nothing, and the older pages a backfill reads never route: history goes through each epic's backfill (D-063).
 
@@ -214,10 +215,10 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Migrations | Alembic, SQL written with `op.execute` | MIT. Pulls in SQLAlchemy (MIT) only as its migration runner; our code uses no ORM |
 | Models and config | Pydantic v2, pydantic-settings | MIT |
 | XML / HTML | lxml 6.1 (E7a, D-066) | Press release tables and text from one lxml parse; selectolax is not used. BSD-3 (bundles libxml2 and libxslt, MIT). Wheels for Python 3.15 on macOS and Linux |
-| HTML pages and templates | Jinja2: proof pages (E5b), web UI (E15), sandboxed client templates (E7b) | BSD-3 |
+| HTML pages and templates | Jinja2 3.1: proof pages (E5b), web UI (E15), sandboxed client templates (E7b) | BSD-3; pulls in MarkupSafe (BSD-3) |
 | Web UI interactivity | htmx for server-rendered partials, Chart.js for charts; both vendored as static files with pinned versions | Permissive (BSD-family, MIT); verify in E15 (D-034) |
 | Prices | `PriceProvider` interface; first real adapter per OD-4 | E10 (D-031) |
-| Webhook signing | stdlib `hmac` / `hashlib`; secrets encrypted at rest with `cryptography` (Fernet) | Apache-2.0 / BSD (E5b) |
+| Webhook signing | stdlib `hmac` / `hashlib`; secrets encrypted at rest with `cryptography` 50 (Fernet) | Apache-2.0 or BSD-3 (E5b); pulls in cffi (MIT) and pycparser (BSD-3). It was a dev dependency of moto before |
 | API | FastAPI + uvicorn | MIT, BSD-3 |
 | MCP | Official `mcp` Python SDK, Streamable HTTP, mounted in the FastAPI app | |
 | Scheduler | APScheduler 3.11 (D-065) | MIT; pulls in tzlocal (MIT). Only `tasks/scheduler.py` uses it; it ships no type hints, so mypy skips its imports. 4.0 is still an alpha |
@@ -229,7 +230,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | CI | GitHub Actions: `pdm install --check`, black, isort, flake8, mypy, migrations, pytest with a PostgreSQL 18 service | `pdm install --check` fails on a missing or stale lockfile |
 | Deploy | Docker Compose on one VM, Caddy for TLS | OD-1 |
 
-Adding a dependency: add it to this table in the same session and check its license.
+Adding a dependency: add it to this table in the same session and check its license. Add it with `pdm add <package> --update-reuse` (and relock with `pdm lock --update-reuse`): a plain `pdm lock` resolves every package again and moved more than a dozen other pins in E5b.
 
 ---
 
@@ -252,12 +253,12 @@ marketdata/
     urls.py              URL builders (§8)
     raw_store.py         RawStore interface, LocalRawStore, S3RawStore
   ingest/                security_master.py, watcher.py, earnings.py, facts.py, cross_check.py (E4b), prices.py,
-                         form4.py, f13.py
+                         form4.py, f13.py; E5b: announce.py (webhook events), golden.py
   extract/               interface.py (Extractor), html_tables.py, earnings_rules.py, columns.py, units.py
   verify/                number_check.py, sanity.py, cross_check.py
   normalize/             metric_catalog.py, periods.py, metrics.py, changes.py, insiders.py, holdings.py, quality.py,
                          tickers.py, universe.py, security_master.py (E2), financials.py, computed.py,
-                         cross_check.py (E4b)
+                         cross_check.py (E4b); E5b: webhooks.py, golden.py
   prices/                E10: provider.py (PriceProvider), fake.py, <vendor>.py
   webhooks/              outbox.py, signing.py, deliver.py
   content/               E7b only: names_ka.py, periods_ka.py, numbers_ka.py, templates.py
@@ -265,9 +266,12 @@ marketdata/
   tasks/                 queue.py, registry.py, worker.py, scheduler.py
   service/               companies.py, earnings.py, financials.py, filings.py, compare.py, changes.py,
                          prices.py, status.py, clients.py, insiders.py, funds.py, quality.py (E4b),
-                         served.py, pages.py, snapshot.py (E5a)
+                         served.py, pages.py, snapshot.py (E5a); E5b: events.py, webhooks.py,
+                         proof.py, accuracy.py, json_text.py
   api/                   app.py, auth.py, envelope.py, errors.py, routes/, proof_pages/; E5a: deps.py
-                         (a connection per request), params.py, examples.py (/docs), request_log.py
+                         (a connection per request), params.py, examples.py (/docs), request_log.py;
+                         E5b: proof_pages/ (render.py, routes.py, templates/), routes/changes.py,
+                         routes/status.py
   mcp_server/            server.py, tools.py
   web/                   E15: routes.py, templates/, static/ (vendored htmx and Chart.js)
 data/                    universe.csv, security_overrides.csv, extraction_overrides.yaml, managers.csv
@@ -286,7 +290,7 @@ Sales material and discovery notes stay outside the repository (§17).
 
 **Rules**
 
-- **Layers:** `api/`, `mcp_server/` and `web/` → `service/` → `db/repositories/`. `ingest/` and `webhooks/` → `db/repositories/`; `ingest/prices.py` uses the `prices/` adapters. No layer skips another. SQL lives only in `db/repositories/`.
+- **Layers:** `api/`, `mcp_server/`, `web/` and `webhooks/` → `service/` → `db/repositories/`: webhooks send the API's own objects and reach their tables through `service/` (D-100). `ingest/` → `db/repositories/`; it writes webhook events in the transaction that changes the data (`ingest/announce.py`); `ingest/prices.py` uses the `prices/` adapters. No layer skips another. SQL lives only in `db/repositories/`.
 - **Pure modules:** `extract/`, `verify/` and `normalize/` (and `content/` in E7b) take records and return records. No I/O inside them, so they can be unit-tested with fixtures.
 - **Verification is independent of extraction (D-015).** `verify/` never imports from `extract/`; it checks values against the stored document, whoever produced them.
 - **Time:** all timestamps are UTC `timestamptz`; period boundaries are `date`.
@@ -296,7 +300,7 @@ Sales material and discovery notes stay outside the repository (§17).
 - **Value changes (D-027):** an upsert that changes an already stored value in `earnings_facts` or `financial_metrics` also writes a `value_changes` row (old value, new value, reason) in the same transaction. `normalize/changes.py` decides the reason.
 - **Errors:** service functions raise domain exceptions (`NotFound`, `InvalidParameter`, `NotApplicable`, `Forbidden`); `api/errors.py` maps them to the error envelope (§10).
 - **Logging:** structured, with `cik`, `accession_no`, `task_id`, `client_id` fields where relevant.
-- **Secrets:** only from environment variables. Never in code, fixtures or logs. Webhook signing secrets are stored encrypted.
+- **Secrets:** only from environment variables. Never in code, fixtures or logs. Webhook signing secrets are stored encrypted. A logged traceback names frames and lines but no local values (D-106).
 - **Edge cases:** every parser surprise, override, amendment oddity or failed check that teaches us something is appended to `docs/EDGE_CASES.md` (date, epic, company and accession, what broke, how it was handled).
 
 **Testing**
@@ -516,35 +520,70 @@ create table value_changes (                  -- D-027: stored values never chan
 );
 create index value_changes_by_time on value_changes (changed_at);
 
--- E5b
+-- E5b (migration 0013, D-100 to D-102): the outbox, written in the transaction that changes the
+-- data; the body is stored as delivered (json keeps the text)
 create table webhook_destinations (
   dest_id               bigserial primary key,
   client_id             bigint not null references clients(client_id),
-  url                   text not null,        -- https only
+  url                   text not null check (url ~ '^https?://'),  -- https; http to this machine in dev
   secret_enc            text not null,        -- signing secret, encrypted with WEBHOOK_ENCRYPTION_KEY
-  event_types           text[] not null,
+  event_types           text[] not null,      -- some of the four §9.11 types
   active                boolean not null default true,
-  consecutive_failures  int not null default 0,
-  created_at            timestamptz not null default now()
+  consecutive_failures  int not null default 0,  -- deliveries whose every attempt failed, in a row
+  created_at            timestamptz not null default now(),
+  disabled_at           timestamptz,          -- switched off by the operator or after 50 failures
+  disabled_reason       text,
+  last_test_at          timestamptz,          -- one test event a minute
+  check (active = (disabled_at is null))
 );
 
 create table webhook_events (
-  event_id    uuid primary key,
-  type        text not null,
-  client_id   bigint references clients(client_id),   -- null = every subscribed client
-  livemode    boolean not null default true,
-  payload     jsonb not null,
-  created_at  timestamptz not null default now()
+  event_id      uuid primary key,             -- UUIDv7
+  type          text not null,                -- earnings.verified, financials.updated, data.changed, filing.event
+  subject       text not null,                -- what it is about: accession, change id, cik:digest, accession:cik
+  detail        jsonb not null default '{}',  -- what the writer knew (a refresh's metrics and periods)
+  client_id     bigint references clients(client_id),   -- null = every subscribed client
+  dest_id       bigint references webhook_destinations(dest_id),  -- a test event's one destination
+  livemode      boolean not null default true,
+  payload       json,                         -- the envelope as delivered; null until published
+  created_at    timestamptz not null default now(),
+  published_at  timestamptz,
+  check ((payload is null) = (published_at is null)),
+  check (livemode = (dest_id is null))
 );
+create unique index webhook_events_once on webhook_events (type, subject) where livemode;
 
 create table webhook_deliveries (
   event_id      uuid not null references webhook_events(event_id),
   dest_id       bigint not null references webhook_destinations(dest_id),
   attempt       int not null,
   status_code   int,
-  error         text,
+  error         text,                         -- e.g. "answered 503", "refused: ..."
+  duration_ms   int not null,
   attempted_at  timestamptz not null default now(),
   primary key (event_id, dest_id, attempt)
+);
+alter table earnings_releases add column live boolean not null default false;  -- routed when filed
+create index value_changes_by_cik on value_changes (cik, change_id);           -- /v1/changes?ticker=
+
+-- E5b (migration 0014, D-105): the golden sets as data, replaced by `marketdata quality accuracy`
+create table golden_values (
+  golden_id     bigserial primary key,
+  kind          text not null check (kind in ('earnings', 'metric')),
+  cik           bigint not null,
+  accession_no  text,                         -- earnings: the release
+  slot          text,
+  metric        text,                         -- metrics: the metric, period type and end
+  period_type   text,
+  period_end    date,
+  value         numeric,                      -- as printed, in base units; null when it doesn't apply
+  prior_value   numeric,                      -- earnings: the same quarter a year earlier
+  status        text not null check (status in ('expected', 'known_difference', 'not_applicable')),
+  note          text,                         -- why a known difference differs
+  source_url    text not null,                -- the SEC document it was read from
+  source_file   text not null,                -- e.g. golden/earnings/aapl.toml
+  loaded_at     timestamptz not null default now(),
+  unique nulls not distinct (kind, cik, accession_no, slot, metric, period_type, period_end)
 );
 
 -- E4a (migrations 0007-0009; checks and frame_facts per D-081, D-084, D-085); E4b: 0010 adds the unit
@@ -998,23 +1037,23 @@ Items 1.04, 2.04, 3.03, 5.01, 5.04, 5.05, 5.06 and 5.08 were added in E3 (D-064)
   - earnings facts: `accession_no`, `document_url`, `source_quote`, `scale_text`, `checks` (the checks passed), `method`, `extractor_version`, and `cross_check` (`status`, `filing_accession_no`, `filing_value`);
   - financial metrics: `accession_no`, `filing_url`, `concept`, `method` (reported, derived_ytd, derived_q4, derived_ttm, computed), `source_accessions`, `calc_version`.
 - **Cross-check (D-028).** When a 10-Q or 10-K for the same quarter is loaded, each earnings slot is compared with the XBRL value for the matching metric and period (§9.3, §9.4): equal within 0.5% (EPS: within $0.01) → `matched`; otherwise `mismatch` with flag `release_vs_filing_mismatch`; no comparable value → `not_comparable`. A mismatch never changes the release value; it is shown, investigated and logged in `docs/EDGE_CASES.md`. The quarter is the period end the release states, matched within a week to a filing's; a release that states none takes the latest period a 10-Q or 10-K reports that ended at most 90 days before it and whose fiscal quarter its label names. The XBRL value is the quarter as the first filing reporting it gave it (a Q4 is the 10-K's year less nine months), so a later restatement doesn't count against the release. A filing listed without facts in companyfacts is `not_comparable`; none listed, `pending`. It runs after every facts refresh, every stored release and in `marketdata normalize --all` (E4b, D-092).
-- **Accuracy report.** `marketdata quality accuracy` and `GET /v1/status` publish, from live data: golden-set match rate per metric and per slot; cross-check match rate (matched / (matched + mismatch)); extraction pass rate; median and 90th-percentile minutes from SEC acceptance to verified; value changes by reason over the last 90 days.
+- **Accuracy report.** `marketdata quality accuracy` and `GET /v1/status` publish, from live data: golden-set match rate per metric and per slot; cross-check match rate (matched / (matched + mismatch)); extraction pass rate; median and 90th-percentile minutes from SEC acceptance to verified; value changes by reason over the last 90 days. The golden sets are loaded into `golden_values` by the CLI (GOLDEN_DIR) and compared with what is served: a known difference counts as a miss, a value that doesn't apply isn't counted. The minutes count only releases the watcher routed when they were filed. Every mismatch is listed with both values; D-028's tolerance stays (E5b, D-105).
 - **Changes (D-027).** Any change to a stored `earnings_facts` or `financial_metrics` value writes a `value_changes` row with reason `correction` (our rules or overrides changed), `restatement` (a newer filing changed a past period) or `amendment` (the company amended the filing we used). Changes are served by `GET /v1/changes` and announced by `data.changed`.
-- **Proof pages.** `/proof/earnings/{accession_no}` and `/proof/metrics/{ticker}/{metric}/{period_type}/{period_end}` show the value, its proof, the SEC links, the check results, the cross-check and the change history. In M1 they sit behind HTTP Basic auth with an `api`-scope key over TLS. From E15 they are part of the web UI and follow its access rule (§9.14); every number in the UI links to one.
+- **Proof pages.** `/proof/earnings/{accession_no}` and `/proof/metrics/{ticker}/{metric}/{period_type}/{period_end}` show the value, its proof, the SEC links, the check results, the cross-check and the change history. In M1 they sit behind HTTP Basic auth with an `api`-scope key over TLS. From E15 they are part of the web UI and follow its access rule (§9.14); every number in the UI links to one. Rendered server-side with Jinja2, they load no script, font or image and are never cached; errors are pages too (E5b, D-104).
 
 ### 9.11 Webhooks (E5b, D-019)
 
-- **Envelope:** `{"id", "type", "created", "livemode", "api_version", "data": {"object": …}}`.
+- **Envelope:** `{"id", "type", "created", "livemode", "api_version", "data": {"object": …, "proof_url": …}, "disclaimer"}`: `created` is ISO 8601 UTC like the API, `api_version` is `v1`, `proof_url` starts with PUBLIC_BASE_URL (null without it, or for an object with no one page), and numbers keep every digit (D-102).
 - **Signing:** header `X-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">`, keyed with the destination's secret. Receivers compare in constant time and reject timestamps more than 5 minutes old.
-- **Delivery:** through the task queue (`webhook_deliver`). Success is any 2xx within 10 seconds. Retries after about 1 minute and about 10 minutes (3 attempts in total), then the delivery is `dead`. 50 consecutive failures disable the destination and alert the operator. HTTPS only; private, loopback and link-local addresses are refused.
+- **Delivery:** through the task queue (`webhook_deliver`). Success is any 2xx within 10 seconds. Retries after about 1 minute and about 10 minutes (3 attempts in total), then the delivery is `dead`. 50 consecutive failures disable the destination and alert the operator. HTTPS only; private, loopback and link-local addresses are refused. A failure is a delivery whose every attempt failed; a delivered event starts the count again; the operator switches a destination back on with `webhooks enable` (the alert is an error log until E7c). The host is resolved at every attempt and the connection goes to a checked public address with the name kept for TLS; redirects aren't followed. In dev, `http` and `https` to this machine are allowed for the local demo (D-102).
 - **Idempotency:** receivers dedupe on `id`; ordering is not guaranteed.
 - **Events (M1):**
-  - `earnings.verified`: a new release's facts are verified (complete or partial); the payload is the same release object as the API.
-  - `financials.updated`: new or changed metric rows for a company after a 10-Q or 10-K.
-  - `data.changed`: a previously served value changed; the payload has the old value, new value, reason and proof.
-  - `filing.event`: a high-importance label from §9.6.
+  - `earnings.verified`: a new release's facts are verified (complete or partial); the payload is the same release object as the API. Only releases the watcher routed when they were filed, once each (D-101).
+  - `financials.updated`: new or changed metric rows for a company after a 10-Q or 10-K. One per facts refresh that added a period or changed a value; it names the filings, metrics and periods, and the rows come from the API (D-101).
+  - `data.changed`: a previously served value changed; the payload has the old value, new value, reason and proof. One per `value_changes` row, the same object as a `/v1/changes` item (D-103).
+  - `filing.event`: a high-importance label from §9.6, on a filing a watch found (the company and the filing as `/filings` lists it).
 - Payloads never contain end-user data. E7b adds `content.*` events (§9.13).
-- **Test events:** `livemode: false`, fired from the CLI, at most one per minute per destination.
+- **Test events:** `livemode: false`, fired from the CLI, at most one per minute per destination. Each carries the newest real object of its type to one destination (D-102).
 
 ### 9.12 Prices (E10, D-031)
 
@@ -1059,7 +1098,7 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
 
 ### 10.1 REST conventions
 
-- Base path `/v1`. Auth header: `X-API-Key` with an `api`-scope key. Proof pages use HTTP Basic auth with an `api`-scope key as the password until E15; then they follow the UI access rule (§9.14). (`review` scope: E7b.)
+- Base path `/v1`. Auth header: `X-API-Key` with an `api`-scope key. Proof pages use HTTP Basic auth with an `api`-scope key as the password (any user name) until E15; then they follow the UI access rule (§9.14). They are logged and rate-limited like `/v1` (D-104). (`review` scope: E7b.)
 - Every successful response uses this envelope:
 
 ```json
@@ -1087,7 +1126,7 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
 | Endpoint | Epic | Auth | Returns |
 | --- | --- | --- | --- |
 | `GET /health` | E0 | none | Process and database status |
-| `GET /v1/status` | E7c (basic), E5b (accuracy), E11 (full) | none | Freshness, track record, accuracy report, queue depth |
+| `GET /v1/status` | E7c (basic), E5b (accuracy), E11 (full) | none | Freshness, track record, accuracy report, queue depth. E5b: freshness and the accuracy report in the envelope with no sources, an answer reused for a minute (D-105) |
 | `GET /v1/coverage?limit=&cursor=` | E5a | api | Covered tickers with class and available data kinds |
 | `GET /v1/companies/{ticker}?price=&price_date=` | E5a (E10 adds prices) | api | Snapshot: identity, class, latest period, TTM core metrics, latest release, latest three filings; from E10, latest close, market cap and P/E where licensed, or computed from a `price` the client passes |
 | `GET /v1/companies/{ticker}/earnings/latest` | E5a | api | Latest verified release with proof and cross-check status |
@@ -1097,7 +1136,7 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
 | `GET /v1/companies/{ticker}/filings?form=&since=&limit=&cursor=` | E5a | api | Filings with plain-language events, including 13D/13G labels; a predecessor's included (D-098) |
 | `GET /v1/compare?tickers=&metrics=&period=&price=` | E5a (E10 adds `price`) | api | 2–5 companies side by side: each metric's newest value of the period type, TTM by default (D-098) |
 | `GET /v1/companies/{ticker}/prices?start=&end=` | E10 | api | End-of-day prices, only if the vendor license includes `api` (§9.12) |
-| `GET /v1/changes?since=&ticker=&reason=` | E5b | api | Value changes with old value, new value, reason and proof |
+| `GET /v1/changes?since=&ticker=&reason=&limit=&cursor=` | E5b | api | Value changes with old value, new value, reason and proof, newest first; each with the value served now (D-103) |
 | `GET /proof/earnings/{accession_no}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a release |
 | `GET /proof/metrics/{ticker}/{metric}/{period_type}/{period_end}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a metric value |
 | `GET /v1/companies/{ticker}/insiders?days=90&signal_only=true` | E8 | api | Aggregated insider trades |
@@ -1172,8 +1211,9 @@ Example `earnings/latest` response body (`data` part):
 | `EXTRACTION_OVERRIDES_FILE` | `data/extraction_overrides.toml` | E7a (D-075) |
 | `ALERT_EMAIL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | — | E7c |
 | `SENTRY_DSN` | — | E7c |
-| `WEBHOOK_ENCRYPTION_KEY` | — (Fernet key) | E5b |
+| `WEBHOOK_ENCRYPTION_KEY` | — (Fernet key, checked when set) | E5b: `webhooks create` and the worker's deliveries refuse to run without it |
 | `PUBLIC_BASE_URL` | `https://<live host>` | E5b (proof links in webhooks) |
+| `GOLDEN_DIR` | `tests/golden` | E5b: the golden sets `quality accuracy` loads (D-105) |
 | `PRICE_PROVIDER`, `PRICE_API_KEY` | — (OD-4) | E10 |
 | `UI_MODE` | `private` or `public` | E15 |
 | `MANAGERS_FILE` | `data/managers.csv` | E9 |
@@ -1440,19 +1480,19 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Depends on:** E5a.
 
 - **E5b-S1 Webhooks.** As an API integrator, I want to be told when data is ready or changes so I don't poll.
-  - AC: migrations create `webhook_destinations`, `webhook_events`, `webhook_deliveries`; CLI `marketdata webhooks create|list|disable|test` (the secret is shown once and stored encrypted).
+  - AC: migrations create `webhook_destinations`, `webhook_events`, `webhook_deliveries`; CLI `marketdata webhooks create|list|disable|test` (the secret is shown once and stored encrypted). (And `enable`; an outbox written where the data changes; D-100 to D-102.)
   - AC: events, envelope, signing, delivery, retries and auto-disable per §9.11; a reference receiver in the tests verifies signatures; the retry schedule is tested with a mocked transport.
 - **E5b-S2 Change feed.** As an API integrator, I want every change to data I already have, with the reason.
-  - AC: `GET /v1/changes` per §10.2 serves `value_changes`; each new change emits `data.changed`; tested for each reason.
+  - AC: `GET /v1/changes` per §10.2 serves `value_changes`; each new change emits `data.changed`; tested for each reason. (D-103.)
 - **E5b-S3 Proof pages.** As a data evaluator, I want to open any number and see where it came from.
-  - AC: proof pages per §9.10 for releases and metric values, showing value, proof, SEC links, checks, cross-check and change history; Basic auth with an `api`-scope key.
+  - AC: proof pages per §9.10 for releases and metric values, showing value, proof, SEC links, checks, cross-check and change history; Basic auth with an `api`-scope key. (D-104.)
 - **E5b-S4 Accuracy report.** As a data evaluator, I want published accuracy, not promises.
-  - AC: `pdm run marketdata quality accuracy` and `GET /v1/status` publish the §9.10 accuracy figures from live data.
+  - AC: `pdm run marketdata quality accuracy` and `GET /v1/status` publish the §9.10 accuracy figures from live data. (Golden values loaded into the database; D-105.)
 - **E5b-S5 Demo guide.** As the operator, I want a repeatable demo for any prospective client: product, engineering, and data or compliance people.
   - AC: `docs/DEMO.md` covers: the API in curl or Postman; a webhook received by a test receiver; a proof page for a live number; a release cross-checked against its 10-Q; the accuracy report and live stats; the integration on one page.
 
 **Out of scope:** MCP (E6), web UI (E15), localization (E7b), sales material (outside the repo, §17).
-**Demo:** the API, webhook, proof and accuracy parts of `docs/DEMO.md` on the live VM.
+**Demo:** the API, webhook, proof and accuracy parts of `docs/DEMO.md` on the live VM. (Run on the dev database on 2026-10-30; the live VM waits for OD-1.)
 
 ### E6 — MCP server (session 11) → Milestone M1
 
@@ -1779,6 +1819,13 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-097 | 2026-10-29 | Earnings in the API (E5a-S2, §10.2): the release object is the company (`ticker`, `cik`, `company`), `period`, `release` and `facts`, each fact with its value, `check_status`, the reasons a value is null, flags and the §9.10 proof. `earnings/latest` is the company's newest results release whatever its status: a release that failed verification is served with null values and their reasons, `release.status` saying so (Guram's choice at the kickoff). `/v1/earnings` lists complete and partial releases, newest first by acceptance time. A release that states no period end takes the period of the 10-Q or 10-K its values were cross-checked with (`filings.period_of_report`) and that quarter's fiscal labels, with `period_end_source: filing` and the filing's accession number (11 releases: J&J, Berkshire, lululemon); otherwise `period_end_source` is `release`. A predecessor's release belongs to the company now, under its primary ticker; `release.cik` keeps the filer. A release asked for by accession number is served whatever its status. Resolves the §16 E4b-S6 and E7a-S5 follow-ups on releases without a stated period end | Serving only verified releases as the latest would answer 404 for the 8 domestic companies with none (NextEra, Tesla, MercadoLibre, Roblox, Aurora, NuScale, Trilogy Metals, Microbot) and show an older quarter as the latest wherever the newest release failed. The feed matches the `earnings.verified` webhook (E5b). A period end from the filing is the quarter the cross-check matched, not an estimate, and its source is named |
 | D-098 | 2026-10-29 | Lists and company data (E5a-S2, S3): lists take `limit` (1 to 100, default 20) and an opaque cursor, URL-safe base64 of the last item's sort key, returned as `data.next_cursor`. Financials: `limit` is periods per metric (1 to 40, default 8), metrics comma-separated, the core set (D-020) by default, rows by metric as asked, each newest first. Snapshot: identity and class, every current ticker, the latest quarter with metrics, the newest TTM value of each core metric (`not_reported` names core metrics no filing reports), the latest release, and the three latest annual, quarterly and current reports (10-K, 10-Q, 8-K, 20-F, 40-F, 6-K and amendments) and 5% stakes about the company: a 13D or 13G only on the listing it is about (D-061), 13G amendments not at all. Compare: 2 to 5 tickers, TTM by default, each metric's newest value per company by ticker, null where none of its filings reports it; one company named twice is refused. Coverage: every current ticker of a universe company, by ticker, with its class and data kinds. Filings and financials merge predecessors (D-084). With no ticker asked for, a company is shown under its primary ticker: common stock first, then the shortest, then the first in order. `price` and `price_date` come with E10 | JPMorgan's newest filings are 424B2 notes (over 26,000 a year) and its own 13G amendments on other companies, so a plain "latest three filings" said nothing about JPMorgan. Keyset cursors keep pages stable while filings arrive. TTM compares companies whose fiscal years end in different months |
 | D-099 | 2026-10-29 | Not applicable (E5a-S4): earnings (the latest release and the feed of one company), the snapshot, financials and comparisons answer 422 `not_applicable` with the capability's reason (§9.1) when the data kind doesn't apply: a fund, a foreign private issuer, a company outside the universe or one not classified yet. The message names the ticker and company. Filings, coverage and a release asked for by accession number answer for every class | A client asking about SPY or TSM learns why there is no data rather than getting a 404; coverage lists every class with its reasons; filings apply to all filers |
+| D-100 | 2026-10-30 | Webhooks are an interface (E5b-S1): the code that changes the data writes the event (`ingest/announce.py`, through `db/repositories/`) in the same transaction, with the task that publishes it (`webhook_publish`, keyed by the event id); publishing builds the body with the API's own service functions and queues the deliveries. `webhooks/` reaches its tables through `service/`, like `api/`, and the layer test enforces it. Supersedes the §6 line "`ingest/` and `webhooks/` → `db/repositories/`" (Guram's choice at the kickoff) | The `earnings.verified` payload must be the API's release object, which `service/` builds; §4's diagram already drew webhooks beside REST and MCP. An outbox in the change's transaction can neither announce a rolled-back change nor miss a committed one, and needs no polling |
+| D-101 | 2026-10-30 | What announces what (E5b-S1): `earnings.verified` once per release (a unique index on type and subject for live events) when a release the watcher routed when it was filed is complete or partial; `earnings_releases.live` keeps that (from the routed task's `live` payload, never cleared), so a backfill or a re-run announces nothing (its changed values go out as `data.changed`). `financials.updated` once per facts refresh that added a period or changed a stored value, naming the company, filings, metrics and periods; a row whose source alone moved doesn't count. `data.changed` once per `value_changes` row, from every path that writes one, `normalize --all` included. `filing.event` per new filing on a routed watch with a high-importance §9.6 label. Publishing runs at priority 10, deliveries at −5: after live work and the watches (0), before backfills (−10) | Announcing backfills would send a year of old releases when a company joins the universe. A summary keeps `financials.updated` small (a first refresh writes thousands of rows) while the API serves the rows with proof; each new 10-Q files the year-ago quarter again, so source-only changes would be noise (EDGE_CASES.md). A slow receiver must never hold up a filing |
+| D-102 | 2026-10-30 | Webhook delivery (§9.11, E5b-S1): the envelope adds `data.proof_url` (PUBLIC_BASE_URL and the object's proof page) and the disclaimer; `created` is ISO 8601 UTC and `api_version` `v1`; the body is written once when published (json keeps the text) and every attempt sends those bytes. A secret is `whsec_` and 32 random bytes, printed once, stored as a Fernet token under WEBHOOK_ENCRYPTION_KEY; the HMAC is keyed with the secret as written. Only globally reachable addresses take deliveries; the name is resolved at every attempt and the connection pinned to the checked address, the name kept for TLS; no redirects. In dev only, http and https to this machine are allowed (the local demo; Guram's choice). A failure is a delivery whose three attempts all failed: 50 in a row switch the destination off with an error log, a delivered event resets the count, and `marketdata webhooks enable` switches it on again. A test event carries the newest real object of its type to one destination, at most one a minute (`last_test_at`); the CLI waits up to 20 s for the worker's first attempt | Clients open the proof page from the event. Fixed bytes keep each signature reproducible. Pinning closes the gap between the address check and the connection (DNS rebinding). Counting attempts would switch a destination off after a 20-minute outage in earnings season; counting deliveries tolerates restarts, as the demo's first delivery showed |
+| D-103 | 2026-10-30 | The change feed (E5b-S2): `GET /v1/changes` lists `value_changes` newest first by `change_id`, with `limit` and `cursor` (D-098), by company (its predecessors too), reason and time. An item names the company, what changed (an earnings fact's release, slot and field, an 8-K/A's amended release; a metric's period), the old and new values, the reason and detail, and the value served now with its unit, reasons, flags and proof. The `data.changed` object is this item | Newest first like `/v1/earnings`; a client replays by `change_id`. The value served now and its proof let a client check a change without another request, and show when a value changed again |
+| D-104 | 2026-10-30 | Proof pages (E5b-S3): rendered from the API's service functions with Jinja2, autoescaped, with no script, font or image (CSP `default-src 'none'`) and `Cache-Control: private, no-store`; HTTP Basic auth with any user name and an `api`-scope key as the password; logged in `api_requests` and counted against the key's rate limit; errors are pages, a 401 with `WWW-Authenticate`; left out of the API reference | A page and the API can't disagree when the same service builds both. Browsers prompt for Basic auth themselves. Pages behind a key must not be kept by browsers or proxies |
+| D-105 | 2026-10-30 | The accuracy report (E5b-S4, §9.10): `marketdata quality accuracy` loads the golden files (GOLDEN_DIR, `tests/golden`) into `golden_values` (migration `0014`, replaced as a whole) and reports, as `GET /v1/status` does: the golden-set match rate per slot and metric (a known difference is a miss, a value that doesn't apply isn't counted, a release or company not stored is counted apart); the cross-check match rate with every mismatch; the extraction pass rate; the median and 90th-percentile minutes from acceptance to the first verification over live releases only (interpolated like `percentile_cont`); value changes by entity and reason over 90 days. D-028's 0.5% stays: a mismatch the filing's rounding explains (CoreWeave's 10-K in millions) is listed, not softened; a rounding-aware tolerance waits for XBRL `decimals` (Guram's choice). `/v1/status` has its own router without a key (D-095), the envelope with no sources, and reuses an answer for a minute | The API reads clean tables, not test files. On the dev database the backfill's verifications give a median of 291,089 minutes (202 days), which says nothing about speed (EDGE_CASES.md). A published rate that quietly widens its tolerance isn't a trust signal. The endpoint needs no key, so its work is bounded |
+| D-106 | 2026-10-30 | Logged tracebacks name frames and lines but carry no local values, in every environment (`log.py`: the rich formatter in dev and the dict transformer in live and prod, both with `show_locals=False`); the decrypted signing secret also stays in a `SecretStr` inside `deliver()` | Found in the demo: structlog 26.1 shows every frame's locals by default, and a failed delivery logged `deliver()`'s plaintext secret to the dev log (deleted; the demo's destination switched off and its key revoked). Secrets never reach logs (§6) |
 
 ---
 
@@ -1897,6 +1944,16 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-29 | E5a demo | The dev database has the client `demo` with its two demo keys revoked; `marketdata keys create demo` gives a new one | Guram |
 | 2026-10-29 | E5a | E5a's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 | 2026-10-29 | E5a | Done: E5a pushed to `origin` with Guram's OK; CI on main is green ([run 40930722018](https://github.com/guramkashmadze/martketdata/actions/runs/40930722018), commit `d698656`) | — |
+| 2026-10-30 | E5b | Done: `/v1/status` (E5a follow-up, D-105); the accuracy report's tolerance for a 10-K in millions (E4b-S6 follow-up): kept at 0.5% with CoreWeave listed as a mismatch, a rounding-aware tolerance waiting for XBRL `decimals` (the E4a-S1 follow-up on reading instances) | — |
+| 2026-10-30 | E5b-S1 | `webhook_events` and `webhook_deliveries` grow with no retention, like `api_requests`: purge published events after a period | E11 |
+| 2026-10-30 | E5b-S1 | A destination switched off after 50 failures, and a dead delivery, only log an error: route both to E7c's alerts | E7c |
+| 2026-10-30 | E5b-S1 | Signing-secret rotation: a `webhooks rotate` command with both secrets valid for a while (a receiver checks either) | When a client asks |
+| 2026-10-30 | E5b-S2 | A rebuild that moves many values sends one `data.changed` per change to every destination (thousands after a calc version that changes values): batch them or cap deliveries if a client asks | E11 |
+| 2026-10-30 | E5b-S1 | `earnings_releases.live` comes from the routed task's payload: if a backfill had queued the same accession first, its payload stays and the release isn't announced. Unlikely, since the watcher routes only new filings | E7c (watch) |
+| 2026-10-30 | E5b-S1 | Deliveries share the worker's slots with SEC work; with many destinations give them a concurrency cap of their own | E11 |
+| 2026-10-30 | E5b | For the live VM: set PUBLIC_BASE_URL and WEBHOOK_ENCRYPTION_KEY, ship `tests/golden` (GOLDEN_DIR) and the proof templates in the image, and put the reference receiver behind HTTPS for the webhook demo | E7c |
+| 2026-10-30 | E5b demo | The dev database has destination 1 (client `demo`, the local receiver) switched off with a secret no key reads any more (the demo's encryption key was deleted), and the demo key 3 revoked | Guram |
+| 2026-10-30 | E5b | E5b's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 
 ---
 
@@ -1940,9 +1997,10 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Quality report: pdm run marketdata quality report
 - Accuracy report: pdm run marketdata quality accuracy
 - API keys: pdm run marketdata clients create NAME, then pdm run marketdata keys create NAME (shown once)
+- Webhooks: pdm run marketdata webhooks create CLIENT URL (the secret is shown once), then webhooks test ID; the worker delivers
 
 ## Rules
-- Layers: api/, mcp_server/ and web/ → service/ → db/repositories/; ingest/ and webhooks/ → db/repositories/. Never skip a layer. SQL only in db/repositories/.
+- Layers: api/, mcp_server/, web/ and webhooks/ → service/ → db/repositories/; ingest/ → db/repositories/ (it writes webhook events in the transaction that changes the data). Never skip a layer. SQL only in db/repositories/.
 - extract/, verify/ and normalize/ (and content/ in E7b) are pure: no I/O. verify/ never imports extract/.
 - The API, MCP server, web UI, proof pages and webhooks read clean tables only. They never call the SEC or the price vendor, and never read raw files.
 - All SEC calls go through marketdata/sec/client.py (User-Agent, max 8 requests/second).
