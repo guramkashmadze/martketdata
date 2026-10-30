@@ -3,11 +3,7 @@
 {% block title %}{{ r.ticker or r.cik }} earnings release {{ r.release.accession_no }}{% endblock %}
 {% block content %}
 <h1>{{ who }}{% if r.ticker %} ({{ r.ticker }}){% endif %}: earnings release</h1>
-<p class="sub">
-  {% if r.period.fiscal_year %}Fiscal {{ r.period.fiscal_year }} {{ r.period.fiscal_period }}{% else %}Period not stated{% endif %}
-  {% if r.period.period_end %}· quarter ended {{ r.period.period_end }}{% endif %}
-  · status <span class="{{ r.release.status }}">{{ r.release.status }}</span>
-</p>
+<p class="sub">{{ (("Fiscal " ~ r.period.fiscal_year ~ " " ~ r.period.fiscal_period) if r.period.fiscal_year else "Period not stated") }}{{ (" · quarter ended " ~ r.period.period_end) if r.period.period_end else "" }} · status <span class="{{ r.release.status }}">{{ r.release.status }}</span></p>
 
 <h2>The release</h2>
 <dl>
