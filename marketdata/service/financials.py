@@ -129,7 +129,7 @@ async def metric_rows(
     for metric in metrics:
         newest_rows = sorted(merged[metric].values(), key=lambda row: row.period_end, reverse=True)
         kept_rows = newest_rows[:limit]
-        views = [_view(row) for row in kept_rows]
+        views = [metric_view(row) for row in kept_rows]
         if views and stale:
             views[0] = views[0].model_copy(
                 update={"quality_flags": (*views[0].quality_flags, STALE_DATA)}
@@ -219,7 +219,8 @@ def metric_flags(rows: Sequence[MetricView], ticker: str | None) -> tuple[FlagRe
     )
 
 
-def _view(row: StoredRow) -> MetricView:
+def metric_view(row: StoredRow) -> MetricView:
+    """A stored row as the API serves it, with its proof (§9.10)."""
     url = urls.filing_index_page(row.cik, row.accession_no) if row.accession_no else None
     return MetricView(
         cik=row.cik,

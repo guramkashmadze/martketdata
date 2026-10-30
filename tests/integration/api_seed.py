@@ -6,7 +6,7 @@ ACME (CIK 1001) took over from Acme Holdings (1000), whose filings hold ACME's f
 were cross-checked with the 10-Q. Its third-quarter release failed verification. A fiscal 2020
 10-K is older than the filings backfill, so only its facts name it. BETA is a second company to
 compare with; FNDX is a fund and FPIX a foreign private issuer; OUTC is a domestic filer outside
-the universe.
+the universe. E5b: one value change of each reason, the predecessor's restatement among them.
 """
 
 import json
@@ -67,6 +67,7 @@ async def seed(conn: Conn) -> None:
     await _filings(conn)
     await _releases(conn)
     await _metrics(conn)
+    await _changes(conn)
     await conn.execute(
         "insert into xbrl_facts (cik, taxonomy, concept, unit, period_start, period_end, value, "
         "fy, fp, form, filed_at, accession_no) values "
@@ -354,3 +355,54 @@ async def _metrics(conn: Conn) -> None:
         start="2025-07-01",
         flags=("outlier_jump",),
     )
+
+
+# E5b: the change feed, oldest first: a correction of ACME's Q2 revenue, the predecessor's Q1
+# revenue restated, and an amendment whose value failed verification (served null now).
+CHANGES: list[tuple[int, dict[str, str], int | None, int | None, str, str, str]] = [
+    (
+        ACME,
+        {"accession_no": Q2_RELEASE, "slot": "revenue", "field": "value"},
+        990,
+        1000,
+        "correction",
+        "rules version 2 to 3",
+        "2026-10-27T04:46:35Z",
+    ),
+    (
+        OLD,
+        {"metric": "revenue", "period_type": "Q", "period_end": "2026-03-31"},
+        880,
+        900,
+        "restatement",
+        f"{OLD_Q1_10Q}, filed 2026-05-01, restates 0001000000-26-000002 of 2026-02-01",
+        "2026-10-28T10:00:00Z",
+    ),
+    (
+        ACME,
+        {"accession_no": Q3_RELEASE, "slot": "revenue", "field": "value", "amends": Q2_RELEASE},
+        1000,
+        None,
+        "amendment",
+        f"8-K/A {Q3_RELEASE} amends the earnings release {Q2_RELEASE}",
+        "2026-10-29T12:00:00Z",
+    ),
+]
+
+
+async def _changes(conn: Conn) -> None:
+    for cik, key, old, new, reason, detail, at in CHANGES:
+        await conn.execute(
+            "insert into value_changes (entity, entity_key, cik, old_value, new_value, reason, "
+            "detail, changed_at) values (%s, %s, %s, %s, %s, %s, %s, %s)",
+            [
+                "financial_metric" if "metric" in key else "earnings_fact",
+                json.dumps(key),
+                cik,
+                old,
+                new,
+                reason,
+                detail,
+                at,
+            ],
+        )

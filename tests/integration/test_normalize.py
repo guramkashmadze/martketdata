@@ -59,6 +59,9 @@ def stored_facts(
     asyncio.run(load())
     yield migrated_database
     with psycopg.connect(migrated_database, autocommit=True) as conn:
+        # E5b: each value change is announced (data.changed) with a task that publishes it.
+        conn.execute("delete from tasks where kind = 'webhook_publish'")
+        conn.execute("delete from webhook_events where type = 'data.changed'")
         conn.execute("delete from value_changes where cik = %s", [AAPL])
         conn.execute("delete from financial_metrics where cik = %s", [AAPL])
         conn.execute("delete from xbrl_facts where cik = %s", [AAPL])
@@ -83,10 +86,15 @@ def test_normalize_all_rebuilds_from_stored_facts(stored_facts: str) -> None:
             "select distinct calc_version from financial_metrics where cik = %s", [AAPL]
         ).fetchall()
         [change] = conn.execute(
-            "select reason, detail, old_value, new_value from value_changes where cik = %s",
+            "select reason, detail, old_value, new_value, change_id from value_changes "
+            "where cik = %s",
             [AAPL],
         ).fetchall()
+        announced = conn.execute(
+            "select subject, livemode from webhook_events where type = 'data.changed'"
+        ).fetchall()
     assert versions == [(CALC_VERSION,)]
+    assert announced == [(str(change[4]), True)]  # E5b: the change goes out as data.changed
     assert change[:2] == ("correction", f"calc version 0.9 to {CALC_VERSION}")
     assert (change[2], change[3]) == (1, 109417000000)
 

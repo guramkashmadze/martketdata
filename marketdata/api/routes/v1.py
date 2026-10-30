@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends
 
 from marketdata.api.auth import require_api_key
 from marketdata.api.errors import ERROR_RESPONSES
-from marketdata.api.routes import companies, compare, coverage, earnings
+from marketdata.api.routes import changes, companies, compare, coverage, earnings
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)], responses=ERROR_RESPONSES)
 router.include_router(coverage.router)
 router.include_router(companies.router)
 router.include_router(earnings.router)
 router.include_router(compare.router)
+router.include_router(changes.router)

@@ -7,6 +7,7 @@ next page starts after it even when new items arrive meanwhile (D-098).
 
 import base64
 import json
+from datetime import UTC, date, datetime, time
 
 from marketdata.service.errors import InvalidParameter
 
@@ -23,6 +24,15 @@ BAD_CURSOR = (
 def check_limit(limit: int, maximum: int = MAX_LIMIT) -> None:
     if not 1 <= limit <= maximum:
         raise InvalidParameter(f"limit must be from 1 to {maximum}, got {limit}")
+
+
+def start_of(since: date | datetime | None) -> datetime | None:
+    """A feed's `since` as a time: a time without a zone is UTC; a day starts at midnight UTC."""
+    if since is None:
+        return None
+    if isinstance(since, datetime):
+        return since if since.tzinfo is not None else since.replace(tzinfo=UTC)
+    return datetime.combine(since, time.min, tzinfo=UTC)
 
 
 def encode_cursor(*parts: str) -> str:

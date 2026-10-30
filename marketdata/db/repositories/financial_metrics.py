@@ -130,6 +130,15 @@ _NEWEST_FILING_ROWS = f"""
     order by metric, period_type, period_end desc
 """
 
+# E5b: rows by (CIK, metric, period type, period end), for the change feed and proof pages.
+_AT = f"""
+    select {_COLUMNS} from financial_metrics
+    where (cik, metric, period_type, period_end) in (
+      select * from unnest(%(ciks)s::bigint[], %(metrics)s::text[], %(types)s::text[],
+                           %(ends)s::date[]))
+    order by cik, metric, period_type, period_end
+"""
+
 _COUNT = "select count(*) from financial_metrics where cik = %(cik)s"
 
 # The quality report (E4b-S3): flags by company, metric and code, and each company's latest
@@ -257,3 +266,17 @@ async def rows_of_newest_filing(conn: AsyncConnection[Any]) -> list[StoredRow]:
         await cur.execute(_NEWEST_FILING_ROWS)
         return await cur.fetchall()
 
+
+async def rows_at(
+    conn: AsyncConnection[Any], keys: Sequence[tuple[int, str, str, date]]
+) -> list[StoredRow]:
+    """The rows at these (CIK, metric, period type, period end) keys that are stored."""
+    params = {
+        "ciks": [key[0] for key in keys],
+        "metrics": [key[1] for key in keys],
+        "types": [key[2] for key in keys],
+        "ends": [key[3] for key in keys],
+    }
+    async with conn.cursor(row_factory=class_row(StoredRow)) as cur:
+        await cur.execute(_AT, params)
+        return await cur.fetchall()

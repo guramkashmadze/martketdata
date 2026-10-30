@@ -12,9 +12,10 @@ A refresh of one company (`facts_refresh`: routed from each new 10-K or 10-Q, an
 3. Rebuilds the CIK's metrics from its stored facts (normalize/financials.py: reported in E4a,
    derived in E4b) and writes the rows that changed, with a `value_changes` row for each
    served value that moved, in one transaction (D-027): `restatement` when a later filing
-   reports it differently, `correction` when the calc version changed. A row the rebuild no
-   longer gives is kept and logged. When the refresh added rows or changed a value, the
-   transaction also announces `financials.updated` to webhook destinations (E5b).
+   reports it differently, `correction` when the calc version changed; each is announced to
+   webhook destinations as `data.changed` (E5b). A row the rebuild no longer gives is kept and
+   logged. When the refresh added rows or changed a value, the transaction also announces
+   `financials.updated`.
    `marketdata normalize --all` runs the same rebuild for every company with stored facts,
    makes no SEC request and announces only the values it changes (`rebuild_all`, E4b-S5).
 4. Cross-checks the company's earnings releases against the 10-Qs and 10-Ks now loaded
@@ -53,7 +54,7 @@ from marketdata.normalize.financials import build_metrics
 from marketdata.normalize.metric_catalog import concepts_by_taxonomy
 from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.normalize.security_master import SecFileError
-from marketdata.normalize.webhooks import FINANCIALS_UPDATED, metrics_update
+from marketdata.normalize.webhooks import DATA_CHANGED, FINANCIALS_UPDATED, metrics_update
 from marketdata.sec import urls
 from marketdata.sec.client import SecNotFound
 
@@ -247,7 +248,8 @@ async def rebuild_metrics(
         changes = metric_changes(stored, result.rows)
         update = metrics_update(cik, stored, result.rows) if announce_update else None
         written = await financial_metrics.upsert(conn, result.rows)
-        await value_changes.record_metric_changes(conn, cik, changes)
+        for change_id in await value_changes.record_metric_changes(conn, cik, changes):
+            await announce(conn, DATA_CHANGED, str(change_id))
         if update is not None:
             await announce(conn, FINANCIALS_UPDATED, update.subject, update.detail())
     kept = sorted(set(stored) - {row.key for row in result.rows})

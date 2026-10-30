@@ -13,9 +13,9 @@ Extracting, verifying and storing (E7a-S3, S4):
    slot (D-072), nor any slot an override marks not applicable.
 4. normalize/earnings.py checks every value against the stored text (verify/) and builds the
    rows; they are stored in one transaction with a `value_changes` row for each served value a
-   re-run (correction) or an 8-K/A (amendment) changes (D-027, D-077). A release the watcher
-   routed when it was filed (`live`) that is complete or partial is announced to webhook
-   destinations (`earnings.verified`, E5b) in that transaction, once.
+   re-run (correction) or an 8-K/A (amendment) changes (D-027, D-077), each announced to
+   webhook destinations as `data.changed` (E5b). A release the watcher routed when it was
+   filed (`live`) that is complete or partial is announced as `earnings.verified`, once.
 5. The company's releases are cross-checked against the 10-Qs and 10-Ks already loaded
    (ingest/cross_check.py, E4b-S6).
 
@@ -66,7 +66,7 @@ from marketdata.normalize.earnings import ReleaseRecord, assemble, not_applicabl
 from marketdata.normalize.filing_index import FilingIndex, earnings_exhibits, parse_filing_index
 from marketdata.normalize.filings import EARNINGS_EXTRACT, EARNINGS_FORMS
 from marketdata.normalize.security_master import SecFileError
-from marketdata.normalize.webhooks import EARNINGS_VERIFIED
+from marketdata.normalize.webhooks import DATA_CHANGED, EARNINGS_VERIFIED
 from marketdata.sec import urls
 
 log = structlog.get_logger(__name__)
@@ -209,7 +209,8 @@ class EarningsIngest:
                     original = await earnings.served(conn, amended)
                     changes = amendment_changes(record.accession_no, amended, original, new)
             await earnings.store(conn, record, live=live)
-            await value_changes.record_fact_changes(conn, record.cik, changes)
+            for change_id in await value_changes.record_fact_changes(conn, record.cik, changes):
+                await announce(conn, DATA_CHANGED, str(change_id))
             release = await earnings.get_release(conn, record.accession_no)
             if release is not None and release.live and release.status in VERIFIED:
                 await announce(conn, EARNINGS_VERIFIED, record.accession_no)

@@ -19,7 +19,13 @@ from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
 from marketdata.db.repositories import filings
-from marketdata.normalize.webhooks import EARNINGS_VERIFIED, FILING_EVENT, FINANCIALS_UPDATED
+from marketdata.normalize.webhooks import (
+    DATA_CHANGED,
+    EARNINGS_VERIFIED,
+    FILING_EVENT,
+    FINANCIALS_UPDATED,
+)
+from marketdata.service.changes import get_change, proof_path
 from marketdata.service.companies import company_refs
 from marketdata.service.earnings import get_earnings
 from marketdata.service.errors import NotFound
@@ -79,6 +85,9 @@ async def event_object(
     if event_type == FILING_EVENT:
         accession_no, cik = subject.rsplit(":", 1)
         return EventObject(await filing_announcement(conn, accession_no, int(cik)), None)
+    if event_type == DATA_CHANGED:
+        change = (await get_change(conn, int(subject))).data
+        return EventObject(change, proof_path(change))
     raise ValueError(f"no object is built for {event_type!r} events")
 
 

@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any
 
 from marketdata.sec import urls
+from marketdata.service.changes import ChangeFeed, ValueChange
 from marketdata.service.companies import Capability, CompanyRef, Coverage, CoveredTicker
 from marketdata.service.compare import ComparedMetric, Comparison
 from marketdata.service.earnings import (
@@ -383,6 +384,63 @@ COVERAGE: Served[Coverage] = Served(
     ),
     sources=(),
     as_of=AS_OF,
+    quality_flags=(),
+)
+
+
+# E5b: Rivian's second-quarter 2026 revenue, which rules version 3 corrected: version 2 had
+# read the six months as the quarter (EDGE_CASES.md).
+RIVN, RIVN_RELEASE, RIVN_TEN_Q = 1874178, "0001874178-26-000053", "0001874178-26-000054"
+RIVN_EXHIBIT = "ex-9912q26rivianearningspr.htm"
+CHANGES: Served[ChangeFeed] = Served(
+    data=ChangeFeed(
+        changes=(
+            ValueChange(
+                change_id=27,
+                changed_at=datetime(2026, 10, 28, 6, 22, 35, tzinfo=UTC),
+                reason="correction",
+                detail="rules version 2 to 3",
+                entity="earnings_fact",
+                ticker="RIVN",
+                cik=RIVN,
+                company="Rivian Automotive, Inc. / DE",
+                filer_cik=RIVN,
+                accession_no=RIVN_RELEASE,
+                amends=None,
+                slot="revenue",
+                field="value",
+                metric=None,
+                period_type=None,
+                period_end=date(2026, 6, 30),
+                old_value=Decimal(3039000000),
+                new_value=Decimal(1658000000),
+                unit="USD",
+                value=Decimal(1658000000),
+                reasons=(),
+                quality_flags=(),
+                proof=FactProof(
+                    accession_no=RIVN_RELEASE,
+                    document_url=urls.filing_document(RIVN, RIVN_RELEASE, RIVN_EXHIBIT),
+                    source_quote="| Total revenues | 1,303 | 1,658 | 2,543 | 3,039 |",
+                    scale_text="(in millions, except per share amounts)",
+                    checks=("in_source", "scale", "sanity"),
+                    method="rule",
+                    extractor_version="3",
+                    cross_check=CrossCheck(
+                        status="matched",
+                        filing_accession_no=RIVN_TEN_Q,
+                        filing_value=Decimal(1658000000),
+                    ),
+                ),
+            ),
+        ),
+        next_cursor=encode_cursor("27"),
+    ),
+    sources=(
+        _source(RIVN, RIVN_TEN_Q, "10-Q", date(2026, 7, 30)),
+        _source(RIVN, RIVN_RELEASE, "8-K", date(2026, 7, 30)),
+    ),
+    as_of=datetime(2026, 10, 28, 6, 22, 35, tzinfo=UTC),
     quality_flags=(),
 )
 

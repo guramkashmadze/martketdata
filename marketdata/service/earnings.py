@@ -14,7 +14,7 @@ an older one; the feed lists verified releases only (complete or partial), newes
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -39,6 +39,7 @@ from marketdata.service.pages import (
     check_limit,
     decode_cursor,
     encode_cursor,
+    start_of,
 )
 from marketdata.service.served import (
     FlagRef,
@@ -311,7 +312,7 @@ async def earnings_feed(
             ciks, CompanyRef(ticker=security.ticker, cik=security.cik, name=security.name)
         )
     stored = await earnings.verified_page(
-        conn, ciks, since=_start(since), after=after, limit=limit + 1
+        conn, ciks, since=start_of(since), after=after, limit=limit + 1
     )
     page = stored[:limit]
     companies = {**await company_refs(conn, {release.cik for release in page}), **known}
@@ -496,15 +497,6 @@ def _flags(release: EarningsRelease) -> list[FlagRef]:
         for fact in release.facts
         for code in fact.quality_flags
     ]
-
-
-def _start(since: date | datetime | None) -> datetime | None:
-    """A time without a zone is UTC; a day starts at midnight UTC."""
-    if since is None:
-        return None
-    if isinstance(since, datetime):
-        return since if since.tzinfo is not None else since.replace(tzinfo=UTC)
-    return datetime.combine(since, time.min, tzinfo=UTC)
 
 
 def _cursor_time(text: str) -> datetime:

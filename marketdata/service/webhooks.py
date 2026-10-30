@@ -20,10 +20,18 @@ from uuid import UUID, uuid7
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.db.repositories import clients, earnings, filings, financial_metrics, tasks
+from marketdata.db.repositories import (
+    clients,
+    earnings,
+    filings,
+    financial_metrics,
+    tasks,
+    value_changes,
+)
 from marketdata.db.repositories import webhooks as repository
 from marketdata.db.repositories.webhooks import Delivery, Destination, Event, FailureCount
 from marketdata.normalize.webhooks import (
+    DATA_CHANGED,
     EARNINGS_VERIFIED,
     EVENT_TYPES,
     FILING_EVENT,
@@ -171,6 +179,10 @@ async def _newest(conn: AsyncConnection[Any], event_type: str) -> tuple[str, dic
         releases = await earnings.verified_page(conn, limit=1)
         if releases:
             return releases[0].accession_no, {}
+    elif event_type == DATA_CHANGED:
+        change_id = await value_changes.newest(conn)
+        if change_id is not None:
+            return str(change_id), {}
     elif event_type == FILING_EVENT:
         found = await filings.newest_with_items(conn, HIGH_ITEMS)
         if found is not None:
