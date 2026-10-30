@@ -2,6 +2,10 @@
 
 Standard-library loggers (uvicorn, psycopg, alembic) go through the same formatter, so every
 line has the same shape. Logs go to stderr; stdout stays free for command output.
+
+A logged traceback names its frames and lines but never their local variables: a frame can hold
+a secret in the clear (a webhook's signing secret while it signs a delivery, E5b), and secrets
+are never logged (PLAN.md §6).
 """
 
 import logging
@@ -25,9 +29,19 @@ def configure_logging(env: Env, level: LogLevel) -> None:
     ]
     renderer: list[Processor]
     if env == "dev":
-        renderer = [structlog.dev.ConsoleRenderer(colors=sys.stderr.isatty())]
+        renderer = [
+            structlog.dev.ConsoleRenderer(
+                colors=sys.stderr.isatty(),
+                exception_formatter=structlog.dev.RichTracebackFormatter(show_locals=False),
+            )
+        ]
     else:
-        renderer = [structlog.processors.dict_tracebacks, structlog.processors.JSONRenderer()]
+        renderer = [
+            structlog.processors.ExceptionRenderer(
+                structlog.tracebacks.ExceptionDictTransformer(show_locals=False)
+            ),
+            structlog.processors.JSONRenderer(),
+        ]
 
     structlog.configure(
         processors=[

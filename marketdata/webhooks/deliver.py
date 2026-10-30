@@ -26,6 +26,7 @@ from uuid import UUID
 import httpx2
 import structlog
 from psycopg import AsyncConnection
+from pydantic import SecretStr
 
 from marketdata.config import Settings, SettingsError, require_webhook_key
 from marketdata.normalize.webhooks import (
@@ -108,7 +109,8 @@ async def deliver(
         raise DeliveryRefused(f"destination {dest_id} is switched off")
     started = time.perf_counter()
     try:
-        secret = decrypt_secret(require_webhook_key(settings), target.secret_enc)
+        # Wrapped, so a traceback or a debugger never shows it in the clear.
+        secret = SecretStr(decrypt_secret(require_webhook_key(settings), target.secret_enc))
     except (SettingsError, SecretUnreadable) as exc:
         # Our configuration, not the destination's fault: nothing is counted against it.
         raise DeliveryRefused(str(exc)) from exc
@@ -130,7 +132,9 @@ async def deliver(
         "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
         "Host": pinned.host,
-        SIGNATURE_HEADER: signature(secret, body, int(now if now is not None else time.time())),
+        SIGNATURE_HEADER: signature(
+            secret.get_secret_value(), body, int(now if now is not None else time.time())
+        ),
     }
     extensions = {"sni_hostname": pinned.server_name} if pinned.server_name else {}
     status: int | None = None

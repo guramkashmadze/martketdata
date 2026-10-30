@@ -52,3 +52,23 @@ def test_level_filters(capsys: pytest.CaptureFixture[str]) -> None:
     structlog.get_logger("marketdata.test").info("hidden")
 
     assert capsys.readouterr().err == ""
+
+
+def _fail_with(signing_secret: str) -> None:
+    raise RuntimeError("delivery failed")
+
+
+@pytest.mark.parametrize("env", ["dev", "live"])
+def test_tracebacks_carry_no_local_variables(env: Env, capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(env, "INFO")
+    log = structlog.get_logger("test")
+    secret = "-".join(("whsec_do", "not", "log", "me"))  # only ever whole at run time
+
+    try:
+        _fail_with(secret)
+    except RuntimeError:
+        log.exception("task_failed")
+
+    out = capsys.readouterr().err
+    assert "delivery failed" in out and "_fail_with" in out  # the frame is named
+    assert secret not in out  # the values of its locals aren't
