@@ -1,4 +1,5 @@
-"""The request log (E5a-S1): one `api_requests` row per /v1 request, refused ones included.
+"""The request log (E5a-S1): one `api_requests` row per /v1 request and proof page (E5b),
+refused ones included.
 
 The row holds the key (none when no valid key was sent), when the request started, its method,
 its path without the query string, the status it was answered with and how long it took. It is
@@ -21,7 +22,7 @@ log = structlog.get_logger(__name__)
 
 
 def is_logged(path: str) -> bool:
-    return path == "/v1" or path.startswith("/v1/")
+    return path == "/v1" or path.startswith(("/v1/", "/proof/"))
 
 
 class RequestLog:

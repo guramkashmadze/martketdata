@@ -4,6 +4,9 @@
 forbidden (403), not_found (404), method_not_allowed (405), not_applicable (422), rate_limited
 (429, with Retry-After) and internal (500). FastAPI answers a parameter that fails validation
 with 422; here it is 400 invalid_parameter, so 422 always means not_applicable (D-096).
+
+Proof pages (E5b-S3) answer the same errors as an HTML page; a 401 asks the browser for HTTP
+Basic credentials (the API key as the password).
 """
 
 from collections.abc import Sequence
@@ -11,10 +14,12 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
+from marketdata.api.auth import PROOF_REALM
+from marketdata.api.proof_pages.render import error_page
 from marketdata.service.errors import (
     DomainError,
     Forbidden,
@@ -72,43 +77,58 @@ def error_response(
     return JSONResponse(body.model_dump(), status_code=status, headers=headers)
 
 
-async def domain_error(request: Request, exc: Exception) -> JSONResponse:
+def _answer(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    headers: dict[str, str] | None = None,
+) -> Response:
+    """The error envelope, or for a proof page the same error as a page."""
+    if not request.url.path.startswith("/proof/"):
+        return error_response(status, code, message, headers)
+    if status == 401:
+        headers = {**(headers or {}), "WWW-Authenticate": f'Basic realm="{PROOF_REALM}"'}
+    return error_page(status, message, headers)
+
+
+async def domain_error(request: Request, exc: Exception) -> Response:
     for kind, status, code in _DOMAIN:
         if isinstance(exc, kind):
             retry_after = exc.retry_after if isinstance(exc, RateLimited) else None
             headers = {"Retry-After": str(retry_after)} if retry_after is not None else None
-            return error_response(status, code, str(exc), headers)
+            return _answer(request, status, code, str(exc), headers)
     return await internal_error(request, exc)
 
 
 async def validation_error(  # noqa: ASYNC124 - Starlette awaits exception handlers
     request: Request, exc: Exception
-) -> JSONResponse:
+) -> Response:
     errors = exc.errors() if isinstance(exc, RequestValidationError) else []
     problems = [f"{_where(error)}: {error.get('msg', 'invalid')}" for error in errors]
-    return error_response(400, "invalid_parameter", "; ".join(problems) or "Invalid request.")
+    return _answer(request, 400, "invalid_parameter", "; ".join(problems) or "Invalid request.")
 
 
-async def http_error(request: Request, exc: Exception) -> JSONResponse:
+async def http_error(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, HTTPException):
         return await internal_error(request, exc)
     path = request.url.path
     if exc.status_code == 404:
-        return error_response(404, "not_found", f"There is no endpoint {path}; /docs lists them.")
+        return _answer(request, 404, "not_found", f"There is no endpoint {path}; /docs lists them.")
     if exc.status_code == 405:
         allow = (exc.headers or {}).get("Allow", "GET")
-        return error_response(
-            405, "method_not_allowed", f"{path} answers {allow} only.", {"Allow": allow}
+        return _answer(
+            request, 405, "method_not_allowed", f"{path} answers {allow} only.", {"Allow": allow}
         )
     code = "internal" if exc.status_code >= 500 else "invalid_parameter"
-    return error_response(exc.status_code, code, str(exc.detail))
+    return _answer(request, exc.status_code, code, str(exc.detail))
 
 
 async def internal_error(  # noqa: ASYNC124 - Starlette awaits exception handlers
     request: Request, exc: Exception
-) -> JSONResponse:
+) -> Response:
     # The server logs the exception with its traceback; the client gets no internals.
-    return error_response(500, "internal", INTERNAL_MESSAGE)
+    return _answer(request, 500, "internal", INTERNAL_MESSAGE)
 
 
 def install(app: FastAPI) -> None:

@@ -1,5 +1,5 @@
-"""The FastAPI app: /health, the /v1 data API (E5a) with its reference at /docs; /proof and /mcp
-and the web UI are mounted by later epics.
+"""The FastAPI app: /health, the /v1 data API (E5a) with its reference at /docs, the proof pages
+at /proof (E5b); /mcp and the web UI are mounted by later epics.
 
 Run with `pdm run uvicorn marketdata.api.app:app`.
 """
@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from marketdata.api import errors
 from marketdata.api.deps import Connect
+from marketdata.api.proof_pages import routes as proof_pages
 from marketdata.api.request_log import RequestLog
 from marketdata.api.routes import health, v1
 from marketdata.config import Settings, load_settings
@@ -56,6 +57,7 @@ def create_app(settings: Settings | None = None, *, connect: Connect | None = No
         app.state.connect = connect
     app.include_router(health.router)
     app.include_router(v1.router)
+    app.include_router(proof_pages.router)
     errors.install(app)
     app.add_middleware(RequestLog)
     return app

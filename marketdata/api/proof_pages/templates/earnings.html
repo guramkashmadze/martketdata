@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% block title %}{{ r.ticker or r.cik }} earnings release {{ r.release.accession_no }}{% endblock %}
+{% block content %}
+<h1>{{ who }}{% if r.ticker %} ({{ r.ticker }}){% endif %}: earnings release</h1>
+<p class="sub">
+  {% if r.period.fiscal_year %}Fiscal {{ r.period.fiscal_year }} {{ r.period.fiscal_period }}{% else %}Period not stated{% endif %}
+  {% if r.period.period_end %}· quarter ended {{ r.period.period_end }}{% endif %}
+  · status <span class="{{ r.release.status }}">{{ r.release.status }}</span>
+</p>
+
+<h2>The release</h2>
+<dl>
+  <dt>Filing</dt>
+  <dd><a href="{{ r.release.filing_url }}">{{ r.release.form or "8-K" }} {{ r.release.accession_no }}</a> (the filing on sec.gov)</dd>
+  <dt>Press release</dt>
+  <dd>{% if r.release.document_url %}<a href="{{ r.release.document_url }}">the exhibit the values were read from</a>{% else %}no exhibit was found{% endif %}</dd>
+  <dt>Accepted by the SEC</dt><dd class="num">{{ r.release.accepted_at | utc }}</dd>
+  <dt>First verified</dt><dd class="num">{{ r.release.verified_at | utc }}</dd>
+  <dt>Period</dt>
+  <dd>
+    {% if r.period.period_end %}quarter ended {{ r.period.period_end }}
+      {% if r.period.period_end_source == "filing" %}(the release states no end; this is the quarter of the 10-Q or 10-K its values were checked against, <a href="{{ filing_url(r.release.cik, r.period.period_end_accession_no) }}">{{ r.period.period_end_accession_no }}</a>){% else %}(as the release states it){% endif %}
+    {% else %}not stated{% endif %}
+    {% if r.period.label %}<br><span class="sub">printed as “{{ r.period.label }}”</span>{% endif %}
+  </dd>
+  <dt>Extracted by</dt>
+  <dd>{{ r.release.extractor }} version {{ r.release.extractor_version }}; every value is then checked against the filed document, independently of how it was read</dd>
+  {% if r.release.notes %}
+  <dt>Notes</dt><dd><ul>{% for note in r.release.notes %}<li>{{ note }}</li>{% endfor %}</ul></dd>
+  {% endif %}
+</dl>
+
+<h2>Values</h2>
+{% for fact in r.facts %}
+<h3>{{ slot_names.get(fact.slot, fact.slot) }}</h3>
+<dl>
+  <dt>Value</dt>
+  <dd class="num value">{{ fact.value | amount(fact.unit) }}</dd>
+  <dt>A year earlier</dt><dd class="num">{{ fact.prior_value | amount(fact.unit) }}</dd>
+  <dt>Change</dt><dd class="num">{{ fact.change_pct | amount("percent") }}</dd>
+  <dt>Checks</dt>
+  <dd>
+    <span class="{{ fact.check_status }}">{{ fact.check_status }}</span>
+    {% if fact.proof.checks %}<ul>{% for check in fact.proof.checks %}<li>{{ checks.get(check, check) }}</li>{% endfor %}</ul>{% endif %}
+    {% if fact.reasons %}<ul>{% for reason in fact.reasons %}<li>{{ reason }}</li>{% endfor %}</ul>{% endif %}
+  </dd>
+  {% if fact.proof.source_quote %}
+  <dt>Row as printed</dt><dd><span class="quote">{{ fact.proof.source_quote }}</span></dd>
+  {% endif %}
+  {% if fact.proof.scale_text %}
+  <dt>Scale</dt><dd>{{ fact.proof.scale_text }}</dd>
+  {% endif %}
+  <dt>Against the 10-Q or 10-K</dt>
+  <dd>
+    <span class="{{ fact.proof.cross_check.status }}">{{ fact.proof.cross_check.status }}</span>:
+    {{ cross_checks.get(fact.proof.cross_check.status, "") }}
+    {% if fact.proof.cross_check.filing_accession_no %}
+    <br>the filing's value: <span class="num">{{ fact.proof.cross_check.filing_value | amount(fact.unit) }}</span>,
+    from <a href="{{ filing_url(r.release.cik, fact.proof.cross_check.filing_accession_no) }}">{{ fact.proof.cross_check.filing_accession_no }}</a>
+    {% endif %}
+  </dd>
+  {% if fact.quality_flags %}
+  <dt>Flags</dt>
+  <dd><ul>{% for code in fact.quality_flags %}<li><code>{{ code }}</code>: {{ proof.flags.get(code, "") }}</li>{% endfor %}</ul></dd>
+  {% endif %}
+</dl>
+{% endfor %}
+
+{{ parts.history(proof.history, None) }}
+{{ parts.filings(proof.sources) }}
+{% endblock %}

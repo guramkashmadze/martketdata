@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% block title %}{{ proof.ticker }} {{ row.metric }} {{ row.period_type }} {{ row.period_end }}{% endblock %}
+{% block content %}
+<h1>{{ who }} ({{ proof.ticker }}): {{ row.metric }}</h1>
+<p class="sub">
+  {{ period_names.get(row.period_type, row.period_type) }} ended {{ row.period_end }}
+  · fiscal {{ row.fiscal_year }} {{ row.fiscal_period }}
+</p>
+
+<h2>The value</h2>
+<dl>
+  <dt>Value</dt><dd class="num value">{{ row.value | amount(row.unit) }}</dd>
+  <dt>Period</dt><dd class="num">{{ row.period_start or "—" }} to {{ row.period_end }}</dd>
+  <dt>How it was obtained</dt>
+  <dd>{{ methods.get(row.proof.method, row.proof.method) }} (<code>{{ row.proof.method }}</code>)</dd>
+  {% if row.proof.concept %}
+  <dt>XBRL concept</dt><dd><code>{{ row.proof.concept }}</code></dd>
+  {% endif %}
+  <dt>Latest filing</dt>
+  <dd>{% if row.proof.filing_url %}<a href="{{ row.proof.filing_url }}">{{ row.proof.accession_no }}</a>, filed {{ row.filed_at or "—" }}{% else %}none{% endif %}</dd>
+  <dt>Filer</dt>
+  <dd>CIK {{ row.cik }}{% if row.cik != proof.cik %}, a predecessor of {{ who }}: its filings hold this period{% endif %}</dd>
+  <dt>Calc version</dt><dd>{{ row.proof.calc_version }}</dd>
+  {% if row.quality_flags %}
+  <dt>Flags</dt>
+  <dd><ul>{% for code in row.quality_flags %}<li><code>{{ code }}</code>: {{ proof.flags.get(code, "") }}</li>{% endfor %}</ul></dd>
+  {% endif %}
+</dl>
+
+{{ parts.history(proof.history, row.unit) }}
+{{ parts.filings(proof.sources) }}
+{% endblock %}

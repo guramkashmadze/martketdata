@@ -11,6 +11,7 @@ dependencies = [
     "cryptography>=46",      # webhook signing secrets encrypted at rest (E5b)
     "fastapi>=0.115",
     "httpx2>=2.16",          # SEC client; also what Starlette's TestClient uses (D-042)
+    "jinja2>=3.1",           # proof pages (E5b), later the web UI (E15)
     "lxml>=6.1",             # press release tables and text (E7a)
     "psycopg[binary]>=3.2",
     "psycopg-pool>=3.2",

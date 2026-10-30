@@ -1,0 +1,43 @@
+{% macro history(entries, unit) -%}
+<h2>Change history</h2>
+{% if entries %}
+<p class="sub">A stored value never changes silently: each change is logged with the old value,
+the new value and why, served by <code>/v1/changes</code> and sent as <code>data.changed</code>.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>When (UTC)</th><th>Value</th><th>Old</th><th>New</th><th>Why</th></tr></thead>
+  <tbody>
+  {% for change in entries %}
+    <tr>
+      <td class="num">{{ change.changed_at | utc }}</td>
+      <td>{{ change.what }}</td>
+      <td class="num">{{ change.old_value | amount(unit) }}</td>
+      <td class="num">{{ change.new_value | amount(unit) }}</td>
+      <td>{{ change.reason }}: {{ reasons.get(change.reason, "") }}{% if change.detail %}<br><span class="sub">{{ change.detail }}</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No value on this page has changed since it was first stored.</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro filings(sources) -%}
+<h2>Filings</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>Form</th><th>Filed</th><th>Accession number</th></tr></thead>
+  <tbody>
+  {% for source in sources %}
+    <tr>
+      <td>{{ source.form or "—" }}</td>
+      <td class="num">{{ source.filed_at or "—" }}</td>
+      <td class="num"><a href="{{ source.url }}">{{ source.accession_no }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{%- endmacro %}
