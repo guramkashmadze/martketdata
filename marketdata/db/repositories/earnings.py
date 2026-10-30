@@ -2,7 +2,8 @@
 
 A release is written with all its facts in one statement each, keyed by accession number (and
 slot): running a release again replaces its rows. `verified_at` keeps the first time a release
-served a value, so latency is measured from the first verification. Value changes are written
+served a value, so latency is measured from the first verification; `live` keeps whether the
+watcher routed it when it was filed (E5b), whatever runs it later. Value changes are written
 by the caller in the same transaction (D-027).
 """
 
@@ -38,6 +39,7 @@ class StoredRelease(BaseModel):
     check_report: dict[str, Any]
     verified_at: datetime | None
     updated_at: datetime
+    live: bool = False  # E5b: routed by the watcher when it was filed
 
 
 class StoredFact(BaseModel):
@@ -64,7 +66,8 @@ class StoredFact(BaseModel):
 
 _RELEASE_COLUMNS = """
     accession_no, cik, accepted_at, doc_name, fiscal_year, fiscal_period, period_end,
-    period_label, status, extractor, extractor_version, check_report, verified_at, updated_at
+    period_label, status, extractor, extractor_version, check_report, verified_at, updated_at,
+    live
 """
 _FACT_COLUMNS = """
     accession_no, slot, value, unit, prior_value, change_pct, basis, source_row_label,
@@ -75,12 +78,12 @@ _FACT_COLUMNS = """
 _UPSERT_RELEASE = """
     insert into earnings_releases (
       accession_no, cik, accepted_at, doc_name, fiscal_year, fiscal_period, period_end,
-      period_label, status, extractor, extractor_version, check_report, verified_at
+      period_label, status, extractor, extractor_version, check_report, verified_at, live
     ) values (
       %(accession_no)s, %(cik)s, %(accepted_at)s, %(doc_name)s, %(fiscal_year)s,
       %(fiscal_period)s, %(period_end)s, %(period_label)s, %(status)s, %(extractor)s,
       %(extractor_version)s, %(check_report)s,
-      case when %(status)s in ('complete', 'partial') then now() end
+      case when %(status)s in ('complete', 'partial') then now() end, %(live)s
     )
     on conflict (accession_no) do update set
       cik = excluded.cik,
@@ -95,6 +98,7 @@ _UPSERT_RELEASE = """
       extractor_version = excluded.extractor_version,
       check_report = excluded.check_report,
       verified_at = coalesce(earnings_releases.verified_at, excluded.verified_at),
+      live = earnings_releases.live or excluded.live,
       updated_at = now()
 """
 
@@ -200,8 +204,9 @@ _ALL_FACTS = f"""
 """
 
 
-async def store(conn: AsyncConnection[Any], release: ReleaseRecord) -> None:
-    """Write a release and its facts, replacing what a run before wrote."""
+async def store(conn: AsyncConnection[Any], release: ReleaseRecord, *, live: bool = False) -> None:
+    """Write a release and its facts, replacing what a run before wrote. `live`: the watcher
+    routed it when it was filed; a release stays live once it was."""
     async with conn.cursor() as cur:
         params = {
             "accession_no": release.accession_no,
@@ -216,6 +221,7 @@ async def store(conn: AsyncConnection[Any], release: ReleaseRecord) -> None:
             "extractor": release.extractor,
             "extractor_version": release.extractor_version,
             "check_report": Jsonb(release.check_report),
+            "live": live,
         }
         await cur.execute(_UPSERT_RELEASE, params)
         for fact in release.facts:

@@ -4,8 +4,10 @@ Handlers are thin wrappers around ingest/: they turn what an ingest step reports
 a retry (an exception) or TaskRefused, so ingest/ never depends on the queue.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from uuid import UUID
 
+import httpx2
 import structlog
 
 from marketdata.db.repositories.tasks import Task
@@ -22,6 +24,7 @@ from marketdata.ingest.watcher import FilingsWatcher, watch_summary
 from marketdata.normalize.filings import EARNINGS_EXTRACT, FACTS_REFRESH
 from marketdata.normalize.security_master import SnapshotRefused
 from marketdata.normalize.universe import DataFileError
+from marketdata.normalize.webhooks import WEBHOOK_DELIVER, WEBHOOK_PUBLISH
 from marketdata.sec import urls
 from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
@@ -30,9 +33,17 @@ from marketdata.tasks.kinds import (
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
 )
-from marketdata.tasks.registry import Registry, TaskContext, TaskRefused
+from marketdata.tasks.queue import RetryPolicy
+from marketdata.tasks.registry import Handler, Registry, TaskContext, TaskRefused
+from marketdata.webhooks import deliver, outbox
 
 log = structlog.get_logger(__name__)
+
+# §9.11: a delivery is attempted three times, about 1 and 10 minutes apart, then it is dead.
+DELIVERY_RETRY = RetryPolicy(
+    max_attempts=deliver.MAX_ATTEMPTS,
+    backoff=(timedelta(minutes=1), timedelta(minutes=10)),
+)
 
 
 class SecurityMasterIncomplete(Exception):
@@ -92,7 +103,9 @@ async def extract_earnings(context: TaskContext, task: Task) -> None:
         overrides = read_overrides(context.settings.extraction_overrides_file)
     except OverrideError as exc:
         raise TaskRefused(str(exc)) from exc
-    await EarningsIngest(context.fetcher, context.connect, overrides).run(cik, accession_no)
+    await EarningsIngest(context.fetcher, context.connect, overrides).run(
+        cik, accession_no, live=task.payload.get("live") is True
+    )
 
 
 async def backfill_earnings(context: TaskContext, task: Task) -> None:
@@ -126,6 +139,50 @@ async def load_public_float(context: TaskContext, task: Task) -> None:
     )
 
 
+async def publish_event(context: TaskContext, task: Task) -> None:
+    """A webhook event (E5b): its body built and stored, a delivery queued per destination."""
+    await outbox.publish(context.connect, context.settings, _event_id(task))
+
+
+def delivery_handler(
+    transport: httpx2.AsyncBaseTransport | None = None,
+    resolver: deliver.Resolver = deliver.resolve,
+) -> Handler:
+    """The `webhook_deliver` handler; the tests give it a transport and a resolver."""
+
+    async def deliver_event(context: TaskContext, task: Task) -> None:
+        """One attempt to deliver a webhook event to one destination (E5b, §9.11)."""
+        try:
+            await deliver.deliver(
+                context.connect,
+                context.settings,
+                _event_id(task),
+                _dest_id(task),
+                task.attempts,
+                final=task.attempts >= DELIVERY_RETRY.max_attempts,
+                transport=transport,
+                resolver=resolver,
+            )
+        except deliver.DeliveryRefused as exc:
+            raise TaskRefused(str(exc)) from exc
+
+    return deliver_event
+
+
+def _event_id(task: Task) -> UUID:
+    try:
+        return UUID(str(task.payload.get("event_id")))
+    except ValueError:
+        raise TaskRefused(f"the task's payload has no event id: {task.payload}") from None
+
+
+def _dest_id(task: Task) -> int:
+    dest_id = task.payload.get("dest_id")
+    if isinstance(dest_id, bool) or not isinstance(dest_id, int) or dest_id <= 0:
+        raise TaskRefused(f"the task's payload has no destination id: {task.payload}")
+    return dest_id
+
+
 def _accession(task: Task) -> str:
     accession = task.payload.get("accession_no")
     try:
@@ -157,7 +214,11 @@ def _cik(task: Task) -> int:
     return cik
 
 
-def build_registry() -> Registry:
+def build_registry(
+    *,
+    webhook_transport: httpx2.AsyncBaseTransport | None = None,
+    webhook_resolver: deliver.Resolver = deliver.resolve,
+) -> Registry:
     """Every kind the worker runs. The watcher routes work only to these (PLAN.md §4)."""
     registry = Registry()
     registry.register(SECURITY_MASTER, load_security_master)
@@ -167,4 +228,10 @@ def build_registry() -> Registry:
     registry.register(EARNINGS_BACKFILL, backfill_earnings)
     registry.register(FACTS_REFRESH, refresh_facts)
     registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
+    registry.register(WEBHOOK_PUBLISH, publish_event)
+    registry.register(
+        WEBHOOK_DELIVER,
+        delivery_handler(webhook_transport, webhook_resolver),
+        retry=DELIVERY_RETRY,
+    )
     return registry

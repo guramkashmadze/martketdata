@@ -69,7 +69,10 @@ async def test_one_new_filing_enqueues_exactly_its_task(
     assert report.stored.inserted == 1
     assert report.stored.routed == (f"{EARNINGS_EXTRACT} {EARNINGS}",)
     [task] = await queue.list_tasks(conn, kind=EARNINGS_EXTRACT)
-    assert (task.key, task.payload) == (EARNINGS, {"cik": AAPL, "accession_no": EARNINGS})
+    assert (task.key, task.payload) == (
+        EARNINGS,
+        {"cik": AAPL, "accession_no": EARNINGS, "live": True},  # E5b: routed when filed
+    )
     assert task.priority == queue.PRIORITY_LIVE  # ahead of backfills (D-067)
 
 

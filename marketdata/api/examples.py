@@ -10,7 +10,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from marketdata.api.envelope import DISCLAIMER, dumps
 from marketdata.sec import urls
 from marketdata.service.companies import Capability, CompanyRef, Coverage, CoveredTicker
 from marketdata.service.compare import ComparedMetric, Comparison
@@ -25,8 +24,9 @@ from marketdata.service.earnings import (
 )
 from marketdata.service.filings import CompanyFilings, FilingEventView, FilingView
 from marketdata.service.financials import Financials, MetricProof, MetricView
+from marketdata.service.json_text import dumps
 from marketdata.service.pages import encode_cursor
-from marketdata.service.served import Served, Source
+from marketdata.service.served import DISCLAIMER, Served, Source
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
 
 AAPL, GOOGL = 320193, 1652044

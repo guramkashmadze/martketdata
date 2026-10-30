@@ -25,6 +25,9 @@ TASK_STATUSES: tuple[TaskStatus, ...] = ("queued", "running", "done", "failed", 
 PRIORITY_LIVE = 10
 PRIORITY_NORMAL = 0
 PRIORITY_BACKFILL = -10
+# E5b: webhook deliveries run after live work and the periodic watches, so a slow receiver
+# never holds up a filing; backfills wait behind them.
+PRIORITY_DELIVERY = -5
 
 
 class Task(BaseModel):

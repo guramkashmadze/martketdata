@@ -253,7 +253,8 @@ async def test_every_new_periodic_filing_queues_the_refresh_again(
     await watch(document)  # the 10-Q before it
 
     [task] = await queue.list_tasks(conn, kind=FACTS_REFRESH)
-    assert (task.key, task.status, task.payload) == (str(AAPL), "queued", {"cik": AAPL})
+    assert (task.key, task.status) == (str(AAPL), "queued")
+    assert task.payload == {"cik": AAPL, "live": True}  # E5b: routed when filed
     assert task.priority == queue.PRIORITY_LIVE
 
 

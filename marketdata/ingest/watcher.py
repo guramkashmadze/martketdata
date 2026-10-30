@@ -8,7 +8,9 @@ A watch of one company:
 3. checks the file's acceptance times; a file that fails gives no times (D-057);
 4. in one transaction, under a lock per company: inserts the listings not stored yet, fills
    acceptance times stored as missing, enqueues the tasks §4 routes new filings to (only for
-   registered kinds) as live work, ahead of backfills (D-067), and records the file processed.
+   registered kinds) as live work, ahead of backfills (D-067) and marked `live`, announces new
+   filings with a high-importance label to webhook destinations (`filing.event`, E5b), and
+   records the file processed.
 
 A company's first watch only records what is there: history goes through each epic's backfill,
 so the first watch routes nothing.
@@ -26,6 +28,7 @@ from typing import Any
 import structlog
 
 from marketdata.db.repositories import companies, filings, tasks, watch_state
+from marketdata.ingest.announce import announce
 from marketdata.ingest.fetch import Connect, Fetched, RawFetcher
 from marketdata.normalize.filings import (
     AcceptanceCheck,
@@ -39,6 +42,7 @@ from marketdata.normalize.filings import (
     without_acceptance_times,
 )
 from marketdata.normalize.security_master import SecFileError
+from marketdata.normalize.webhooks import FILING_EVENT, announces_filing
 from marketdata.sec import urls
 
 log = structlog.get_logger(__name__)
@@ -171,11 +175,13 @@ class FilingsWatcher:
                                 conn,
                                 work.kind,
                                 work.key,
-                                work.payload,
+                                {**work.payload, "live": True},
                                 force=work.force,
                                 priority=tasks.PRIORITY_LIVE,
                             )
                             routed.append(f"{work.kind} {work.key}")
+                    if announces_filing(row.form, row.items_8k, row.file_number):
+                        await announce(conn, FILING_EVENT, f"{row.accession_no}:{row.cik}")
             if watched:
                 await watch_state.record_change(
                     conn, cik, fetched.sha256, fetched.key, fetched.fetched_at

@@ -13,8 +13,10 @@ A refresh of one company (`facts_refresh`: routed from each new 10-K or 10-Q, an
    derived in E4b) and writes the rows that changed, with a `value_changes` row for each
    served value that moved, in one transaction (D-027): `restatement` when a later filing
    reports it differently, `correction` when the calc version changed. A row the rebuild no
-   longer gives is kept and logged. `marketdata normalize --all` runs the same rebuild for
-   every company with stored facts and makes no SEC request (`rebuild_all`, E4b-S5).
+   longer gives is kept and logged. When the refresh added rows or changed a value, the
+   transaction also announces `financials.updated` to webhook destinations (E5b).
+   `marketdata normalize --all` runs the same rebuild for every company with stored facts,
+   makes no SEC request and announces only the values it changes (`rebuild_all`, E4b-S5).
 4. Cross-checks the company's earnings releases against the 10-Qs and 10-Ks now loaded
    (ingest/cross_check.py, E4b-S6).
 5. Checks the group's XBRL 10-K and 10-Q filings of the last 30 days in `filings` against the
@@ -41,6 +43,7 @@ from marketdata.db.repositories import (
     xbrl_facts,
 )
 from marketdata.db.repositories.xbrl_facts import FactsWritten
+from marketdata.ingest.announce import announce
 from marketdata.ingest.cross_check import cross_check_company
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.normalize.changes import metric_changes
@@ -50,6 +53,7 @@ from marketdata.normalize.financials import build_metrics
 from marketdata.normalize.metric_catalog import concepts_by_taxonomy
 from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.normalize.security_master import SecFileError
+from marketdata.normalize.webhooks import FINANCIALS_UPDATED, metrics_update
 from marketdata.sec import urls
 from marketdata.sec.client import SecNotFound
 
@@ -187,8 +191,10 @@ class FactsLoader:
         return file, parsed
 
     async def rebuild_metrics(self, cik: int) -> MetricsBuilt:
-        """Step 3: the CIK's metrics from its stored facts."""
-        return await rebuild_metrics(self._connect, cik, calc_version=self._calc_version)
+        """Step 3: the CIK's metrics from its stored facts, new and changed rows announced."""
+        return await rebuild_metrics(
+            self._connect, cik, calc_version=self._calc_version, announce_update=True
+        )
 
     async def _missing(
         self, group: Sequence[int], held: set[str], now: datetime
@@ -209,11 +215,16 @@ class FactsLoader:
 
 
 async def rebuild_metrics(
-    connect: Connect, cik: int, *, calc_version: str = CALC_VERSION
+    connect: Connect,
+    cik: int,
+    *,
+    calc_version: str = CALC_VERSION,
+    announce_update: bool = False,
 ) -> MetricsBuilt:
     """A CIK's metrics rebuilt from its stored facts (its predecessors' helping derive its
     quarters) and the rows that changed written, each served value that moved with its
-    `value_changes` row, in one transaction (D-027)."""
+    `value_changes` row, in one transaction (D-027). `announce_update` (a facts refresh):
+    rows the rebuild added or whose value changed are announced as `financials.updated`."""
     concepts = concepts_by_taxonomy()
     async with connect() as conn:
         company = await companies.get(conn, cik)
@@ -234,8 +245,11 @@ async def rebuild_metrics(
     async with connect() as conn, conn.transaction():
         stored = await financial_metrics.stored(conn, cik)
         changes = metric_changes(stored, result.rows)
+        update = metrics_update(cik, stored, result.rows) if announce_update else None
         written = await financial_metrics.upsert(conn, result.rows)
         await value_changes.record_metric_changes(conn, cik, changes)
+        if update is not None:
+            await announce(conn, FINANCIALS_UPDATED, update.subject, update.detail())
     kept = sorted(set(stored) - {row.key for row in result.rows})
     for metric, period_type, period_end in kept:
         log.warning(

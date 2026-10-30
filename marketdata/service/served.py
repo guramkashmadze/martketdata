@@ -19,6 +19,8 @@ from pydantic import BaseModel, ConfigDict, WithJsonSchema
 from marketdata.db.repositories import filings, xbrl_facts
 from marketdata.sec import urls
 
+DISCLAIMER = "Information from public filings. Not investment advice."
+
 # A served value: a Decimal, written as a JSON number with every digit (D-096). Pydantic's
 # schema would call it a string; the API reference says what clients get.
 type Number = Annotated[Decimal, WithJsonSchema({"type": "number"}, mode="serialization")]

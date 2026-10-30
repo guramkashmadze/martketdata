@@ -13,7 +13,9 @@ Extracting, verifying and storing (E7a-S3, S4):
    slot (D-072), nor any slot an override marks not applicable.
 4. normalize/earnings.py checks every value against the stored text (verify/) and builds the
    rows; they are stored in one transaction with a `value_changes` row for each served value a
-   re-run (correction) or an 8-K/A (amendment) changes (D-027, D-077).
+   re-run (correction) or an 8-K/A (amendment) changes (D-027, D-077). A release the watcher
+   routed when it was filed (`live`) that is complete or partial is announced to webhook
+   destinations (`earnings.verified`, E5b) in that transaction, once.
 5. The company's releases are cross-checked against the 10-Qs and 10-Ks already loaded
    (ingest/cross_check.py, E4b-S6).
 
@@ -50,6 +52,7 @@ from marketdata.extract.earnings_rules import (
 )
 from marketdata.extract.html_tables import parse_document
 from marketdata.extract.interface import Release, ReleaseDocument
+from marketdata.ingest.announce import announce
 from marketdata.ingest.cross_check import cross_check_company
 from marketdata.ingest.fetch import Connect, RawFetcher
 from marketdata.ingest.watcher import FilingsWatcher
@@ -63,9 +66,12 @@ from marketdata.normalize.earnings import ReleaseRecord, assemble, not_applicabl
 from marketdata.normalize.filing_index import FilingIndex, earnings_exhibits, parse_filing_index
 from marketdata.normalize.filings import EARNINGS_EXTRACT, EARNINGS_FORMS
 from marketdata.normalize.security_master import SecFileError
+from marketdata.normalize.webhooks import EARNINGS_VERIFIED
 from marketdata.sec import urls
 
 log = structlog.get_logger(__name__)
+
+VERIFIED = ("complete", "partial")  # a release that serves verified values
 
 
 def read_overrides(path: Path) -> tuple[Override, ...]:
@@ -127,8 +133,9 @@ class EarningsIngest:
         self._connect = connect
         self._overrides = tuple(overrides)
 
-    async def run(self, cik: int, accession_no: str) -> ExtractedRelease:
-        """Fetch, extract, verify and store one release (steps 1-4 above)."""
+    async def run(self, cik: int, accession_no: str, *, live: bool = False) -> ExtractedRelease:
+        """Fetch, extract, verify and store one release (steps 1-4 above). `live`: the watcher
+        routed it when it was filed."""
         fetched = await self.fetch(cik, accession_no)
         async with self._connect() as conn:
             company = await companies.get(conn, cik)
@@ -168,7 +175,7 @@ class EarningsIngest:
                 "not_applicable_overrides": overridden,
             },
         )
-        changes = await self._store(record, group, fetched.index.form)
+        changes = await self._store(record, group, fetched.index.form, live=live)
         # Its 10-Q or 10-K may be loaded already (a re-run, an 8-K/A): check it now (E4b-S6).
         await cross_check_company(self._connect, cik)
         log.info(
@@ -183,7 +190,7 @@ class EarningsIngest:
         return ExtractedRelease(fetched, record, tuple(changes))
 
     async def _store(
-        self, record: ReleaseRecord, group: Sequence[int], form: str
+        self, record: ReleaseRecord, group: Sequence[int], form: str, *, live: bool = False
     ) -> list[ValueChange]:
         new = [
             Served(fact.slot, fact.value, fact.prior_value, fact.extractor_version)
@@ -201,8 +208,11 @@ class EarningsIngest:
                 if amended is not None:
                     original = await earnings.served(conn, amended)
                     changes = amendment_changes(record.accession_no, amended, original, new)
-            await earnings.store(conn, record)
+            await earnings.store(conn, record, live=live)
             await value_changes.record_fact_changes(conn, record.cik, changes)
+            release = await earnings.get_release(conn, record.accession_no)
+            if release is not None and release.live and release.status in VERIFIED:
+                await announce(conn, EARNINGS_VERIFIED, record.accession_no)
         return changes
 
     async def fetch(self, cik: int, accession_no: str) -> FetchedRelease:

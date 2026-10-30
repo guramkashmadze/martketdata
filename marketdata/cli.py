@@ -18,11 +18,12 @@ from typing import Annotated, Any
 import typer
 from psycopg import AsyncConnection
 
-from marketdata.config import Settings, SettingsError, load_settings
+from marketdata.config import Settings, SettingsError, load_settings, require_webhook_key
 from marketdata.db.pool import create_pool
 from marketdata.db.repositories import predecessors
 from marketdata.db.repositories.clients import ApiKey, Client
 from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
+from marketdata.db.repositories.webhooks import Delivery, Destination
 from marketdata.ingest.cross_check import (
     CrossCheckReport,
     cross_check_all,
@@ -48,6 +49,7 @@ from marketdata.normalize.universe import DataFileError, SecurityOverride, Unive
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
 from marketdata.service import clients as api_clients
+from marketdata.service import webhooks as webhook_service
 from marketdata.service.companies import (
     CompanyProfile,
     ListedSecurity,
@@ -66,6 +68,7 @@ from marketdata.tasks import queue
 from marketdata.tasks import scheduler as task_scheduler
 from marketdata.tasks.handlers import build_registry
 from marketdata.tasks.worker import serve
+from marketdata.webhooks.signing import encrypt_secret, new_secret
 
 app = typer.Typer(
     help="marketdata: trusted, verified data from SEC filings. Information, not investment advice.",
@@ -1248,6 +1251,194 @@ def keys_revoke(
         raise _fail(str(exc)) from None
     revoked_at = _utc(key.revoked_at) if key.revoked_at else "—"
     typer.echo(f"Key {key.key_id} of client {key.client_name} is revoked (since {revoked_at} UTC).")
+
+
+@groups["webhooks"].command("create")
+def webhooks_create(
+    client: Annotated[str, typer.Argument(help="The client's name (`marketdata clients list`).")],
+    url: Annotated[str, typer.Argument(help="The client's endpoint, an https URL.")],
+    events: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--event",
+            help="An event type to send (repeatable): earnings.verified, financials.updated, "
+            "data.changed, filing.event. Default: all four.",
+        ),
+    ] = None,
+) -> None:
+    """Add a webhook destination for a client (PLAN.md §9.11). Its signing secret is printed
+    once and stored encrypted with WEBHOOK_ENCRYPTION_KEY."""
+    settings = _settings()
+    try:
+        key = require_webhook_key(settings)
+    except SettingsError as exc:
+        raise _fail(str(exc), 2) from None
+    secret = new_secret()
+    secret_enc = encrypt_secret(key, secret)
+
+    async def work(conn: AsyncConnection[Any]) -> Destination:
+        return await webhook_service.create_destination(
+            conn,
+            client,
+            url,
+            events or (),
+            secret_enc=secret_enc,
+            allow_loopback=settings.env == "dev",
+        )
+
+    try:
+        destination = _in_transaction(settings, work)
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    typer.echo(
+        f"Destination {destination.dest_id} for client {destination.client_name}: "
+        f"{destination.url}"
+    )
+    typer.echo(f"Events: {', '.join(destination.event_types)}. Signing secret:")
+    typer.echo("")
+    typer.echo(f"    {secret}")
+    typer.echo("")
+    typer.echo(
+        "Copy it now: it is shown only once and stored encrypted. Each delivery carries "
+        'X-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>" keyed with this '
+        "secret>; reject signatures more than five minutes old. Send a test event with "
+        f"`marketdata webhooks test {destination.dest_id}`."
+    )
+
+
+@groups["webhooks"].command("list")
+def webhooks_list(
+    client: Annotated[str | None, typer.Option(help="Only this client's destinations.")] = None,
+) -> None:
+    """List webhook destinations (never their secrets): client, URL, events, whether they are
+    on, failed deliveries in a row and the latest attempt."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> list[Destination]:
+        return await webhook_service.list_destinations(conn, client)
+
+    try:
+        listed = _in_transaction(settings, work)
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    for line in _destination_lines(listed):
+        typer.echo(line)
+
+
+def _destination_lines(listed: list[Destination]) -> list[str]:
+    if not listed:
+        return ["No webhook destinations yet. `marketdata webhooks create CLIENT URL` adds one."]
+    lines = []
+    for destination in listed:
+        state = (
+            "on"
+            if destination.active
+            else (
+                f"off since {_utc(destination.disabled_at)} UTC: {destination.disabled_reason}"
+                if destination.disabled_at
+                else "off"
+            )
+        )
+        attempt = _utc(destination.last_attempt_at) if destination.last_attempt_at else "never"
+        lines += [
+            f"  {destination.dest_id:>4}  {destination.client_name}  {destination.url}",
+            f"        events: {', '.join(destination.event_types)}",
+            f"        {state}; failed deliveries in a row: {destination.consecutive_failures}; "
+            f"created {_utc(destination.created_at)} UTC; latest attempt {attempt}",
+        ]
+    return lines
+
+
+@groups["webhooks"].command("disable")
+def webhooks_disable(
+    dest_id: Annotated[int, typer.Argument(help="The destination's ID (`webhooks list`).")],
+) -> None:
+    """Switch a destination off: nothing more is delivered to it. Twice changes nothing."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> Destination:
+        return await webhook_service.disable_destination(conn, dest_id)
+
+    try:
+        destination = _in_transaction(settings, work)
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    since = _utc(destination.disabled_at) if destination.disabled_at else "—"
+    typer.echo(
+        f"Destination {destination.dest_id} ({destination.url}) is off since {since} UTC: "
+        f"{destination.disabled_reason}."
+    )
+
+
+@groups["webhooks"].command("enable")
+def webhooks_enable(
+    dest_id: Annotated[int, typer.Argument(help="The destination's ID (`webhooks list`).")],
+) -> None:
+    """Switch a destination on again, its count of failed deliveries back at 0. Events
+    published while it was off are not sent."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> Destination:
+        return await webhook_service.enable_destination(conn, dest_id)
+
+    try:
+        destination = _in_transaction(settings, work)
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    typer.echo(f"Destination {destination.dest_id} ({destination.url}) is on.")
+
+
+@groups["webhooks"].command("test")
+def webhooks_test(
+    dest_id: Annotated[int, typer.Argument(help="The destination's ID (`webhooks list`).")],
+    event_type: Annotated[
+        str | None,
+        typer.Option("--type", help="The event type; default: the destination's first."),
+    ] = None,
+    wait: Annotated[
+        float, typer.Option(min=0, max=120, help="Seconds to wait for the worker's attempt.")
+    ] = 20.0,
+) -> None:
+    """Send a test event (livemode false) to one destination, carrying the newest real object
+    of its type; one a minute. The worker delivers it; this waits for its first attempt."""
+    settings = _settings()
+
+    async def run() -> tuple[webhook_service.TestEvent, list[Delivery]]:
+        async with create_pool(str(settings.database_url), max_size=1) as pool:
+            async with pool.connection() as conn:
+                queued = await webhook_service.queue_test_event(conn, dest_id, event_type)
+            deadline = time.monotonic() + wait
+            while True:
+                async with pool.connection() as conn:
+                    attempts = await webhook_service.deliveries(conn, queued.event_id, dest_id)
+                if attempts or time.monotonic() >= deadline:
+                    return queued, attempts
+                await asyncio.sleep(0.5)
+
+    try:
+        queued, attempts = asyncio.run(run())
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except NotFound as exc:
+        raise _fail(str(exc)) from None
+    typer.echo(
+        f"Test event {queued.event_id} ({queued.type}, livemode false, about {queued.subject}) "
+        f"queued for destination {queued.dest_id}."
+    )
+    if not attempts:
+        raise _fail(
+            f"No attempt within {wait:.0f} s: the worker delivers it (`marketdata worker`)."
+        )
+    for attempt in attempts:
+        outcome = attempt.error or f"answered {attempt.status_code}"
+        typer.echo(
+            f"  attempt {attempt.attempt} at {_utc(attempt.attempted_at)} UTC: {outcome} "
+            f"in {attempt.duration_ms} ms"
+        )
+    if attempts[-1].error is not None:
+        raise typer.Exit(1)
 
 
 def _quoted(text: str) -> str:

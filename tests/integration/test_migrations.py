@@ -20,6 +20,7 @@ E5A_INDEXES = {
     "xbrl_facts_by_accession",
     "earnings_releases_by_acceptance",
 }
+WEBHOOK_TABLES = {"webhook_destinations", "webhook_events", "webhook_deliveries"}
 
 
 def _tables(url: str) -> set[str]:
@@ -46,8 +47,8 @@ def _indexes(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0012(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0012"
+def test_head_is_0013(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0013"
 
 
 def _units(url: str) -> str:
@@ -67,6 +68,14 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert "priority" in _columns(migrated_database, "tasks")
     assert "percent" in _units(migrated_database)
     assert _indexes(migrated_database) >= E5A_INDEXES
+    assert _tables(migrated_database) >= WEBHOOK_TABLES
+    assert "live" in _columns(migrated_database, "earnings_releases")
+    assert "value_changes_by_cik" in _indexes(migrated_database)
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & WEBHOOK_TABLES == set()
+    assert "live" not in _columns(migrated_database, "earnings_releases")
+    assert "value_changes_by_cik" not in _indexes(migrated_database)
 
     command.downgrade(alembic_config, "-1")
     assert _indexes(migrated_database) & E5A_INDEXES == set()
@@ -115,7 +124,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) & E0_TABLES == set()
 
     command.upgrade(alembic_config, "head")
-    assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES
+    assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES | WEBHOOK_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:
@@ -259,3 +268,34 @@ async def test_a_compared_slot_names_its_filing(conn: psycopg.AsyncConnection[An
 
     with pytest.raises(psycopg.errors.CheckViolation):
         await conn.execute(insert, ["matched", None, None])
+
+
+async def test_webhook_rows_are_checked(conn: psycopg.AsyncConnection[Any]) -> None:
+    await conn.execute("insert into clients (name) values ('hooks test')")
+    destination = (
+        "insert into webhook_destinations (client_id, url, secret_enc, event_types) "
+        "select client_id, %s, 'x', %s from clients where name = 'hooks test' returning dest_id"
+    )
+    event = (
+        "insert into webhook_events (event_id, type, subject, livemode, dest_id, client_id) "
+        "values (gen_random_uuid(), 'data.changed', %s, %s, %s, %s)"
+    )
+    cursor = await conn.execute(destination, ["https://h.example.com", ["data.changed"]])
+    dest_id = (await cursor.fetchone() or [None])[0]
+    await conn.execute(event, ["1", True, None, None])
+
+    for statement, params in [
+        (destination, ["ftp://h.example.com", ["data.changed"]]),  # not a web URL
+        (destination, ["https://h.example.com", ["data.changd"]]),  # no such event type
+        (destination, ["https://h.example.com", []]),  # no event type at all
+        (event, ["2", False, None, None]),  # a test event goes to one destination
+        (event, ["3", True, dest_id, None]),  # a live event goes to every subscriber
+    ]:
+        with pytest.raises(psycopg.errors.CheckViolation):
+            async with conn.transaction():
+                await conn.execute(statement, params)
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        async with conn.transaction():
+            await conn.execute(event, ["1", True, None, None])  # once per type and subject
+    client = await (await conn.execute("select client_id from clients")).fetchone()
+    await conn.execute(event, ["1", False, dest_id, (client or [None])[0]])  # tests repeat

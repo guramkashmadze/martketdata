@@ -4,6 +4,8 @@ Each epic adds the settings it reads. Variables from later epics may already be 
 they are ignored until then. An empty value (`NAME=`) counts as not set.
 """
 
+import base64
+import binascii
 import re
 from pathlib import Path
 from typing import Annotated, Literal
@@ -23,11 +25,28 @@ class SettingsError(Exception):
     """Configuration is missing or invalid. The message says which variable and how to fix it."""
 
 
+FERNET_KEY_HELP = (
+    "a Fernet key, 32 bytes in URL-safe base64; make one with `pdm run python -c "
+    '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`'
+)
+
+
 def check_sec_user_agent(value: str) -> str:
     value = value.strip()
     if not _SEC_USER_AGENT.match(value):
         raise ValueError(f"must be {SEC_USER_AGENT_FORMAT}")
     return value
+
+
+def check_fernet_key(value: SecretStr) -> SecretStr:
+    text = value.get_secret_value().strip()
+    try:
+        raw = base64.urlsafe_b64decode(text.encode("ascii"))
+    except binascii.Error, UnicodeEncodeError:
+        raw = b""
+    if len(raw) != 32:
+        raise ValueError(f"must be {FERNET_KEY_HELP}")
+    return SecretStr(text)
 
 
 class Settings(BaseSettings):
@@ -67,6 +86,17 @@ class Settings(BaseSettings):
     predecessors_file: Path = Path("data/predecessors.csv")
     extraction_overrides_file: Path = Path("data/extraction_overrides.toml")
 
+    # E5b. Webhook signing secrets are stored encrypted with this key: `webhooks create` and
+    # the worker's deliveries need it (require_webhook_key). Proof links in webhook events
+    # start with PUBLIC_BASE_URL; without it they are null.
+    webhook_encryption_key: Annotated[SecretStr, AfterValidator(check_fernet_key)] | None = None
+    public_base_url: HttpUrl | None = None
+
+    @property
+    def base_url(self) -> str | None:
+        """PUBLIC_BASE_URL without its trailing slash."""
+        return str(self.public_base_url).rstrip("/") if self.public_base_url else None
+
 
 def load_settings(env_file: str | None = ".env") -> Settings:
     """Load settings, failing fast with one line per missing or invalid variable."""
@@ -83,6 +113,16 @@ def require_sec_user_agent(settings: Settings) -> str:
             _message([f"  - SEC_USER_AGENT is missing. Set it to {SEC_USER_AGENT_FORMAT}."])
         )
     return settings.sec_user_agent
+
+
+def require_webhook_key(settings: Settings) -> str:
+    """The key that encrypts webhook signing secrets (E5b). Creating a destination and
+    delivering to one refuse to start without it."""
+    if settings.webhook_encryption_key is None:
+        raise SettingsError(
+            _message([f"  - WEBHOOK_ENCRYPTION_KEY is missing. Set it to {FERNET_KEY_HELP}."])
+        )
+    return settings.webhook_encryption_key.get_secret_value()
 
 
 def _describe(exc: ValidationError) -> str:

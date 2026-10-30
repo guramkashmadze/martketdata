@@ -102,6 +102,14 @@ _BY_ACCESSION = f"""
     order by accession_no, cik
 """
 
+# E5b: the newest 8-K with one of these items (a test event's filing).
+_NEWEST_WITH_ITEMS = f"""
+    select {_COLUMNS} from filings
+    where form in ('8-K', '8-K/A') and items_8k && %(items)s::text[]
+    order by filed_at desc, accepted_at desc nulls last, accession_no desc, cik
+    limit 1
+"""
+
 # E5a: a company group's filings, newest first, a page at a time after the last one served
 # (filing date, acceptance time, accession number). A filing without an acceptance time sorts
 # at the start of its day.
@@ -257,3 +265,10 @@ async def page(
     async with conn.cursor(row_factory=class_row(Filing)) as cur:
         await cur.execute(_PAGE, params)
         return await cur.fetchall()
+
+
+async def newest_with_items(conn: AsyncConnection[Any], items: Sequence[str]) -> Filing | None:
+    """The newest 8-K listing with any of these items."""
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_NEWEST_WITH_ITEMS, {"items": list(items)})
+        return await cur.fetchone()

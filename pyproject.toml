@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.13",
     "apscheduler>=3.11,<4",  # the scheduler process (E3-S3); 4.0 is still an alpha
     "boto3>=1.43",           # S3RawStore (R2 or B2 in production)
+    "cryptography>=46",      # webhook signing secrets encrypted at rest (E5b)
     "fastapi>=0.115",
     "httpx2>=2.16",          # SEC client; also what Starlette's TestClient uses (D-042)
     "lxml>=6.1",             # press release tables and text (E7a)

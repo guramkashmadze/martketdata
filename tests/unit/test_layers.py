@@ -40,7 +40,13 @@ IO_MODULES = (
     "sqlalchemy",
     "urllib.request",
 )
-INTERFACE_PACKAGES = ("marketdata.api", "marketdata.mcp_server", "marketdata.web")
+# E5b: webhooks/ publishes the API's objects and reads its tables through service/ (D-100).
+INTERFACE_PACKAGES = (
+    "marketdata.api",
+    "marketdata.mcp_server",
+    "marketdata.web",
+    "marketdata.webhooks",
+)
 SQL_ALLOWED = ("marketdata.db.repositories", "marketdata.db.migrations")
 # SEC hosts are named only inside sec/, so every SEC URL comes from sec/urls.py and every
 # SEC request from sec/client.py.

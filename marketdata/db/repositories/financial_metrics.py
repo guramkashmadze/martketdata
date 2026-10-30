@@ -119,6 +119,17 @@ _FISCAL_LABELS = """
     order by cik, period_end, metric
 """
 
+# E5b: the rows whose latest filing is the newest filing any row reads (a test event's update).
+_NEWEST_FILING_ROWS = f"""
+    select {_COLUMNS} from financial_metrics
+    where (cik, accession_no) = (
+      select cik, accession_no from financial_metrics
+      where accession_no is not null and filed_at is not null
+      order by filed_at desc, accession_no desc, cik
+      limit 1)
+    order by metric, period_type, period_end desc
+"""
+
 _COUNT = "select count(*) from financial_metrics where cik = %(cik)s"
 
 # The quality report (E4b-S3): flags by company, metric and code, and each company's latest
@@ -239,3 +250,10 @@ async def row_counts(
             int(cik): (int(rows), int(flagged), filed)
             for cik, rows, flagged, filed in await cur.fetchall()
         }
+
+
+async def rows_of_newest_filing(conn: AsyncConnection[Any]) -> list[StoredRow]:
+    async with conn.cursor(row_factory=class_row(StoredRow)) as cur:
+        await cur.execute(_NEWEST_FILING_ROWS)
+        return await cur.fetchall()
+

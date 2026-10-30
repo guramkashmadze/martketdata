@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:a22274343088350b0b4de886af9487094b78882064d30f2495c34aee1b6cc084"
+content_hash = "sha256:d0cbb75bebaae84324abc4a19d379867b096af35c7203bfcf3db2fac4dbcb9d4"
 
 [[metadata.targets]]
 requires_python = ">=3.15,<3.16"
@@ -233,7 +233,7 @@ name = "cffi"
 version = "2.1.1"
 requires_python = ">=3.10"
 summary = "Foreign Function Interface for Python calling C code."
-groups = ["dev"]
+groups = ["default", "dev"]
 marker = "platform_python_implementation != \"PyPy\""
 dependencies = [
     "pycparser; implementation_name != \"PyPy\"",
@@ -353,7 +353,7 @@ name = "cryptography"
 version = "50.0.2"
 requires_python = "!=3.9.0,!=3.9.1,>=3.9"
 summary = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
-groups = ["dev"]
+groups = ["default", "dev"]
 dependencies = [
     "cffi>=2.0.0; platform_python_implementation != \"PyPy\"",
     "typing-extensions>=4.13.2; python_full_version < \"3.11\"",
@@ -1070,7 +1070,7 @@ name = "pycparser"
 version = "3.12"
 requires_python = ">=3.11"
 summary = "C parser in Python"
-groups = ["dev"]
+groups = ["default", "dev"]
 marker = "implementation_name != \"PyPy\" and platform_python_implementation != \"PyPy\""
 files = [
     {file = "pycparser-3.12-py3-none-any.whl", hash = "sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e"},
