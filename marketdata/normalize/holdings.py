@@ -15,11 +15,13 @@ both would be 50% from their mean as soon as either is wrong. The check flags a 
 changes one (§9.5).
 """
 
+import calendar
+import re
 import statistics
 import tomllib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal
 from fractions import Fraction
 from typing import Literal, cast
@@ -516,3 +518,53 @@ def position_changes(
                 entity_key["put_call"] = old.put_call
             found.append(ValueChange(entity_key, old_value, new_value, reason, detail))
     return found
+
+
+# --- Quarters (E9-S5, S6).
+
+_QUARTER = re.compile(r"^(\d{4})[- ]?Q([1-4])$", re.IGNORECASE)
+
+
+def quarter_end(day: date) -> date:
+    """The last quarter end on or before `day`."""
+    end = _end(day.year, (day.month - 1) // 3 * 3 + 3)  # of the quarter `day` is in
+    return end if day == end else quarters_before(end, 1)
+
+
+def quarters_before(period: date, quarters: int) -> date:
+    """The quarter end `quarters` quarters before the quarter end `period`."""
+    index = period.year * 4 + (period.month - 1) // 3 - quarters
+    return _end(index // 4, index % 4 * 3 + 3)
+
+
+def backfill_start(today: date, quarters: int) -> date:
+    """The first filing date a funds backfill of `quarters` quarters reads: the day after the
+    quarter end before the oldest of them, so that quarter is loaded too and the oldest one has
+    change types."""
+    return quarters_before(quarter_end(today), quarters) + timedelta(days=1)
+
+
+def parse_quarter(text: str) -> date:
+    """A quarter as 2026Q2 (or 2026-Q2, 2026 Q2) or as its end date, 2026-06-30."""
+    value = text.strip()
+    match = _QUARTER.match(value)
+    if match:
+        return _end(int(match.group(1)), int(match.group(2)) * 3)
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"a quarter is written 2026Q2 or 2026-06-30, got {text!r}") from None
+    if quarter_end(day) != day:
+        raise ValueError(
+            f"{text} is not a quarter end (March 31, June 30, September 30, December 31)"
+        )
+    return day
+
+
+def quarter_label(period: date) -> str:
+    """2026Q2 for 2026-06-30."""
+    return f"{period.year}Q{(period.month - 1) // 3 + 1}"
+
+
+def _end(year: int, month: int) -> date:
+    return date(year, month, calendar.monthrange(year, month)[1])

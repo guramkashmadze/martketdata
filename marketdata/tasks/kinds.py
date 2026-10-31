@@ -8,3 +8,4 @@ SECURITY_MASTER = "security_master"  # key: the date, YYYY-MM-DD
 EARNINGS_BACKFILL = "earnings_backfill"  # key: CIK (E7a)
 PUBLIC_FLOAT_LOAD = "public_float_load"  # key: the date, YYYY-MM-DD (E4a-S5)
 INSIDERS_BACKFILL = "insiders_backfill"  # key: CIK (E8-S4)
+FUNDS_BACKFILL = "funds_backfill"  # key: a curated manager's CIK (E9-S5)

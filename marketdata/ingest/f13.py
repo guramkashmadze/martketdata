@@ -19,6 +19,7 @@
 """
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -29,10 +30,11 @@ from marketdata.db.repositories import filings, holdings, managers, tasks, value
 from marketdata.db.repositories.holdings import StoredF13Filing
 from marketdata.ingest.announce import announce
 from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.ingest.watcher import FilingsWatcher
 from marketdata.normalize.changes import Reason
 from marketdata.normalize.cusips import CUSIP_MAP, PENDING
 from marketdata.normalize.filing_index import IndexDocument, parse_filing_index
-from marketdata.normalize.filings import F13_FORMS
+from marketdata.normalize.filings import F13_FORMS, F13_PARSE
 from marketdata.normalize.form13f import (
     METHOD,
     PARSER_VERSION,
@@ -318,3 +320,54 @@ def _documents(
     if len(tables) > 1:
         raise F13Refused(f"{accession_no}: the index page lists {len(tables)} information tables")
     return covers[0], tables[0] if tables else None
+
+
+@dataclass(frozen=True)
+class FundsBackfillReport:
+    cik: int
+    since: date
+    queued: tuple[str, ...]  # accession numbers whose f13_parse task is queued
+
+
+class FundsBackfill:
+    """One curated manager's 13F reports back to a date (`marketdata backfill funds`, E9-S5).
+
+    The manager's filings are loaded first: a manager never watched gets its first watch (which
+    routes nothing, D-063) and its older pages back to the date. Then an `f13_parse` task is
+    queued for each 13F-HR and 13F-HR/A on its listing filed in the window, behind live work
+    (D-067), and one `cusip_map` task after them all. Each report's documents are fetched as
+    for a live one: three SEC requests per report, none for documents stored before (D-070).
+    """
+
+    def __init__(self, fetcher: RawFetcher, connect: Connect, kinds: frozenset[str]) -> None:
+        self._fetcher = fetcher
+        self._connect = connect
+        self._kinds = kinds  # registered task kinds (§4)
+
+    async def run(self, cik: int, since: date, *, force: bool = False) -> FundsBackfillReport:
+        """Queue `cik`'s 13F reports filed on or after `since`; `force` parses reports parsed
+        before again (a new parser version)."""
+        if F13_PARSE not in self._kinds:
+            raise RuntimeError(f"{F13_PARSE} is not a registered task kind")
+        async with self._connect() as conn:
+            manager = await managers.get(conn, cik)
+        if manager is None or not manager.curated:
+            raise F13Refused(f"CIK {cik} is not a curated manager: run `marketdata managers load`")
+        await FilingsWatcher(self._fetcher, self._connect, self._kinds).backfill(cik, since)
+        queued: list[str] = []
+        async with self._connect() as conn, conn.transaction():
+            for filing in await filings.filer_listings(conn, cik, sorted(F13_FORMS), since):
+                await tasks.enqueue(
+                    conn,
+                    F13_PARSE,
+                    filing.accession_no,
+                    {"cik": cik, "accession_no": filing.accession_no},
+                    force=force,
+                    priority=tasks.PRIORITY_BACKFILL,
+                )
+                queued.append(filing.accession_no)
+            await tasks.enqueue(
+                conn, CUSIP_MAP, PENDING, {}, force=True, priority=tasks.PRIORITY_BACKFILL - 1
+            )
+        log.info("funds_backfill_queued", cik=cik, since=since.isoformat(), queued=len(queued))
+        return FundsBackfillReport(cik, since, tuple(queued))

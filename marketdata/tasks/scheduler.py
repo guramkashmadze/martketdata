@@ -35,6 +35,7 @@ from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
     FILINGS_BACKFILL,
     FILINGS_WATCH,
+    FUNDS_BACKFILL,
     INSIDERS_BACKFILL,
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
@@ -158,6 +159,31 @@ async def enqueue_insiders_backfills(
         for company in universe
         if company.filer_type in ("domestic", "foreign_private_issuer")
         and (ciks is None or company.cik in ciks)
+    ]
+
+
+async def enqueue_funds_backfills(
+    conn: AsyncConnection[Any],
+    since: date,
+    *,
+    force: bool = False,
+    ciks: Collection[int] | None = None,
+) -> list[Task]:
+    """On demand (`marketdata backfill funds`): one funds_backfill per curated 13F manager (E9),
+    or per one of `ciks`, back to `since`, behind live and periodic work (D-067). `force`
+    parses reports parsed before again."""
+    payload = {"since": since.isoformat(), "force": force}
+    return [
+        await queue.enqueue(
+            conn,
+            FUNDS_BACKFILL,
+            str(cik),
+            {"cik": cik, **payload},
+            force=True,
+            priority=queue.PRIORITY_BACKFILL,
+        )
+        for cik in await managers.curated_ciks(conn)
+        if ciks is None or cik in ciks
     ]
 
 

@@ -14,7 +14,7 @@ from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.cusips import CusipMapper
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
-from marketdata.ingest.f13 import F13Ingest, F13Refused, read_unit_overrides
+from marketdata.ingest.f13 import F13Ingest, F13Refused, FundsBackfill, read_unit_overrides
 from marketdata.ingest.facts import FactsLoader
 from marketdata.ingest.form4 import Form4Ingest, Form4Refused, InsidersBackfill
 from marketdata.ingest.public_float import PublicFloatLoader
@@ -36,6 +36,7 @@ from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
     FILINGS_BACKFILL,
     FILINGS_WATCH,
+    FUNDS_BACKFILL,
     INSIDERS_BACKFILL,
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
@@ -153,6 +154,18 @@ async def parse_13f_filing(context: TaskContext, task: Task) -> None:
         ingest = F13Ingest(context.fetcher, context.connect, overrides)
         await ingest.run(cik, accession_no, live=live)
     except (F13Refused, SecFileError, UnitOverrideError) as exc:
+        raise TaskRefused(str(exc)) from exc
+
+
+async def backfill_funds(context: TaskContext, task: Task) -> None:
+    """One curated manager's 13F reports back to the payload's `since` date (E9-S5): its filings
+    loaded, then an f13_parse task queued for each report and one cusip_map after them. A CIK
+    that isn't a curated manager is refused."""
+    cik, since = _cik(task), _since(task)
+    backfill = FundsBackfill(context.fetcher, context.connect, context.kinds)
+    try:
+        await backfill.run(cik, since, force=task.payload.get("force") is True)
+    except F13Refused as exc:
         raise TaskRefused(str(exc)) from exc
 
 
@@ -285,6 +298,7 @@ def build_registry(
     registry.register(INSIDERS_BACKFILL, backfill_insiders)
     registry.register(F13_PARSE, parse_13f_filing)
     registry.register(CUSIP_MAP, map_cusips)
+    registry.register(FUNDS_BACKFILL, backfill_funds)
     registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
     registry.register(WEBHOOK_PUBLISH, publish_event)
     registry.register(

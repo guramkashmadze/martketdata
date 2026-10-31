@@ -46,6 +46,7 @@ from marketdata.ingest.security_master import (
 )
 from marketdata.log import configure_logging
 from marketdata.normalize.golden import GoldenFileError
+from marketdata.normalize.holdings import backfill_start
 from marketdata.normalize.insider_data_set import (
     FilingCheck,
     quarter_dates,
@@ -336,6 +337,58 @@ def backfill_insiders(
     typer.echo(
         "Follow them with `marketdata tasks list --kind insiders_backfill` and "
         "`--kind form4_parse`."
+    )
+
+
+@groups["backfill"].command("funds")
+def backfill_funds(
+    quarters: Annotated[
+        int,
+        typer.Option(min=1, max=40, help="How many quarter ends, plus the one before them."),
+    ] = 8,
+    force: Annotated[
+        bool,
+        typer.Option(help="Parse 13F reports that were parsed before again (a new parser)."),
+    ] = False,
+    names: Annotated[
+        list[str] | None,
+        typer.Option("--manager", help="Only this curated manager, by name or CIK (repeatable)."),
+    ] = None,
+) -> None:
+    """Queue a funds backfill for each curated 13F manager; the worker runs them (E9-S5).
+
+    Each task loads the manager's filings, then queues the parsing of every 13F-HR and 13F-HR/A
+    it filed since the quarter end before the oldest of the last N, so that quarter is loaded
+    too and the oldest has change types, then the mapping of their CUSIPs. Exits with 1 when
+    there is no curated manager.
+    """
+    settings = _settings()
+    since = backfill_start(datetime.now(UTC).date(), quarters)
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        ciks = (
+            [(await fund_service.resolve_manager(conn, name)).manager_cik for name in names]
+            if names
+            else None
+        )
+        return await task_scheduler.enqueue_funds_backfills(conn, since, force=force, ciks=ciks)
+
+    queued = _queue(settings, work)
+    if not queued:
+        raise _fail("No curated managers: run `marketdata managers load` first.")
+    start = since.isoformat()
+    mine = [task for task in queued if task.status == "queued" and task.payload["since"] == start]
+    typer.echo(
+        f"Queued {len(mine)} funds backfills of 13F reports filed since {since} for "
+        f"{len(queued)} curated managers; the worker runs them."
+    )
+    if len(mine) < len(queued):
+        typer.echo(
+            f"  {len(queued) - len(mine)} were already pending and keep their own start date."
+        )
+    typer.echo(
+        "Follow them with `marketdata tasks list --kind funds_backfill`, `--kind f13_parse` and "
+        "`--kind cusip_map`."
     )
 
 

@@ -3,7 +3,8 @@ worker runs them. E7a: `marketdata backfill earnings --quarters N` queues one ea
 per domestic universe company. E4a: `marketdata backfill facts` queues one facts refresh per
 domestic universe company, and both take `--ticker`. E8: `marketdata backfill insiders
 --quarters N` queues one insiders backfill per domestic filer or foreign private issuer in the
-universe. The CLI commits, so the test removes what it wrote."""
+universe. E9: `marketdata backfill funds --quarters N` queues one funds backfill per curated
+manager. The CLI commits, so the test removes what it wrote."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -15,12 +16,19 @@ from typer.testing import CliRunner
 
 from marketdata import cli
 from marketdata.normalize.filings import FACTS_REFRESH
-from marketdata.tasks.kinds import EARNINGS_BACKFILL, FILINGS_BACKFILL, INSIDERS_BACKFILL
+from marketdata.normalize.holdings import backfill_start
+from marketdata.tasks.kinds import (
+    EARNINGS_BACKFILL,
+    FILINGS_BACKFILL,
+    FUNDS_BACKFILL,
+    INSIDERS_BACKFILL,
+)
 from marketdata.tasks.scheduler import months_before, years_before
 
 CIKS = (320193, 1652044)
 FUND = 884394  # SPY: in the universe, but earnings apply to domestic filers only (§9.1)
 FOREIGN = 1046179  # TSM: its directors and officers file Forms 4 since March 2026 (E8)
+MANAGERS = {1067983: "Berkshire Hathaway", 1096343: "Markel Group", 1336528: "Pershing Square"}
 
 
 @pytest.fixture
@@ -40,8 +48,17 @@ def universe(
     with psycopg.connect(migrated_database, autocommit=True) as conn:
         conn.execute(
             "delete from tasks where kind = any(%s)",
-            [[FILINGS_BACKFILL, EARNINGS_BACKFILL, FACTS_REFRESH, INSIDERS_BACKFILL]],
+            [
+                [
+                    FILINGS_BACKFILL,
+                    EARNINGS_BACKFILL,
+                    FACTS_REFRESH,
+                    INSIDERS_BACKFILL,
+                    FUNDS_BACKFILL,
+                ]
+            ],
         )
+        conn.execute("delete from managers where manager_cik = any(%s)", [list(MANAGERS)])
         others = list(CIKS) + [FUND, FOREIGN]
         conn.execute("delete from securities where cik = any(%s)", [others])
         conn.execute("delete from companies where cik = any(%s)", [others])
@@ -170,4 +187,37 @@ def test_insiders_backfills_cover_domestic_filers_and_foreign_issuers(universe: 
     assert rows == [
         (str(cik), {"cik": cik, "since": since.isoformat(), "force": False})
         for cik in sorted((*CIKS, FOREIGN), key=str)
+    ]
+
+
+def test_funds_backfills_cover_the_curated_managers(universe: str) -> None:
+    with psycopg.connect(universe, autocommit=True) as conn:
+        for cik, name in MANAGERS.items():
+            conn.execute(
+                "insert into managers (manager_cik, name, display_name, curated) "
+                "values (%s, %s, %s, %s)",
+                [cik, name.upper(), name, cik != 1336528],  # the old Pershing CIK, dropped
+            )
+    since = backfill_start(datetime.now(UTC).date(), 8)
+
+    every = CliRunner().invoke(cli.app, ["backfill", "funds"])
+    one = CliRunner().invoke(cli.app, ["backfill", "funds", "--manager", "markel", "--force"])
+    unknown = CliRunner().invoke(cli.app, ["backfill", "funds", "--manager", "scion"])
+
+    assert every.exit_code == 0, every.output
+    assert (
+        f"Queued 2 funds backfills of 13F reports filed since {since} for 2 curated managers"
+        in every.stdout
+    )
+    # Markel's task is still queued: it keeps its payload, without force.
+    assert "Queued 1 funds backfills" in one.stdout and "for 1 curated managers" in one.stdout
+    assert unknown.exit_code == 1
+    assert "No curated manager matches 'scion'" in unknown.output
+    with psycopg.connect(universe) as conn:
+        rows = conn.execute(
+            "select key, payload from tasks where kind = %s order by key", [FUNDS_BACKFILL]
+        ).fetchall()
+    assert rows == [
+        (str(cik), {"cik": cik, "since": since.isoformat(), "force": False})
+        for cik in (1067983, 1096343)
     ]

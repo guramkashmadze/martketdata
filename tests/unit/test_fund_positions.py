@@ -8,15 +8,22 @@ from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 
+import pytest
+
 from marketdata.normalize.form13f import parse_information_table
 from marketdata.normalize.holdings import (
     SHARE_TYPES_DIFFER,
     FiledLine,
     HeldBoth,
     PeriodFiling,
+    backfill_start,
     changes,
     lines_in_force,
+    parse_quarter,
     positions,
+    quarter_end,
+    quarter_label,
+    quarters_before,
     split_ratio,
 )
 
@@ -245,3 +252,22 @@ def test_a_split_needs_two_holders_and_the_price_moving_by_the_inverse_ratio() -
     )
     reverse = [_held(1, "1000", "100", "2", "21"), _held(2, "30", "3", "2", "19")]
     assert split_ratio(reverse) == Fraction(1, 10)
+
+
+def test_quarters_and_the_backfill_window() -> None:
+    assert quarter_end(date(2026, 11, 1)) == date(2026, 9, 30)
+    assert quarter_end(date(2026, 3, 31)) == date(2026, 3, 31)
+    assert quarter_end(date(2026, 1, 15)) == date(2025, 12, 31)
+    assert quarters_before(date(2026, 9, 30), 8) == date(2024, 9, 30)
+    # Eight quarters to Q3 2026, and Q3 2024 before them so Q4 2024 has change types.
+    assert backfill_start(date(2026, 11, 1), 8) == date(2024, 10, 1)
+    assert [parse_quarter(text) for text in ("2026Q2", "2025-q4", "2026 Q1", "2026-06-30")] == [
+        date(2026, 6, 30),
+        date(2025, 12, 31),
+        date(2026, 3, 31),
+        date(2026, 6, 30),
+    ]
+    assert quarter_label(date(2025, 12, 31)) == "2025Q4"
+    for text in ("2026Q5", "2026-06-29", "Q2"):
+        with pytest.raises(ValueError):
+            parse_quarter(text)
