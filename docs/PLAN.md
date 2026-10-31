@@ -79,9 +79,9 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E5a | Data API | 9 | E4b | Done | 2026-10-29. First `outlier_jump` was kept to revenue, total assets, total equity and shares outstanding (rules version 3, calc version 2.3; 4,311 flagged rows became 291, D-094). S1: `marketdata clients create\|list` and `keys create\|list\|revoke`, a key shown once and stored as its sha256; `X-API-Key` on the /v1 router: 401, 403, and 429 with Retry-After over the key's requests of the last minute; an `api_requests` row per /v1 request; the §10.1 envelope with numbers written from `Decimal` digit for digit (D-095, D-096); migration `0012`. S2: eight service functions returning data with sources, `as_of` and flags: the latest release whatever its status, the feed of verified releases, the 11 releases without a stated period end dated from their 10-Q or 10-K, predecessors merged, sources older than the filings backfill found through their facts (D-096 to D-098). S3: the §10.2 routes, `/docs` with examples from Apple's filings, a contract test per route on a hand-made dataset and on Apple's real filings loaded from the fixtures. S4: `not_applicable` (422) with the §9.1 reason for funds, foreign issuers and companies outside the universe (D-099). Demo on the dev database: client `demo`; `/v1/companies/AAPL/earnings/latest` and `…/financials?period=Q` (128 rows of the 16 core metrics, 9 sources, 20 ms); JPMorgan's snapshot led to listing only stake filings about the company. Lint gate and 1,242 tests green on local PostgreSQL 18. 5 edge cases logged. CI on main is green ([run 40930722018](https://github.com/guramkashmadze/martketdata/actions/runs/40930722018), commit `d698656`) |
 | E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Done | 2026-10-30. S1: webhooks through an outbox: the code that changes the data writes the event in the same transaction, `webhook_publish` builds the §9.11 envelope around the API's own object and `webhook_deliver` sends it signed to a checked public address, three attempts about 1 and 10 minutes apart, 50 failed deliveries in a row switching the destination off; `earnings.verified` only for releases routed live (`earnings_releases.live`), `financials.updated` when a facts refresh adds rows or changes values, `data.changed` per value change, `filing.event` per new filing with a high-importance label (D-100 to D-102); `marketdata webhooks create|list|disable|enable|test`, the secret printed once and stored encrypted (Fernet); `scripts/webhook_receiver.py`, the reference receiver the tests check deliveries with; migration `0013`. S2: `GET /v1/changes`, newest first, each change with the value served now and its proof (D-103). S3: proof pages for releases and metric values, Jinja2, HTTP Basic auth with an `api` key (D-104). S4: `marketdata quality accuracy` and `GET /v1/status` (no key) from golden values loaded into the database (migration `0014`), the time to verified over live releases only, D-028's tolerance kept (D-105). S5: `docs/DEMO.md`, run on the dev database: Apple's Q3 2026 release matched its 10-Q on all four slots; a webhook of each type delivered to the reference receiver, the first after one retry; accuracy: golden release slots 135 of 138, golden metric values 658 of 684, cross-check 99.7%, extraction 82.5%, no live release yet. The demo found the decrypted signing secret in a logged traceback: tracebacks carry no local values now (D-106). Lint gate and 1,334 tests green on local PostgreSQL 18. 4 edge cases logged. CI on main is green ([run 41175252635](https://github.com/guramkashmadze/martketdata/actions/runs/41175252635), commit `e13283e`) |
 | E6 | MCP server | 11 | E5a | Done | 2026-10-31. Milestone M1 with E7c. S1: the official `mcp` SDK 2.3 (`MCPServer`) at exactly `/mcp` in the API's app, Streamable HTTP, stateless with JSON answers; a key gate checks `X-API-Key` (api scope) as on `/v1`, and a refused request gets the error envelope (401, 403, 429) and a row with the path `/mcp`; each tool call writes `api_requests` (method `MCP`, the tool's name, the status of its outcome); only this machine's host and PUBLIC_BASE_URL's are accepted (D-107). S2: `lookup_company` (ticker, share class, CIK or name, D-109), `company_snapshot`, `get_financials`, `recent_filings` (reports and stakes unless a form is asked for, D-110), `compare_companies` and `latest_earnings`, each answering from the API's service function; compact answers (D-108): the envelope without its flag list, a short proof on each value, every filing read in `sources`; at most 16 metrics and 40 values a call (25 in a comparison), 20 filings. S3: `docs/MCP.md` (Claude Code, Claude Desktop through `mcp-remote` or a custom connector, Cursor, VS Code, the MCP Inspector; five example questions, one in Georgian), linked from `docs/DEMO.md`. No migration. On the dev database the official Python SDK's client connected to the running API over HTTP (the 2025 handshake and 2026-07-28), listed the six tools and called each, every call logged with its key, tool and status; the demo question's call (Apple's revenue and free cash flow, 8 quarters) answered 3.4 KB with its 10-Qs and 10-K. Largest answers across eight companies: 7.7 KB (BRK-B's snapshot, a five-company comparison). Lint gate and 1,375 tests green on local PostgreSQL 18. 9 edge cases logged. The Inspector and an AI client weren't run here (§16). CI on main is green ([run 41200224914](https://github.com/guramkashmadze/martketdata/actions/runs/41200224914), commit `6294f03`) |
-| E10 | Prices, end-of-day and licensed | 12 | E5a, OD-4 | Not started | D-031 |
-| E15 | Web UI | 13–14 | E5b, E6; E10 for price fields | Not started | Milestone M2 |
-| E8 | Insider trades | 15 | E5a, E6, E15 | Not started | |
+| E8 | Insider trades | 12 (D-111) | E5a, E6 | Done | 2026-10-31. Built before E7c, E10 and E15 (D-111); its UI section moved to E15-S2. S1: `normalize/form4.py` reads a Form 4 or 4/A's XML (the primary document without EDGAR's `xsl…/` folder): owners and roles, both tables numbered in document order, footnote ids per field, the filing's 10b5-1 box (`aff10b5One`, `1`/`0` or `true`/`false`); 7 real fixtures. S2: migration `0015` (`insider_filings`, `insider_owners`, `insider_transactions`; `value_changes` takes `insider_transaction`, D-116); `form4_parse` registered, so the watcher routes new Forms 4 on issuer listings (D-063); data kind `insiders` for domestic filers and foreign private issuers, whose insiders file since March 2026 (D-117). S3: a 4/A supersedes only what it restates or corrects, a filing made twice counts once, decided for the whole insider group whatever the order (D-114); served trades that change are value changes, `data.changed` and `/v1/changes` items (D-115); the rules handle all 56 of the universe's 4/As of two years. S4: `backfill insiders --quarters 8` from each filing's XML (D-113); `insiders reconcile --quarter` against the SEC's data set. S5: `GET /v1/companies/{ticker}/insiders` per insider group, day, code and security with proof, totals and summaries, `codes=P,S` by default (D-112, D-118); MCP `insider_activity`, under 8 KB (D-119); `docs/MCP.md`, `docs/DEMO.md` part 7. Dev database: 10,403 Forms 4 of 66 issuers (with XOM's predecessor) filed 2024-10-31 to 2026-10-23, parsed in 21.5 minutes with no failure or retry, every XML at its name; 37,312 lines, 117 superseded by 4/As and 52 by two duplicate filings, 65 changes announced; 525 filings of seven foreign issuers. Reconciliation, 2026 Q3, ten companies: 430 filings, 310 equal to the data set and 120 equal but for its rounding to two decimals, none different or missing. Demo: NVIDIA's 365 days through REST (51 ms) and the official MCP client over HTTP (6.1 KB; heaviest answer 7.4 KB, Micron). Lint gate and 1,499 tests green on local PostgreSQL 18. 15 edge cases logged. Not pushed: CI not run (§16) |
+| E10 | Prices, end-of-day and licensed | 13 | E5a, OD-4 | Not started | D-031 |
+| E15 | Web UI | 14–15 | E5b, E6; E10 for price fields | Not started | Milestone M2. E15-S2 adds the insider section of the company page (D-111) |
 | E9 | 13F fund portfolios | 16 | E5a, E6, E15 | Not started | Milestone M3 |
 | E11 | Operations and production readiness | 17–18 | E15, E9 | Not started | Milestone M4 |
 | E7b | Georgian localization and content controls | on demand | E5a, OD-6, OD-8, OD-9 | Not started | When a client or our UI needs Georgian (D-026) |
@@ -253,12 +253,12 @@ marketdata/
     urls.py              URL builders (§8)
     raw_store.py         RawStore interface, LocalRawStore, S3RawStore
   ingest/                security_master.py, watcher.py, earnings.py, facts.py, cross_check.py (E4b), prices.py,
-                         form4.py, f13.py; E5b: announce.py (webhook events), golden.py
+                         form4.py, f13.py; E5b: announce.py (webhook events), golden.py; E8: insider_data_set.py
   extract/               interface.py (Extractor), html_tables.py, earnings_rules.py, columns.py, units.py
   verify/                number_check.py, sanity.py, cross_check.py
   normalize/             metric_catalog.py, periods.py, metrics.py, changes.py, insiders.py, holdings.py, quality.py,
                          tickers.py, universe.py, security_master.py (E2), financials.py, computed.py,
-                         cross_check.py (E4b); E5b: webhooks.py, golden.py
+                         cross_check.py (E4b); E5b: webhooks.py, golden.py; E8: form4.py, insider_data_set.py
   prices/                E10: provider.py (PriceProvider), fake.py, <vendor>.py
   webhooks/              outbox.py, signing.py, deliver.py
   content/               E7b only: names_ka.py, periods_ka.py, numbers_ka.py, templates.py
@@ -646,38 +646,73 @@ create table frame_facts (                    -- E4a-S5 (D-085): one concept acr
   primary key (taxonomy, concept, unit, frame, cik)
 );
 
--- E8
+-- E8 (migration 0015, D-116): a filing parsed, its owners and its trades as filed; a line is
+-- superseded by the 4/A that restates or corrects it, or by the first copy of a filing made twice
+create table insider_filings (
+  accession_no              text primary key,
+  issuer_cik                bigint not null,
+  form                      text not null check (form in ('4', '4/A')),
+  filed_at                  date not null,
+  period_of_report          date not null,
+  original_filed_at         date,                    -- a 4/A's dateOfOriginalSubmission
+  owner_ciks                bigint[] not null,        -- sorted: the insider group
+  rule_10b5_1               boolean,                  -- the filing's box; null before April 2023
+  not_subject_to_section16  boolean,
+  doc_name                  text not null,            -- the XML in the filing folder
+  raw_key                   text not null references raw_objects(key),
+  schema_version            text,
+  footnotes                 jsonb not null default '{}',  -- id -> text
+  remarks                   text,
+  method                    text not null,            -- form4_xml
+  extractor_version         text not null,
+  parsed_at                 timestamptz not null default now()
+);
+create index insider_filings_by_issuer on insider_filings (issuer_cik, filed_at);
+
 create table insider_owners (
-  accession_no      text not null,
+  accession_no      text not null references insider_filings(accession_no),
   owner_cik         bigint not null,
+  position          int not null,
   owner_name        text not null,
-  is_director       boolean,
-  is_officer        boolean,
+  is_director       boolean not null,
+  is_officer        boolean not null,
   officer_title     text,
-  is_ten_pct_owner  boolean,
+  is_ten_pct_owner  boolean not null,
+  is_other          boolean not null,
+  other_text        text,
   primary key (accession_no, owner_cik)
 );
 
 create table insider_transactions (
-  accession_no       text not null,
-  line_no            int not null,            -- order within the filing
-  issuer_cik         bigint not null,
-  period_of_report   date,
-  security_title     text,
-  is_derivative      boolean not null,
-  trade_date         date not null,
-  code               text not null,           -- P, S, A, M, F, G, D, ...
-  acquired_disposed  char(1),                 -- A or D
-  shares             numeric,
-  price              numeric,
-  owned_after        numeric,
-  direct_indirect    char(1),                 -- D or I
-  is_10b5_1          boolean,                 -- null when unknown (pre-2023)
-  footnotes          jsonb,
-  superseded_by      text,                    -- accession_no of the 4/A that replaced it
+  accession_no         text not null references insider_filings(accession_no),
+  line_no              int not null,            -- order within the filing, table I first
+  issuer_cik           bigint not null,
+  is_derivative        boolean not null,
+  security_title       text,
+  trade_date           date not null,
+  code                 text not null,           -- P, S, A, M, F, G, D, ...
+  acquired_disposed    text,                    -- A or D
+  shares               numeric,
+  price                numeric,
+  owned_after          numeric,
+  direct_indirect      text,                    -- D or I
+  nature_of_ownership  text,                    -- e.g. By Trust
+  timeliness           text,                    -- E (early) or L (late)
+  exercise_price       numeric,                 -- table II: the derivative's terms
+  exercise_date        date,
+  expiration_date      date,
+  underlying_title     text,
+  underlying_shares    numeric,
+  footnotes            jsonb not null default '{}',  -- field -> footnote ids
+  method               text not null,
+  extractor_version    text not null,
+  superseded_by        text,                    -- the 4/A, or the first copy of a duplicate
+  superseded_line      int,                     -- its line that restates or corrects this one
+  superseded_reason    text,                    -- amendment or duplicate
   primary key (accession_no, line_no)
 );
 create index insider_by_issuer on insider_transactions (issuer_cik, trade_date desc);
+-- value_changes.entity also takes 'insider_transaction' (D-115)
 
 -- E9
 create table managers (
@@ -829,7 +864,7 @@ create table drafts (
 | Bulk submissions | `https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip` | Rebuilt nightly |
 | Filing folder | `https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/` | Add `index.json` for a file list |
 | Filing index page | `https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/{accession_no}-index.htm` | Document table includes each document's **Type** (e.g. EX-99.1). Verify in E7a |
-| Insider bulk data | [Insider Transactions Data Sets](https://www.sec.gov/dera/data/form-345) | Quarterly ZIPs of Forms 3/4/5, flattened, from 2006 |
+| Insider bulk data | [Insider Transactions Data Sets](https://www.sec.gov/dera/data/form-345) | Quarterly ZIPs of Forms 3/4/5, flattened, from 2006. E8: 8 to 13 MB a quarter in 2025-2026, linked as `/files/…/insider-transactions-data-sets/2026q3_form345.zip` under two folders; tab-separated, dates `31-JUL-2026`, `AFF10B5ONE` the 10b5-1 box. Used only to check our XML parsing (D-113) |
 | 13F bulk data | [Form 13F Data Sets](https://www.sec.gov/dera/data/form-13f) | Released for three-month windows |
 | Fund holdings (E14) | SEC Form N-PORT data sets | Public with a lag of about two months; verify current rules in E14 |
 | CUSIP mapping | `POST https://api.openfigi.com/v3/mapping` | `idType: ID_CUSIP`. A free API key raises limits; check current limits in E9 |
@@ -841,7 +876,7 @@ create table drafts (
 - Press release tables: units stated in a caption or header ("in millions, except per share data"), negatives in parentheses, dashes for zero or nil, `$` and `%` in separate cells, footnote markers in labels, quarter and year-to-date columns side by side. (E7a)
 - Schedules 13D and 13G: verified in E3 (D-061). Old codes `SC 13D`, `SC 13D/A`, `SC 13G`, `SC 13G/A` until December 2024; `SCHEDULE 13D`, `SCHEDULE 13D/A`, `SCHEDULE 13G`, `SCHEDULE 13G/A` since. The subject company's submissions list them (with a `005-` file number), and so do the filer's (with none).
 - `acceptanceDateTime` in submissions is UTC, but the SEC once served a whole file with every time shifted by the Eastern offset a second time (Apple, 2026-10-24). The watcher checks each file and stores no times from a file that fails (D-057). (E3)
-- Form 4: `primaryDocument` in submissions often points at a rendered path like `xslF345X05/form4.xml`. The raw XML is usually the same filename without the `xsl…/` folder. (E8)
+- Form 4: `primaryDocument` in submissions often points at a rendered path like `xslF345X05/form4.xml`. The raw XML is usually the same filename without the `xsl…/` folder. (E8) Verified in E8: every one of the universe's Form 4s of two years has an `xslF345X03/05/06` primary document and its XML at the same name; `index.json` is the fallback. Booleans are written `1`/`0` and `true`/`false`; foreign private issuers' insiders file since March 2026 and convert prices into dollars.
 - 13F: the information table is a separate XML document in the filing; find it through the filing index (type `INFORMATION TABLE`). (E9)
 - `dei:EntityPublicFloat` is reported once a year on the 10-K cover page, measured at the end of the second fiscal quarter; some filers omit it or report it oddly. The universe growth rule (D-035) must handle missing and stale values. (E4a) Verified in E4a (D-085): the frames API serves dei concepts; hundreds of cover pages state the float a thousand or a million times too large (Cabot: 4.4 quadrillion dollars), and some date it a year early (AMD).
 - companyfacts doesn't list every XBRL 10-Q (KO, V and NEE lacked their July 2026 10-Qs three months later), gives the CIK as an integer or a string, and includes facts of 8-K, proxy statements and other forms. (E4a)
@@ -981,13 +1016,17 @@ Items 1.04, 2.04, 3.03, 5.01, 5.04, 5.05, 5.06 and 5.08 were added in E3 (D-064)
 
 ### 9.7 Insider trades (Form 4)
 
-- Parse both tables of the XML: non-derivative and derivative. Store both; the default view serves non-derivative lines only.
-- Transaction codes: P = open-market or private purchase; S = open-market or private sale; A = grant or award; M = exercise or conversion of a derivative; F = shares withheld to pay exercise price or tax; G = gift; D = disposition to the issuer. Store other codes as-is.
-- **Signal view** = non-derivative, code P or S, not superseded.
-- **10b5-1 plans:** since 2023 Form 4 has a checkbox for trades under a pre-planned 10b5-1 plan. Store it in `is_10b5_1` (null for earlier filings). The SEC's insider dataset added this field (`AFF10B5ONE`) for 2023 onward; confirm the XML element name in E8.
-- **Amendments:** a 4/A supersedes the lines of the earlier filing with the same issuer, same reporting owner(s) and same `period_of_report`. Set `superseded_by`. If no match is found, keep both and flag `amendment_unmatched` in logs.
+- **Source:** each Form 4 and 4/A on the issuer's own listing (no file number, D-063), from the filing's XML: the submissions' primary document is EDGAR's rendering (`xslF345X06/form4.xml`) and the XML is the same name in the folder, else found through `index.json`. Kept raw first and parsed by `normalize/form4.py` (`PARSER_VERSION`); the issuer in the XML must be the listing's company. Live filings are routed by the watcher; history comes from `marketdata backfill insiders` (E8, D-113).
+- Parse both tables of the XML: non-derivative and derivative, numbered in document order, table I first. Store both; the default view serves non-derivative lines only. Holdings (positions without a trade) are not stored; owners' addresses and signatures are not kept (D-116).
+- Transaction codes: P = open-market or private purchase; S = open-market or private sale; A = grant or award; M = exercise or conversion of a derivative; F = shares withheld to pay exercise price or tax; G = gift; D = disposition to the issuer; the SEC's other codes are labelled too (`normalize/insiders.py`). Store other codes as-is.
+- **Default view** = non-derivative, codes P and S, not superseded; any codes can be asked for (`codes`, `all`) and derivatives added (D-112). There is no "signal" view or wording (D-029).
+- **10b5-1 plans:** since April 2023 Form 4 has one box per filing (`aff10b5One`, the data set's `AFF10B5ONE`), written `1`/`0` or `true`/`false`: a trade in the filing was made under a plan meant to meet Rule 10b5-1(c), and footnotes say which. It is stored on the filing (`insider_filings.rule_10b5_1`, null before the box) and served on each of its trades as the filing's box (D-116).
+- **Amendments and duplicates (D-114):** a 4/A amends the filings its owners made about the issuer on the date it names (`dateOfOriginalSubmission`), and a later 4/A of the same filing amends the earlier one. A 4/A without lines supersedes nothing; one that repeats a line unchanged, or has the same lines by table, security and code (when no other filing of that day has), restates the filing and supersedes all its lines; otherwise it supersedes only the lines it corrects and its other lines are trades the original left out. A filing made twice the same day is served once, from its first copy. Supersession is decided for the whole insider group whenever one of its filings is stored, so arrival order doesn't matter; a 4/A naming no stored filing is logged `amendment_unmatched` and its lines are served. Drawn from the universe's 56 4/As of two years, each handled right.
+- **Changes (D-027, D-115):** a served trade that a 4/A corrects or drops, a duplicate removed, or a new parser version changes writes a `value_changes` row (entity `insider_transaction`, field `shares`, the rest in the detail), announced as `data.changed` and served by `/v1/changes`.
 - Multiple reporting owners share one filing's lines; owners live in `insider_owners`.
-- Display aggregation: per owner, per trade date, per code — total shares, share-weighted average price, total value (shares × price). Keep footnotes; prices are often weighted averages explained there.
+- **Display aggregation (D-118):** per insider group (a filing's owners: joint filers count once), trade date, code, security and table: total shares, share-weighted average price (four decimals), total value (shares × price, exact), the last line's holdings when the lines share one ownership. Keep footnotes; prices are often weighted averages explained there. Flags: `price_not_reported`, `price_partly_reported`, `direction_differs_from_code` (P that disposes or S that acquires). Each trade's proof lists the filings and lines it sums and the checks it passed.
+- **Foreign private issuers (D-117):** their directors and officers file Forms 4 since March 2026 (TSM's first on its listing is of 2026-03-24); the filers convert prices into US dollars and give the rate in a footnote, so prices are served as filed with their footnotes.
+- **Reconciliation:** `marketdata insiders reconcile --quarter 2026q3` compares our parse with the SEC's Insider Transactions Data Set for a sample of companies (D-113).
 
 ### 9.8 13F fund portfolios
 
@@ -1139,7 +1178,7 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
 | `GET /v1/changes?since=&ticker=&reason=&limit=&cursor=` | E5b | api | Value changes with old value, new value, reason and proof, newest first; each with the value served now (D-103) |
 | `GET /proof/earnings/{accession_no}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a release |
 | `GET /proof/metrics/{ticker}/{metric}/{period_type}/{period_end}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a metric value |
-| `GET /v1/companies/{ticker}/insiders?days=90&signal_only=true` | E8 | api | Aggregated insider trades |
+| `GET /v1/companies/{ticker}/insiders?days=90&codes=P,S&include_derivative=false&limit=&cursor=` | E8 | api | Insider trades per insider group, day, code and security, each with its Forms 4 as proof; totals per code and a summary per insider over the window; `days` 1 to 730 (D-112, D-118) |
 | `GET /v1/funds?curated=true` | E9 | api | Curated managers |
 | `GET /v1/funds/{manager_cik}/holdings?quarter=` | E9 | api | Positions with weights and changes |
 | `GET /v1/companies/{ticker}/funds` | E9 | api | Curated managers holding this company, latest period |
@@ -1184,7 +1223,7 @@ Example `earnings/latest` response body (`data` part):
 | `recent_filings` | E6 | `ticker`, `form` (optional), `days` (max 365) | Up to 20 filings with event labels |
 | `compare_companies` | E6 | `tickers` (2–5), `metrics`, `period` | Comparison table + sources |
 | `latest_earnings` | E6 | `ticker` | Verified release facts with proof; no free text |
-| `insider_activity` | E8 | `ticker`, `days` (max 365), `signal_only` (default true) | Aggregated trades + sources |
+| `insider_activity` | E8 | `ticker`, `days` (max 365), `codes` (P and S by default) | Totals per code, up to 8 insiders and 12 trades + sources (D-119) |
 | `investor_portfolio` | E9 | `manager` (name or CIK), `quarter` (optional) | Top 20 positions with changes + sources |
 
 ---
@@ -1513,7 +1552,28 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Out of scope:** OAuth, public directory listings (§3).
 **Demo:** ask an AI client "How did <company>'s revenue and free cash flow change over the last 8 quarters?" and get an answer citing SEC filing links.
 
-### E10 — Prices, end-of-day and licensed (session 12)
+### E8 — Insider trades (session 12, D-111)
+
+**Goal:** clean, readable insider buying and selling for universe companies.
+**Depends on:** E5a and E6 (E3 for the watcher). Built before E10 and E15 (D-111); its UI section moved to E15-S2.
+
+- **E8-S1 Form 4 parser.** As a developer, I want Form 4 XML parsed into typed records so trades are stored consistently.
+  - AC: parses owners and roles, non-derivative and derivative lines, footnotes, and the 10b5-1 checkbox (§9.7).
+  - AC: fixtures for at least 5 real filings, including a 4/A, a filing with several owners, and one with the 10b5-1 box checked.
+- **E8-S2 Wiring.** As the operator, I want new Form 4s processed automatically.
+  - AC: migration creates `insider_owners` and `insider_transactions`; `form4_parse` handler registered; the watcher enqueues it. (And `insider_filings`, D-116.)
+- **E8-S3 Amendments.** As a user, I want corrected filings to replace the originals so I don't see a trade twice.
+  - AC: §9.7 superseding rule with tests for matched and unmatched amendments. (Line by line, and duplicate filings, D-114; value changes, D-115.)
+- **E8-S4 Backfill.** As the operator, I want two years of history so the feature is useful from day one.
+  - AC: `pdm run marketdata backfill insiders --quarters 8` for universe issuers. (From each filing's XML, D-113.)
+  - AC: a reconciliation report compares a sample of companies between the SEC Insider Transactions data set and XML parsing; differences listed in §16.
+- **E8-S5 Serve.** As a user, I want to see who bought or sold, how much, and at what price.
+  - AC: `GET /v1/companies/{ticker}/insiders` and MCP `insider_activity` with the §9.7 aggregation; purchases and sales (codes P and S) by default (D-112); 10b5-1 marked.
+  - The UI insider section with proof links to the Form 4 filings is E15-S2's (D-111).
+
+**Demo:** insider activity for a company over 365 days via REST and via an AI client.
+
+### E10 — Prices, end-of-day and licensed (session 13)
 
 **Goal:** end-of-day prices and the price-based metrics that need them, in every channel the vendor license allows (D-031).
 **Depends on:** E5a; OD-4.
@@ -1533,7 +1593,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Out of scope:** real-time or intraday prices; corporate-action history beyond what the vendor provides.
 **Demo:** a snapshot showing market cap and P/E with the price date, and the same request from a channel outside the license returning `price_not_licensed`.
 
-### E15 — Web UI (sessions 13–14) → Milestone M2
+### E15 — Web UI (sessions 14–15) → Milestone M2
 
 **Goal:** a small, fast, read-only website where invited testers (later, anyone) can look up a company and check every number (D-034).
 **Depends on:** E5b, E6; E10 for price fields (the UI can launch without them).
@@ -1545,6 +1605,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E15-S2 Search and company page.** As a UI visitor, I want one page that shows how a company is doing and lets me check every number.
   - AC: search by ticker or name; the company page per §9.14 (identity, class, latest release, 8-quarter core-metric history with a chart, latest close where licensed, recent filings with labels).
   - AC: every number links to its proof page; funds and foreign issuers get a "what we cover" page instead of an error.
+  - AC: an insider section on the company page from E8's `service.insiders` (§9.7): totals, insiders and the latest trades, each with links to its Form 4 filings (moved from E8-S5, D-111).
 - **E15-S3 Compare page.** As a UI visitor, I want 2–5 companies side by side.
   - AC: a compare page built on `service.compare`, with proof links.
 - **E15-S4 Proof and status pages in the UI.** As a data evaluator, I want proof and accuracy one click away.
@@ -1552,29 +1613,8 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E15-S5 Quality.** As the operator, I want the UI tested like the API.
   - AC: render tests for each page with seeded data; a test that every number on the company page has a proof link; pages work at phone width; basic accessibility checks (labels, contrast, keyboard navigation).
 
-**Out of scope:** accounts, watchlists, alerts, Georgian (E7b); insider and fund sections (added by E8 and E9).
+**Out of scope:** accounts, watchlists, alerts, Georgian (E7b); the fund section (added by E9).
 **Demo:** open a company page on the live VM, click a revenue figure, and land on its proof page with the SEC quote and the 10-Q cross-check.
-
-### E8 — Insider trades (session 15)
-
-**Goal:** clean, readable insider buying and selling for universe companies.
-**Depends on:** E5a, E6 and E15 (E3 for the watcher).
-
-- **E8-S1 Form 4 parser.** As a developer, I want Form 4 XML parsed into typed records so trades are stored consistently.
-  - AC: parses owners and roles, non-derivative and derivative lines, footnotes, and the 10b5-1 checkbox (§9.7).
-  - AC: fixtures for at least 5 real filings, including a 4/A, a filing with several owners, and one with the 10b5-1 box checked.
-- **E8-S2 Wiring.** As the operator, I want new Form 4s processed automatically.
-  - AC: migration creates `insider_owners` and `insider_transactions`; `form4_parse` handler registered; the watcher enqueues it.
-- **E8-S3 Amendments.** As a user, I want corrected filings to replace the originals so I don't see a trade twice.
-  - AC: §9.7 superseding rule with tests for matched and unmatched amendments.
-- **E8-S4 Backfill.** As the operator, I want two years of history so the feature is useful from day one.
-  - AC: `pdm run marketdata backfill insiders --quarters 8` uses the SEC Insider Transactions datasets for universe issuers.
-  - AC: a reconciliation report compares a sample of companies between dataset and XML parsing; differences listed in §16.
-- **E8-S5 Serve.** As a user, I want to see who bought or sold, how much, and at what price.
-  - AC: `GET /v1/companies/{ticker}/insiders` and MCP `insider_activity` with the §9.7 aggregation; `signal_only=true` by default; 10b5-1 marked.
-  - AC: an insider section on the UI company page (§9.14), with proof links to the Form 4 filings.
-
-**Demo:** insider activity for a company over 365 days via REST and via an AI client.
 
 ### E9 — 13F fund portfolios (session 16) → Milestone M3
 
@@ -1830,6 +1870,15 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-108 | 2026-10-31 | Compact MCP answers (E6-S2, Guram's choice at the kickoff): the tools call the API's service functions and answer the envelope without its list of flags (`data`, `sources`, `as_of`, the disclaimer), JSON text written by `json_text.dumps` with no structured content. A metric value keeps a short proof: period end, fiscal label (`FY2026 Q3`), value, method, the filing it came from (`accession_no`; the latest one read for a derived, TTM or computed value) and its flags, the XBRL concept named once for a series whose values share it; every filing a value reads is in `sources` with its SEC link. A comparison's values give their own period end without the label; `recent_filings`' filings carry their own links, so its sources are empty; `latest_earnings` answers the API's release as it is, each fact with its full proof and quote. Without metrics, `get_financials` and `compare_companies` use revenue, operating income, net income, diluted EPS and free cash flow. A call answers at most 16 metrics and 40 values (`get_financials`, 12 periods) or 25 values (`compare_companies`); lists stop at 20 filings and 10 matches | The API's answers measured 9 to 67 KB on the dev database (a snapshot 12.5 to 15 KB, the core set over 8 quarters 51 to 67 KB) against §10.3's 8 KB. In a first compact shape the flag list repeated every value's flags and each value its concept; a comparison's sources (a TTM value reads four or five filings) set its lower cap. Afterwards the largest answers across eight companies were 7.7 KB. The SDK's structured output would write Decimals as strings. The full proof stays one `/v1` call or proof page away |
 | D-109 | 2026-10-31 | `lookup_company` (E6-S1): a query matches a current ticker (normalized as §9.2), its share classes (`BRK` finds BRK-A and BRK-B), a CIK, or a name compared as lowercase letters and digits (the whole name, its start, a word's start, anywhere), in that order; within each, companies in the universe first, then by name. Up to 10 matches, each with the ticker matched or the company's primary one, its other tickers, name, CIK, filer type and whether its data is covered, with the §9.1 reason. Companies without a current ticker are left out (Exxon Mobil Corp, XOM's predecessor); names are matched in the Latin alphabet. One query in `db/repositories/companies.py`, no index or migration | Every other tool takes a ticker. EDGAR spells names its own way (`COCA COLA CO`, `JPMORGAN CHASE & CO`), so punctuation and case mustn't matter. The 9,184 companies are scanned in a few milliseconds; E15's search can reuse the service function |
 | D-110 | 2026-10-31 | `recent_filings` (E6-S2): without `form`, the snapshot's forms (D-098): 10-K, 10-Q, 8-K, 20-F, 40-F, 6-K and their amendments, and 5% stakes in the company; `form` asks for any one form (`4`, `424B2`, `SCHEDULE 13D`); `days` from 1 to 365, 90 by default, counted back from today (UTC); 20 filings, newest first, and `more` when more match. A service option (`reports_only`) leaves the REST route as it was | JPMorgan's 20 newest filings are all 424B2 notes, and a question about what a company announced wants its reports and events. `more` tells the client to narrow the window rather than page |
+| D-111 | 2026-10-31 | Build order: E8 (insider trades) is built now, before E7c, E10 and E15, a change to D-032's order (Guram's choice); E7c still waits on OD-1. E8-S5's UI section, the insider section of the company page, moves to E15-S2, which builds that page on E8's service function with links to the Form 4 filings; E8 serves insider trades through REST and MCP | Only that section of E8 depends on E15, and the company page doesn't exist before E15 |
+| D-112 | 2026-10-31 | No "signal" view (E8-S5, Guram's choice at the kickoff): the insider trades are filtered by Form 4 transaction codes, `codes=P,S` by default (purchases and sales in the open market or privately), `all` for every code, in REST and in MCP's `insider_activity`; derivatives on request (`include_derivative`). Supersedes `signal_only` in §9.7, §10.2 and §10.3 | "Signal" is the wording D-029 and CLAUDE.md rule out. `open_market_only` would mislabel: codes P and S also cover private purchases and sales. Codes are the SEC's own words for what happened |
+| D-113 | 2026-10-31 | Insider history from each filing's XML (E8-S4, Guram's choice at the kickoff): `marketdata backfill insiders --quarters 8` queues one `insiders_backfill` per domestic filer or foreign private issuer in the universe; each loads its predecessors' filings and queues `form4_parse` for every Form 4 and 4/A on their own stored listings filed in the window, behind live work. It doesn't watch the company: a watch would route days-old 8-Ks and 10-Qs as live work and count them toward the time to verified (D-105). The SEC's Insider Transactions Data Sets only check our parsing: `marketdata insiders reconcile --quarter 2026q3` fetches the quarter's ZIP (8 to 13 MB, in memory: D-047's refusal is for the gigabyte bulk files) raw first and compares a sample of companies filing by filing. Supersedes E8-S4's "uses the SEC Insider Transactions datasets" | One parser for live and history, raw first, with the filing as every trade's proof; the data sets lag a quarter, flatten the XML and round it to two decimals. The dev backfill parsed 10,403 filings in 21.5 minutes |
+| D-114 | 2026-10-31 | Amendments and duplicates (E8-S3, §9.7): a 4/A amends its owners' filings about the issuer of the date it names, and an earlier 4/A of that filing; without lines it supersedes nothing; it restates a filing (all its lines) when it repeats one of its lines unchanged, or has the same lines by table, security and code and no other filing of that day has; otherwise it supersedes only the lines it corrects (the same table, security, code and date: the only one, else the only one with its ownership, else the only one differing in at most one value; else, for a corrected date, the only line of its table, security and code), and its other lines are trades the original left out. A filing made twice the same day is served once, from its first copy. A later 4/A wins, and an amendment overrides a duplicate. Decided again for the whole insider group (the filings of the same owners about the issuer) whenever one is stored. Supersedes §9.7's "a 4/A supersedes the lines of the earlier filing … same period_of_report" | The universe's 56 4/As of two years: 26 restate the lines (20 correcting values or a date), 4 have no lines (a power of attorney), 7 restate only what they correct (CoreWeave: 1 line of 10), some add omitted trades (a Netflix director's "second of two parts", Marvell's omitted grant), some restate with new structure (Trilogy Metals); date corrections change the period of report (Atlassian's ten). The whole-filing rule would have hidden trades in 11 of them; these rules handle all 56 |
+| D-115 | 2026-10-31 | Insider trades never change silently (D-027, E8-S3): `value_changes.entity` takes `insider_transaction` (migration 0015). One row per served line whose trade changes: a 4/A's correction (reason `amendment`, the shares before and after, every other changed field in the detail), a line a restatement drops (new value null), a duplicate copy no longer served (reason `correction`), or a line a new parser version reads otherwise (`correction`). Lines first stored already superseded were never served and change nothing. `/v1/changes` serves them with the line, the filing that serves the trade now and the trade as served now with its proof; `data.changed` announces them; the accuracy report counts them | A 4/A changes what `/insiders` serves; a client that kept the old trade must be told, with the reason. A line holds several values, so one row per line with the detail is clearer than one per field |
+| D-116 | 2026-10-31 | The insider tables (E8-S2, migration 0015, §7): `insider_filings` is new (one row per Form 4 or 4/A parsed: the raw XML's key, the owners' CIKs, a 4/A's original date, the 10b5-1 box, footnote texts, remarks, parser version); `insider_owners` adds `is_other`, `other_text` and the owners' order; `insider_transactions` adds the derivative terms, nature of ownership, timeliness, footnote ids per field, `method` and `extractor_version`, and `superseded_line` and `superseded_reason`; `period_of_report` and the 10b5-1 box live on the filing. Holdings (positions reported without a trade), owners' addresses and signatures are not stored | The box is one per filing (Apple's Form 4 has it checked, while only its sales carry the plan's footnote); a filing row holds the raw file every line is proved by. Addresses are personal and serve no question (guardrail 2) |
+| D-117 | 2026-10-31 | Foreign private issuers' insider trades (E8, capability `insiders`): the data kind applies to domestic filers and foreign private issuers in the universe, not to funds, other filers or companies outside it. Their directors and officers file Forms 4 since March 2026; prices are served as filed with their footnotes, not flagged, which supersedes the kickoff's "a flag and no USD value" for prices not in dollars | Seven universe FPIs have 525 Forms 4 since 2026-03-24 (TSM 256). Every sampled filing converts the price into dollars and states the rate (Sony and Toyota from yen, TSMC from New Taiwan dollars); Alibaba's footnote gives the Hong Kong dollar range, its price is in dollars |
+| D-118 | 2026-10-31 | Serving insider trades (E8-S5, §9.7, §10.2): per insider group (a filing's owners), trade date, code, security and table: shares summed, the price weighted by shares over the lines that give one (four decimals), the value as shares times price (exact), the last line's holdings when the lines share one ownership, the filing's 10b5-1 box, the footnotes, flags (`price_not_reported`, `price_partly_reported`, `direction_differs_from_code`) and a proof listing each Form 4 and its lines with the checks passed. Totals per code and one summary per insider group and code cover the window; insiders are listed by latest trade, never by size; trades by date, a page at a time. `days` is 1 to 730 (90 by default), counted back from today (UTC) by trade date | Joint filers (Magnetar's four entities, South32 and its subsidiary) would otherwise count a trade once per owner; Alphabet's Class A and Class C shares mustn't be added. Ordering by value would rank insiders (D-029) |
+| D-119 | 2026-10-31 | MCP `insider_activity` (E8-S5, §10.3): the API's service in a compact answer: totals per code, at most 8 insider summaries with their roles and 12 trades (each with its Form 4's accession number, without the roles), the trades' filings in `sources`, `more_insiders` and `more_trades`; `days` to 365; the seven tools share the request log and rate | A busy window (12 insiders, 30 days of sales, long titles) measured 10.2 KB with 15 trades, 10 insiders and roles on each trade; 7.3 KB (7,446 bytes) with these caps, under §10.3's 8 KB |
 
 ---
 
@@ -1970,6 +2019,20 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-31 | E6 | Dev database: client `mcp-check` and its key 4, made for the HTTP check, revoked at the end of the session | — |
 | 2026-10-31 | E6 | E6's commits are local: CI hasn't run on them, and pushing waits for Guram's OK | Guram |
 | 2026-10-31 | E6 | Done: E6 pushed to `origin` with Guram's OK; CI on main is green ([run 41200224914](https://github.com/guramkashmadze/martketdata/actions/runs/41200224914), commit `6294f03`) | — |
+| 2026-10-31 | E8 | Done: the E3-S4 follow-up (D-063): Forms 4 are parsed from the issuer's own listing (no file number), never from an owner's | — |
+| 2026-10-31 | E8 | E8's commits are local: CI hasn't run on them, and pushing them (with E6's CI record, `b6e0f3c`) waits for Guram's OK | Guram |
+| 2026-10-31 | E8-S5 | Not run here: an AI client (Claude Code, or Claude Desktop through `mcp-remote`) asking the E8 demo question; the official MCP Python SDK's client over HTTP stood in, as in E6 (`docs/MCP.md`, example 6) | Guram |
+| 2026-10-31 | E8 (D-111) | The insider section of the company page, from `service.insiders`, with links to the Forms 4: now E15-S2's | E15 |
+| 2026-10-31 | E8-S5 | An insider trade has no proof page: its proof links the Form 4 and its XML on sec.gov. The UI links every number to a proof page (§9.14) | E15 |
+| 2026-10-31 | E8 | Live routing is on: the watcher routes every new Form 4 on a universe issuer's own listing as live work (priority 10), up to about 80 a day. On the dev database the Forms 4 filed since the last watch (2026-10-28) load when the scheduler and worker next run | E7c (watch) |
+| 2026-10-31 | E8 | No webhook event for a new Form 4: §9.11 has none. Add one (`insider.filed`) if a client asks | Later |
+| 2026-10-31 | E8-S1 | Holdings (positions reported without a trade, e.g. shares held by a trust) aren't stored; they would give each insider's holdings by nature | Later |
+| 2026-10-31 | E8-S1 (D-116) | The 10b5-1 box is per filing: a per-trade marker could come from the line's own footnotes naming Rule 10b5-1 (Apple's sales carry it, its RSU settlement doesn't) | Later |
+| 2026-10-31 | E8-S4 | Reconciliation of 2026 Q3, ten companies (AAPL, ACN, CRWV, GOOG, JPM, META, NFLX, TEAM, TSM, WMT): 430 filings, 310 equal to the SEC's data set, 120 equal but for its rounding to two decimals, none different, none on one side only. No differences to list | — |
+| 2026-10-31 | E8-S3 | `amendment_unmatched` was logged 4 times in the backfill: IonQ's 4/A arrived before its original, which then superseded as it should; three 4/As name originals older than the two-year window (J&J of 2024-05-03, Alphabet of 2023-03-28, Berkshire's of 2020-05-19 with a 2025 gift), so their lines are served as filed. A longer backfill would match the first two | Later |
+| 2026-10-31 | E8-S5 | Served with flags, as filed: three trades dated after their filing (filers' typos: Alphabet 0001193125-26-025268, Trilogy Metals 0000912282-25-000268, Alphabet 0000950170-25-111530), an IonQ sale marked acquired (0001193125-26-162187), two sales priced only in a footnote (Berkshire 0001728451-25-000008's average of $500.99805; NuScale's JBIC sale 0001104659-24-123464). Reading prices from footnotes is text reading (E12) | E12 or later |
+| 2026-10-31 | E8 | Not done in E8: a label for a company's own stake and insider filings (Disney's 13D on FuboTV, Berkshire's Forms 4 on other companies) needs the subject's name from the filing; Forms 4 now give it for the issuer side only | Later |
+| 2026-10-31 | E8 | Dev database: client `e8-demo` and its key 5, made for the demo, revoked at the end; `api_requests` holds its 1 REST and 14 MCP rows | — |
 
 ---
 

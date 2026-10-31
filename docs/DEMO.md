@@ -261,6 +261,26 @@ calls `get_financials` for both metrics and answers with each quarter's value an
 10-K it came from, with SEC links. `docs/MCP.md` sets up Claude Desktop, Cursor, VS Code and
 the MCP Inspector, and lists the tools and example questions, one of them in Georgian.
 
+## 7. Insider trades (everyone)
+
+Who among a company's directors, officers and 10% owners bought or sold, from their Forms 4
+(E8). Each trade is grouped per insider, day, code and security, with the shares, the average
+price weighted by shares and the value, the filing's 10b5-1 box (a trade in it was made under
+a pre-arranged plan) and the Form 4 lines it sums as proof:
+
+```bash
+curl -s -H "X-API-Key: $KEY" "$BASE/v1/companies/NVDA/insiders?days=365&limit=5" \
+  | jq '{totals: .data.totals, first: .data.trades[0] | {trade_date, insiders: [.insiders[].name], code, shares, average_price, value, rule_10b5_1, filings: .proof.filings}}'
+```
+
+On the dev database on 2026-10-31 (two years of Forms 4 backfilled), NVIDIA's last 365 days hold
+38 sales by 11 insiders, 8,988,679 shares for 1,877,876,036.4748 USD; the newest is its general
+counsel's of 2026-09-21: three lines of one Form 4 summed to 30,460 shares at a weighted
+222.8015 USD, under a 10b5-1 plan. Codes P and S (purchases and sales) are the default;
+`codes=all` adds awards, exercises, tax withholdings and gifts. A 4/A replaces the lines it
+corrects, a filing made twice counts once, and a served trade that changes is in
+`/v1/changes`. In an AI chat the same question calls `insider_activity`.
+
 ## The integration on one page
 
 - **Auth.** `X-API-Key: mdk_...` on every `/v1` request (`/v1/status` needs none). The operator
@@ -285,7 +305,10 @@ the MCP Inspector, and lists the tools and example questions, one of them in Geo
   HMAC-SHA256 of "<t>.<raw body>">`. Check it in constant time and reject a `t` more than five
   minutes off (scripts/webhook_receiver.py); answer 2xx within 10 seconds; dedupe on `id`;
   don't rely on order. Failed deliveries are tried again about 1 and 10 minutes later.
-- **AI chats.** MCP at `/mcp` (Streamable HTTP) with the same `X-API-Key`: six read-only tools
+- **Insider trades.** `GET /v1/companies/{ticker}/insiders?days=&codes=&include_derivative=`
+  from the insiders' Forms 4: per insider, day, code and security, each trade's Form 4 lines as
+  proof; totals and a summary per insider (E8).
+- **AI chats.** MCP at `/mcp` (Streamable HTTP) with the same `X-API-Key`: seven read-only tools
   over the same data, compact answers under about 8 KB (`docs/MCP.md`).
 - **What we never do.** No advice, ratings, targets or rankings; no end-user data in requests,
   responses or events; we never contact a client's users. Every response says: Information

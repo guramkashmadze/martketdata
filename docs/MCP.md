@@ -208,7 +208,7 @@ flow of the second quarter reads):
 
 ## Example questions
 
-Five questions and the tool calls they should lead to. The client chooses the calls; a client
+Six questions and the tool calls they should lead to. The client chooses the calls; a client
 that already knows a ticker skips `lookup_company`. The answers are numbers with their SEC
 links, never a view on what to do with them.
 
@@ -234,6 +234,12 @@ links, never a view on what to do with them.
    from FY2025 Q3 to FY2026 Q2, the fourth quarter of 2025 derived from the 10-K less nine
    months (`derived_q4`). Names are matched in the Latin alphabet, so the client looks up
    "Berkshire Hathaway", not its Georgian spelling; the answer's wording is the client's.
+
+6. "Have NVIDIA's insiders been buying or selling over the last year?"
+   `insider_activity(ticker="NVDA", days=365)`: on the dev database 38 sales and no purchases,
+   8,988,679 shares for 1,877,876,036.4748 USD; the eight insiders with the newest trades, each
+   with the trades summed, and the newest twelve trades, each with its Form 4 and its 10b5-1 box.
+   6.1 KB.
 
 Questions about a fund ("What is SPY's revenue?") get `not_applicable` with the reason. The
 tools answer with filed numbers only: none ranks, scores or recommends.
