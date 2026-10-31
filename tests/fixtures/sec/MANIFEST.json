@@ -236,6 +236,16 @@
     "sha256": "252a23af54f9d984ffe10728592d4daa593230b1cd55fb057d1722c2c2defb65",
     "raw_key": "raw/sec/1045810/0001045810-26-000073/q2fy27pr.htm"
   },
+  "filings/1046179/0001046179-26-000723/wk-form4_1791455750.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1046179/000104617926000723/wk-form4_1791455750.xml",
+    "fetched_at": "2026-10-31T12:38:54+00:00",
+    "original_size_bytes": 5162,
+    "original_sha256": "48d9658258c797246bd547eab834e535fd21ab8059ecd6510af0c9d7f4d1363b",
+    "trim": null,
+    "size_bytes": 5162,
+    "sha256": "48d9658258c797246bd547eab834e535fd21ab8059ecd6510af0c9d7f4d1363b",
+    "raw_key": "raw/sec/1046179/0001046179-26-000723/wk-form4_1791455750.xml"
+  },
   "filings/1067983/0001193125-26-344495/0001193125-26-344495-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/1067983/000119312526344495/0001193125-26-344495-index.htm",
     "fetched_at": "2026-10-25T22:20:14+00:00",
@@ -275,6 +285,16 @@
     "size_bytes": 29829,
     "sha256": "36570019131ba7202acef370bfc4bef9366c0d0852383bd3a24bc09872be021d",
     "raw_key": "raw/sec/1108524/0001108524-26-000187/crm-q2fy27xexhibit991.htm"
+  },
+  "filings/1108524/0001127602-22-007431/form4.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1108524/000112760222007431/form4.xml",
+    "fetched_at": "2026-10-31T12:38:56+00:00",
+    "original_size_bytes": 15791,
+    "original_sha256": "643d8a0a6add3550db32815356082d1a9c583ae8a19651e16c087d851002f477",
+    "trim": null,
+    "size_bytes": 15791,
+    "sha256": "643d8a0a6add3550db32815356082d1a9c583ae8a19651e16c087d851002f477",
+    "raw_key": "raw/sec/1108524/0001127602-22-007431/form4.xml"
   },
   "filings/1326801/0001628280-26-028364/0001628280-26-028364-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828026028364/0001628280-26-028364-index.htm",
@@ -446,6 +466,26 @@
     "sha256": "c7323192b26b831597456bbdd69f55c75a86df78d1c56474d6572e5c7f45c83e",
     "raw_key": "raw/sec/1467373/0001467373-25-000221/q1fy26earnings8-kexhibit.htm"
   },
+  "filings/1513845/0001513845-26-000136/form4.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1513845/000151384526000136/form4.xml",
+    "fetched_at": "2026-10-31T12:38:59+00:00",
+    "original_size_bytes": 4961,
+    "original_sha256": "eb06573610d7ad08eb9f1b2665975da92a32828358d8410f6560fc2a2e6b83a6",
+    "trim": null,
+    "size_bytes": 4961,
+    "sha256": "eb06573610d7ad08eb9f1b2665975da92a32828358d8410f6560fc2a2e6b83a6",
+    "raw_key": "raw/sec/1513845/0001513845-26-000136/form4.xml"
+  },
+  "filings/1543418/0001193125-26-378380/ownership.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1543418/000119312526378380/ownership.xml",
+    "fetched_at": "2026-10-31T12:39:00+00:00",
+    "original_size_bytes": 5382,
+    "original_sha256": "9d6ca9880a8070e44cef6dafda751bbcf1f19988f645ff32549913ab435253d6",
+    "trim": null,
+    "size_bytes": 5382,
+    "sha256": "9d6ca9880a8070e44cef6dafda751bbcf1f19988f645ff32549913ab435253d6",
+    "raw_key": "raw/sec/1543418/0001193125-26-378380/ownership.xml"
+  },
   "filings/1594805/0001594805-26-000046/0001594805-26-000046-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/1594805/000159480526000046/0001594805-26-000046-index.htm",
     "fetched_at": "2026-10-25T22:20:30+00:00",
@@ -465,6 +505,26 @@
     "size_bytes": 12498,
     "sha256": "aa355f86a980386606221e3f2d895329cc2472f7bddd26577942b72402604b78",
     "raw_key": "raw/sec/1594805/0001594805-26-000046/exhibit991pressreleaseq220.htm"
+  },
+  "filings/1652044/0000950170-25-112321/ownership.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1652044/000095017025112321/ownership.xml",
+    "fetched_at": "2026-10-31T12:39:03+00:00",
+    "original_size_bytes": 1751,
+    "original_sha256": "336139879484cbb5d80e3ca5c15adb06e7176bfb99136d1feca957f0637697b3",
+    "trim": null,
+    "size_bytes": 1751,
+    "sha256": "336139879484cbb5d80e3ca5c15adb06e7176bfb99136d1feca957f0637697b3",
+    "raw_key": "raw/sec/1652044/0000950170-25-112321/ownership.xml"
+  },
+  "filings/1769628/0001104659-26-098473/tm2623554-1_4aseq1.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1769628/000110465926098473/tm2623554-1_4aseq1.xml",
+    "fetched_at": "2026-10-31T12:39:05+00:00",
+    "original_size_bytes": 57914,
+    "original_sha256": "7ac07a947ea6eb21d8cb87e1c97b4a81f063b0e341ca541d4a10c5a10a485daa",
+    "trim": null,
+    "size_bytes": 57914,
+    "sha256": "7ac07a947ea6eb21d8cb87e1c97b4a81f063b0e341ca541d4a10c5a10a485daa",
+    "raw_key": "raw/sec/1769628/0001104659-26-098473/tm2623554-1_4aseq1.xml"
   },
   "filings/1874178/0001874178-26-000053/0001874178-26-000053-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/1874178/000187417826000053/0001874178-26-000053-index.htm",
@@ -905,6 +965,16 @@
     "size_bytes": 9636,
     "sha256": "d575f71c0972451691a34ac4ea6d59738c84958b7398331918e80ad089e8e492",
     "raw_key": "raw/sec/320193/0000320193-26-000018/a8-kex991q3202606272026.htm"
+  },
+  "filings/320193/0001140361-26-040127/form4.xml": {
+    "url": "https://www.sec.gov/Archives/edgar/data/320193/000114036126040127/form4.xml",
+    "fetched_at": "2026-10-31T12:38:50+00:00",
+    "original_size_bytes": 23004,
+    "original_sha256": "63d65b6e17d6566bbdccfdb96db267169bc6984a0e552bb363c87739b9cc8dac",
+    "trim": null,
+    "size_bytes": 23004,
+    "sha256": "63d65b6e17d6566bbdccfdb96db267169bc6984a0e552bb363c87739b9cc8dac",
+    "raw_key": "raw/sec/320193/0001140361-26-040127/form4.xml"
   },
   "filings/34088/0000034088-26-000065/0000034088-26-000065-index.htm": {
     "url": "https://www.sec.gov/Archives/edgar/data/34088/000003408826000065/0000034088-26-000065-index.htm",

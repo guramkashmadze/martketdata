@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+<ownershipDocument>
+
+    <schemaVersion>X0609</schemaVersion>
+
+    <documentType>4</documentType>
+
+    <periodOfReport>2026-08-28</periodOfReport>
+
+    <notSubjectToSection16>true</notSubjectToSection16>
+
+    <issuer>
+        <issuerCik>0001543418</issuerCik>
+        <issuerName>Trilogy Metals Inc.</issuerName>
+        <issuerTradingSymbol>TMQ</issuerTradingSymbol>
+        <issuerForeignTradingSymbol>TMQ (TSX)</issuerForeignTradingSymbol>
+    </issuer>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0001635752</rptOwnerCik>
+            <rptOwnerName>South32 Ltd</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerNonUSAddressFlag>true</rptOwnerNonUSAddressFlag>
+            <rptOwnerStreet1>LEVEL 2</rptOwnerStreet1>
+            <rptOwnerStreet2>100 ST GEORGES TERRACE</rptOwnerStreet2>
+            <rptOwnerCity>PERTH</rptOwnerCity>
+            <rptOwnerNonUSStateTerritory>AUSTRALIA</rptOwnerNonUSStateTerritory>
+            <rptOwnerCountry>C3</rptOwnerCountry>
+            <rptOwnerZipCode>WA 6000</rptOwnerZipCode>
+            <rptOwnerStateDescription>AUSTRALIA</rptOwnerStateDescription>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>false</isDirector>
+            <isOfficer>false</isOfficer>
+            <isTenPercentOwner>true</isTenPercentOwner>
+            <isOther>false</isOther>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0001726854</rptOwnerCik>
+            <rptOwnerName>South32 International Investment Holdings Proprietary Ltd</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerNonUSAddressFlag>true</rptOwnerNonUSAddressFlag>
+            <rptOwnerStreet1>LEVEL 2</rptOwnerStreet1>
+            <rptOwnerStreet2>100 ST GEORGES TERRACE</rptOwnerStreet2>
+            <rptOwnerCity>PERTH</rptOwnerCity>
+            <rptOwnerNonUSStateTerritory>AUSTRALIA</rptOwnerNonUSStateTerritory>
+            <rptOwnerCountry>C3</rptOwnerCountry>
+            <rptOwnerZipCode>WA 6000</rptOwnerZipCode>
+            <rptOwnerStateDescription>AUSTRALIA</rptOwnerStateDescription>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>false</isDirector>
+            <isOfficer>false</isOfficer>
+            <isTenPercentOwner>true</isTenPercentOwner>
+            <isOther>false</isOther>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <aff10b5One>false</aff10b5One>
+
+    <nonDerivativeTable>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Common Stock</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-08-28</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>false</equitySwapInvolved>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>8215570</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>2.17</value>
+                    <footnoteId id="F2"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>10379741</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>I</value>
+                </directOrIndirectOwnership>
+                <natureOfOwnership>
+                    <value>By wholly-owned subsidiary</value>
+                    <footnoteId id="F1"/>
+                </natureOfOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+    </nonDerivativeTable>
+
+    <footnotes>
+        <footnote id="F1">The shares are owned directly by South32 International Investment Holdings Proprietary Limited, which is a wholly-owned subsidiary of South32 Limited. South32 Limited is an indirect beneficial owner of the reported securities.</footnote>
+        <footnote id="F2">Pursuant to the terms of a Transaction Agreement dated August 28, 2026, by and between South32 International Investment Holdings Pty Ltd (&quot;South32 International&quot;) and the United States Department of Defense, South32 International agreed to sell 8,215,570 common shares of the Issuer to the Investor for $17,827,785.90 in a private transaction.</footnote>
+    </footnotes>
+
+    <ownerSignature>
+        <signatureName>/s/ Claire Tolcon, Company Secretary of South32 Limited</signatureName>
+        <signatureDate>2026-08-31</signatureDate>
+    </ownerSignature>
+
+    <ownerSignature>
+        <signatureName>/s/ Rebecca Healy, Company Secretary of South32 International Investment Holdings Proprietary Limited</signatureName>
+        <signatureDate>2026-08-31</signatureDate>
+    </ownerSignature>
+</ownershipDocument>
