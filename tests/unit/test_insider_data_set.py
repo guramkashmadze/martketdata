@@ -190,3 +190,13 @@ def test_a_filing_on_one_side_only_is_listed() -> None:
         ("0000000001-26-000001", "only_data_set"),
         ("0000000001-26-000009", "only_ours"),
     ]
+
+
+def test_trades_that_differ_only_by_the_data_sets_rounding_are_rounded_not_different() -> None:
+    """The data set writes Meta's 602.7466 as 602.75 and Walmart's 52,458.807 shares as
+    52,458.81."""
+    ours = _ours(_line(1, "S", "151.004", "343.0751", "39417"), _line(2, "M", "330", None, "1982"))
+
+    [check] = reconcile(ours, read_data_set(DATA, [320193]))
+
+    assert (check.status, check.differences) == ("rounded", ())

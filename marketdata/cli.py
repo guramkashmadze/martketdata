@@ -481,11 +481,16 @@ def insiders_reconcile(
         mine = [check for check in checks if check.issuer_cik == cik]
         count = Counter(check.status for check in mine)
         typer.echo(
-            f"  {ticker:<6} {len(mine):>4} filings: {count['same']} same, {count['differs']} "
-            f"differ, {count['only_ours']} only ours, {count['only_data_set']} only in the data "
-            f"set; {sum(check.lines for check in mine)} trades"
+            f"  {ticker:<6} {len(mine):>4} filings: {count['same']} same, {count['rounded']} "
+            f"same but for the data set's rounding, {count['differs']} differ, "
+            f"{count['only_ours']} only ours, {count['only_data_set']} only in the data set; "
+            f"{sum(check.lines for check in mine)} trades"
         )
-    differing = [check for check in checks if check.status != "same"]
+    typer.echo(
+        "The data set rounds shares, prices and holdings to two decimals; the XML keeps the "
+        "filed digits."
+    )
+    differing = [check for check in checks if check.status not in ("same", "rounded")]
     if differing:
         typer.echo("")
         typer.echo("Differences:")

@@ -10,7 +10,10 @@ Pure: takes the bytes of the landing page and of a quarter's ZIP.
   the document type (3, 4, 4/A, 5 ...) and the 10b5-1 box as AFF10B5ONE, written 0/1,
   false/true or empty, like the XML's `aff10b5One`.
 - NONDERIV_TRANS.tsv and DERIV_TRANS.tsv have one row per trade, numbers written with a decimal
-  point (`4012678.0`), in no particular order: lines are compared as a multiset.
+  point (`4012678.0`), in no particular order: lines are compared as a multiset. The data set
+  rounds shares, prices and holdings to two decimals (Meta's 602.7466 is 602.75, Walmart's
+  52,458.807 shares 52,458.81), while the XML keeps the filed digits: a filing whose trades
+  agree once ours are rounded the same way is `rounded`, not a difference.
 """
 
 import csv
@@ -21,13 +24,14 @@ from collections import Counter
 from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Literal
 
 from marketdata.normalize.insiders import TradeLine
 from marketdata.normalize.security_master import SecFileError
 
 QUARTER = re.compile(r"^(\d{4})q([1-4])$")
+CENTS = Decimal("0.01")  # the data set's rounding
 FORMS = frozenset({"4", "4/A"})
 _TRUE, _FALSE = frozenset({"1", "true"}), frozenset({"0", "false"})
 
@@ -110,7 +114,7 @@ def read_data_set(data: bytes, issuers: Collection[int]) -> dict[str, DataSetFil
     }
 
 
-type Status = Literal["same", "differs", "only_ours", "only_data_set"]
+type Status = Literal["same", "rounded", "differs", "only_ours", "only_data_set"]
 
 
 @dataclass(frozen=True)
@@ -158,11 +162,19 @@ def reconcile(
         differences = list(_header_differences(mine, data_set))
         ours_lines = Counter(_trade(line) for line in mine.lines)
         their_lines = Counter(_trade(line) for line in data_set.lines)
-        for trade in sorted((ours_lines - their_lines).elements(), key=str):
-            differences.append(f"only in our parse: {_describe(trade)}")
-        for trade in sorted((their_lines - ours_lines).elements(), key=str):
-            differences.append(f"only in the data set: {_describe(trade)}")
-        status: Status = "differs" if differences else "same"
+        status: Status = "same"
+        if ours_lines != their_lines:
+            if Counter(map(_rounded, ours_lines.elements())) == Counter(
+                map(_rounded, their_lines.elements())
+            ):
+                status = "rounded"
+            else:
+                for trade in sorted((ours_lines - their_lines).elements(), key=str):
+                    differences.append(f"only in our parse: {_describe(trade)}")
+                for trade in sorted((their_lines - ours_lines).elements(), key=str):
+                    differences.append(f"only in the data set: {_describe(trade)}")
+        if differences:
+            status = "differs"
         checks.append(
             FilingCheck(accession, mine.issuer_cik, status, len(mine.lines), tuple(differences))
         )
@@ -196,6 +208,25 @@ def _trade(line: TradeLine | DataSetLine) -> Trade:
         line.owned_after,
         line.direct_indirect,
     )
+
+
+def _rounded(trade: Trade) -> Trade:
+    derivative, title, day, code, direction, shares, price, owned, ownership = trade
+    return (
+        derivative,
+        title,
+        day,
+        code,
+        direction,
+        _cents(shares),
+        _cents(price),
+        _cents(owned),
+        ownership,
+    )
+
+
+def _cents(value: Decimal | None) -> Decimal | None:
+    return None if value is None else value.quantize(CENTS, ROUND_HALF_UP)
 
 
 def _describe(trade: Trade) -> str:
