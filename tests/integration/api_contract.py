@@ -8,6 +8,7 @@ from marketdata.api.envelope import DISCLAIMER
 SEC_FOLDER = "https://www.sec.gov/Archives/edgar/data/"
 EARNINGS_PROOF = ("accession_no", "document_url", "source_quote", "scale_text", "method")
 METRIC_PROOF = ("accession_no", "filing_url", "method", "calc_version")
+FUND_PROOF = ("accession_nos", "lines", "method", "extractor_version")  # E9: a 13F position
 INSIDER_PROOF = (  # E8: each Form 4 an insider trade sums
     "accession_no",
     "form",
@@ -35,6 +36,9 @@ def check_envelope(body: dict[str, Any]) -> None:
         check_proof(value)
     for filing in _filings(body["data"]):
         assert filing["accession_no"] and filing["url"].startswith(SEC_FOLDER), filing
+    for position in _positions(body["data"]):  # E9: every 13F position names its reports
+        assert all(position["proof"][key] for key in FUND_PROOF), position
+        assert position["value_usd"] is not None and position["shares"] is not None, position
 
 
 def check_proof(item: dict[str, Any]) -> None:
@@ -86,3 +90,15 @@ def _filings(node: Any) -> Any:
     elif isinstance(node, list):
         for child in node:
             yield from _filings(child)
+
+
+def _positions(node: Any) -> Any:
+    """Every 13F position (E9): it has a weight, null for options and principal amounts."""
+    if isinstance(node, dict):
+        if "weight_pct" in node and "proof" in node:
+            yield node
+        for child in node.values():
+            yield from _positions(child)
+    elif isinstance(node, list):
+        for child in node:
+            yield from _positions(child)

@@ -364,3 +364,91 @@ async def replace_positions(
             },
         )
         return written, cur.rowcount
+
+
+# --- E9-S6: reading portfolios.
+
+
+class PeriodSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    manager_cik: int
+    report_period: date
+    positions: int
+    value_usd: Decimal  # every position's value
+    long_value_usd: Decimal  # the long equity positions' (shares held outright)
+
+
+_LATEST_FILINGS = f"""
+    select distinct on (manager_cik) {_FILING_COLUMNS} from f13_filings
+    where manager_cik = any(%(ciks)s)
+    order by manager_cik, report_period desc, filed_at desc, accession_no desc
+"""
+_FILINGS = f"""
+    select {_FILING_COLUMNS} from f13_filings where accession_no = any(%(accessions)s)
+    order by filed_at, accession_no
+"""
+_PERIODS = """
+    select distinct report_period from f13_filings where manager_cik = %(cik)s
+    order by report_period desc
+"""
+_SUMMARIES = """
+    select manager_cik, report_period, count(*) as positions,
+           coalesce(sum(value_usd), 0) as value_usd,
+           coalesce(sum(value_usd) filter (where put_call is null and share_type = 'SH'), 0)
+             as long_value_usd
+    from fund_positions
+    where (manager_cik, report_period) in (
+      select * from unnest(%(ciks)s::bigint[], %(periods)s::date[]))
+    group by manager_cik, report_period
+"""
+# Curated managers' positions in these securities at these quarter ends (the cross-manager
+# unit check and splits, E9-S4; a company's holders, E9-S6).
+_POSITIONS_OF = f"""
+    select {", ".join(f"p.{name.strip()}" for name in _POSITION_COLUMNS.split(","))}
+    from fund_positions p join managers m using (manager_cik)
+    where m.curated and p.cusip = any(%(cusips)s) and p.report_period = any(%(periods)s)
+    order by p.report_period, p.cusip, p.manager_cik
+"""
+
+
+async def latest_filings(
+    conn: AsyncConnection[Any], manager_ciks: Sequence[int]
+) -> list[StoredF13Filing]:
+    """Each manager's latest report: of its newest quarter, the one filed last."""
+    async with conn.cursor(row_factory=class_row(StoredF13Filing)) as cur:
+        await cur.execute(_LATEST_FILINGS, {"ciks": list(manager_ciks)})
+        return await cur.fetchall()
+
+
+async def filings(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list[StoredF13Filing]:
+    async with conn.cursor(row_factory=class_row(StoredF13Filing)) as cur:
+        await cur.execute(_FILINGS, {"accessions": list(accessions)})
+        return await cur.fetchall()
+
+
+async def periods(conn: AsyncConnection[Any], manager_cik: int) -> list[date]:
+    """The quarter ends a manager has reports for, newest first."""
+    async with conn.cursor() as cur:
+        await cur.execute(_PERIODS, {"cik": manager_cik})
+        return [row[0] for row in await cur.fetchall()]
+
+
+async def summaries(
+    conn: AsyncConnection[Any], quarters: Sequence[tuple[int, date]]
+) -> list[PeriodSummary]:
+    """Positions and values of these (manager, quarter end) pairs."""
+    params = {"ciks": [cik for cik, _ in quarters], "periods": [period for _, period in quarters]}
+    async with conn.cursor(row_factory=class_row(PeriodSummary)) as cur:
+        await cur.execute(_SUMMARIES, params)
+        return await cur.fetchall()
+
+
+async def positions_of(
+    conn: AsyncConnection[Any], cusips: Sequence[str], report_periods: Sequence[date]
+) -> list[StoredPosition]:
+    """The curated managers' positions in these CUSIPs at these quarter ends."""
+    params = {"cusips": list(cusips), "periods": list(report_periods)}
+    async with conn.cursor(row_factory=class_row(StoredPosition)) as cur:
+        await cur.execute(_POSITIONS_OF, params)
+        return await cur.fetchall()

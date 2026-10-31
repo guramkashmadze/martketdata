@@ -47,6 +47,8 @@ TOOLS = {
     "compare_companies",
     "latest_earnings",
     "insider_activity",  # E8 (test_mcp_insiders.py)
+    "investor_portfolio",  # E9 (test_mcp_funds.py)
+    "fund_holders",
 }
 MAX_ANSWER = 8 * 1024  # bytes (§10.3)
 

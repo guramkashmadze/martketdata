@@ -156,3 +156,41 @@ async def counts(conn: AsyncConnection[Any]) -> dict[str, int]:
     async with conn.cursor() as cur:
         await cur.execute(_COUNTS)
         return {str(status): int(count) for status, count in await cur.fetchall()}
+
+
+class CusipLink(BaseModel):
+    """A CUSIP's mapping with our security's ticker and company, when it links to one."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cusip: str
+    status: str
+    figi: str | None
+    figi_ticker: str | None  # OpenFIGI's
+    ticker: str | None  # ours
+    cik: int | None
+
+
+_LINKS = """
+    select m.cusip, m.status, m.figi, m.ticker as figi_ticker, s.ticker, s.cik
+    from cusip_map m left join securities s on s.security_id = m.security_id
+    where m.cusip = any(%(cusips)s)
+    order by m.cusip
+"""
+_OF_COMPANIES = """
+    select distinct m.cusip from cusip_map m join securities s on s.security_id = m.security_id
+    where s.cik = any(%(ciks)s) order by m.cusip
+"""
+
+
+async def links(conn: AsyncConnection[Any], cusips: Sequence[str]) -> list[CusipLink]:
+    async with conn.cursor(row_factory=class_row(CusipLink)) as cur:
+        await cur.execute(_LINKS, {"cusips": list(cusips)})
+        return await cur.fetchall()
+
+
+async def of_companies(conn: AsyncConnection[Any], ciks: Sequence[int]) -> list[str]:
+    """The CUSIPs mapped to these companies' securities (every share class)."""
+    async with conn.cursor() as cur:
+        await cur.execute(_OF_COMPANIES, {"ciks": list(ciks)})
+        return [str(row[0]) for row in await cur.fetchall()]

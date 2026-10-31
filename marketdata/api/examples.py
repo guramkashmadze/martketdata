@@ -2,7 +2,9 @@
 
 Apple's third quarter of fiscal 2026 and Alphabet's trailing twelve months as the dev database
 served them on 2026-10-29, from their 8-K and 10-Q filings (shortened: two earnings slots, two
-metrics). They are built from the response models, so they keep the shape the API returns.
+metrics); Berkshire Hathaway's 13F report for 2026-06-30 as it served it on 2026-11-01 (E9,
+shortened to one position). They are built from the response models, so they keep the shape
+the API returns.
 """
 
 import json
@@ -34,6 +36,18 @@ from marketdata.service.earnings import (
 )
 from marketdata.service.filings import CompanyFilings, FilingEventView, FilingView
 from marketdata.service.financials import Financials, MetricProof, MetricView
+from marketdata.service.funds import (
+    ABOUT_13F,
+    ChangeCount,
+    CompanyFunds,
+    Fund,
+    FundFiling,
+    FundHoldings,
+    FundList,
+    FundPosition,
+    Holder,
+    PositionProof,
+)
 from marketdata.service.insiders import (
     CodeTotal,
     Insider,
@@ -630,6 +644,134 @@ STATUS: Served[StatusReport] = Served(
     ),
     sources=(),
     as_of=datetime(2026, 10, 29, 17, 18, 57, tzinfo=UTC),
+    quality_flags=(),
+)
+
+
+# E9: Berkshire Hathaway's 13F report for the quarter ended 2026-06-30.
+BERKSHIRE = 1067983
+BERKSHIRE_13F = "0001193125-26-352200"
+FUNDS_AT = datetime(2026, 11, 1, 0, 2, 13, tzinfo=UTC)
+BERKSHIRE_SOURCE = Source(
+    accession_no=BERKSHIRE_13F,
+    form="13F-HR",
+    filed_at=date(2026, 8, 14),
+    url=urls.filing_folder(BERKSHIRE, BERKSHIRE_13F),
+)
+BERKSHIRE_APPLE = FundPosition(
+    cusip="037833100",
+    issuer="APPLE INC",
+    title_of_class="COM",
+    ticker="AAPL",
+    company_cik=AAPL,
+    figi="BBG000B9XRY4",
+    put_call=None,
+    share_type="SH",
+    shares=Decimal("227917808"),
+    value_usd=Decimal("65950296923"),
+    weight_pct=Decimal("22.0383"),
+    change_type="unchanged",
+    previous_shares=Decimal("227917808"),
+    shares_change=Decimal(0),
+    split_ratio=None,
+    quality_flags=(),
+    proof=PositionProof(
+        accession_nos=(BERKSHIRE_13F,), lines=12, method="f13_xml", extractor_version="1"
+    ),
+)
+
+FUNDS: Served[FundList] = Served(
+    data=FundList(
+        funds=(
+            Fund(
+                manager_cik=BERKSHIRE,
+                manager="Berkshire Hathaway",
+                name="BERKSHIRE HATHAWAY INC",
+                curated=True,
+                report_period=date(2026, 6, 30),
+                quarter="2026Q2",
+                filed_at=date(2026, 8, 14),
+                accession_no=BERKSHIRE_13F,
+                positions=29,
+                value_usd=Decimal("299253556246"),
+                long_value_usd=Decimal("299253556246"),
+            ),
+        ),
+        note=ABOUT_13F,
+    ),
+    sources=(BERKSHIRE_SOURCE,),
+    as_of=FUNDS_AT,
+    quality_flags=(),
+)
+
+FUND_HOLDINGS: Served[FundHoldings] = Served(
+    data=FundHoldings(
+        manager_cik=BERKSHIRE,
+        manager="Berkshire Hathaway",
+        name="BERKSHIRE HATHAWAY INC",
+        quarter="2026Q2",
+        report_period=date(2026, 6, 30),
+        filed_at=date(2026, 8, 14),
+        previous_period=date(2026, 3, 31),
+        filings=(
+            FundFiling(
+                accession_no=BERKSHIRE_13F,
+                form="13F-HR",
+                amendment_type=None,
+                filed_at=date(2026, 8, 14),
+                filing_url=urls.filing_folder(BERKSHIRE, BERKSHIRE_13F),
+                table_url=urls.filing_document(BERKSHIRE, BERKSHIRE_13F, "56757.xml"),
+                value_unit="dollars",
+                unit_rule="filed on or after 2023-01-03: whole dollars (SEC FAQ 62)",
+                entry_total=89,
+                lines=89,
+                value_total=Decimal("299253556246"),
+                value_sum=Decimal("299253556246"),
+                method="f13_xml",
+                extractor_version="1",
+            ),
+        ),
+        positions_count=29,
+        value_usd=Decimal("299253556246"),
+        long_value_usd=Decimal("299253556246"),
+        changes=(
+            ChangeCount(change_type="new", positions=1),
+            ChangeCount(change_type="added", positions=7),
+            ChangeCount(change_type="trimmed", positions=6),
+            ChangeCount(change_type="unchanged", positions=15),
+            ChangeCount(change_type="exited", positions=1),
+        ),
+        positions=(BERKSHIRE_APPLE,),
+        next_cursor=encode_cursor("037833100", ""),
+        note=ABOUT_13F,
+    ),
+    sources=(BERKSHIRE_SOURCE,),
+    as_of=FUNDS_AT,
+    quality_flags=(),
+)
+
+COMPANY_FUNDS: Served[CompanyFunds] = Served(
+    data=CompanyFunds(
+        ticker="AAPL",
+        cik=AAPL,
+        company="Apple Inc.",
+        cusips=("037833100",),
+        holders=(
+            Holder(
+                manager_cik=BERKSHIRE,
+                manager="Berkshire Hathaway",
+                quarter="2026Q2",
+                report_period=date(2026, 6, 30),
+                filed_at=date(2026, 8, 14),
+                accession_no=BERKSHIRE_13F,
+                filing_url=urls.filing_folder(BERKSHIRE, BERKSHIRE_13F),
+                position=BERKSHIRE_APPLE,
+            ),
+        ),
+        note=ABOUT_13F,
+    ),
+    sources=(BERKSHIRE_SOURCE,),
+    as_of=FUNDS_AT,
     quality_flags=(),
 )
 

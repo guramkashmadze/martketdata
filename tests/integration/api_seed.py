@@ -8,7 +8,8 @@ were cross-checked with the 10-Q. Its third-quarter release failed verification.
 compare with; FNDX is a fund and FPIX a foreign private issuer; OUTC is a domestic filer outside
 the universe. E5b: one value change of each reason, the predecessor's restatement among them.
 E8: ACME's chief executive sold shares ten days ago in two lines of one Form 4 under a 10b5-1
-plan, and gave some away.
+plan, and gave some away. E9: a curated manager's 13F report for 2026-06-30 holds ACME in two
+lines (one per other manager) and a call on BETA.
 """
 
 import json
@@ -31,6 +32,9 @@ Q3_RELEASE = "0001001000-26-000040"
 FY2020_10K = "0001001000-21-000005"  # older than the filings backfill: known from facts only
 BETA_10Q = "0002002000-26-000011"
 INSIDER_FORM4 = "0001001000-26-000050"
+MANAGER = 9009
+MANAGER_13F = "0009009000-26-000003"
+ACME_CUSIP, BETA_CUSIP = "000900110", "000900219"
 CALC = "2.3"
 
 
@@ -72,6 +76,7 @@ async def seed(conn: Conn) -> None:
     await _metrics(conn)
     await _changes(conn)
     await _insiders(conn)
+    await _fund(conn)
     await conn.execute(
         "insert into xbrl_facts (cik, taxonomy, concept, unit, period_start, period_end, value, "
         "fy, fp, form, filed_at, accession_no) values "
@@ -462,4 +467,68 @@ async def _insiders(conn: Conn) -> None:
                 Decimal(owned),
                 json.dumps({"security_title": ["F1"]} if code == "S" else {}),
             ],
+        )
+
+
+async def _fund(conn: Conn) -> None:
+    """E9: Test Capital's report for 2026-06-30, positions built as the ingest builds them."""
+    await conn.execute(
+        "insert into managers (manager_cik, name, display_name) "
+        "values (%s, 'TEST CAPITAL LLC', 'Test Capital')",
+        [MANAGER],
+    )
+    keys = [f"raw/sec/{MANAGER}/{MANAGER_13F}/{name}" for name in ("primary_doc.xml", "t.xml")]
+    for key in keys:
+        await conn.execute(
+            "insert into raw_objects (key, url, sha256, size_bytes, fetched_at) "
+            "values (%s, %s, %s, 1, now())",
+            [
+                key,
+                "https://www.sec.gov/Archives/edgar/data/" + key.removeprefix("raw/sec/"),
+                "0" * 64,
+            ],
+        )
+    await conn.execute(
+        "insert into filings (accession_no, cik, form, filed_at, period_of_report) "
+        "values (%s, %s, '13F-HR', '2026-08-14', '2026-06-30')",
+        [MANAGER_13F, MANAGER],
+    )
+    await conn.execute(
+        "insert into f13_filings (accession_no, manager_cik, form, filed_at, report_period, "
+        "report_type, entry_total, value_total, lines, value_sum, value_unit, unit_rule, "
+        "cover_doc, cover_raw_key, table_doc, table_raw_key, schema_version, method, "
+        "extractor_version) "
+        "values (%s, %s, '13F-HR', '2026-08-14', '2026-06-30', '13F HOLDINGS REPORT', 3, 4100000, "
+        "3, 4100000, 'dollars', 'filed on or after 2023-01-03: whole dollars (SEC FAQ 62)', "
+        "'primary_doc.xml', %s, 't.xml', %s, 'X0202', 'f13_xml', '1')",
+        [MANAGER_13F, MANAGER, keys[0], keys[1]],
+    )
+    for line_no, cusip, put_call, shares, value in [
+        (1, ACME_CUSIP, None, 30000, 3000000),
+        (2, ACME_CUSIP, None, 10000, 1000000),
+        (3, BETA_CUSIP, "CALL", 1000, 100000),
+    ]:
+        await conn.execute(
+            "insert into holdings_raw (accession_no, line_no, manager_cik, report_period, "
+            "name_of_issuer, title_of_class, cusip, shares, share_type, value_as_filed, value_usd, "
+            "put_call, investment_discretion, method, extractor_version) values (%s, %s, %s, "
+            "'2026-06-30', 'ISSUER', 'COM', %s, %s, 'SH', %s, %s, %s, 'SOLE', 'f13_xml', '1')",
+            [MANAGER_13F, line_no, MANAGER, cusip, shares, value, value, put_call],
+        )
+    for cusip, put_call, shares, value, weight, lines in [
+        (ACME_CUSIP, None, 40000, 4000000, Decimal("100.0000"), 2),
+        (BETA_CUSIP, "CALL", 1000, 100000, None, 1),
+    ]:
+        await conn.execute(
+            "insert into fund_positions (manager_cik, report_period, cusip, put_call, share_type, "
+            "name_of_issuer, title_of_class, shares, value_usd, weight_pct, lines, "
+            "source_accessions) values (%s, '2026-06-30', %s, %s, 'SH', 'ISSUER', 'COM', %s, %s, "
+            "%s, %s, %s)",
+            [MANAGER, cusip, put_call, shares, value, weight, lines, [MANAGER_13F]],
+        )
+    for cusip, ticker in [(ACME_CUSIP, "ACME"), (BETA_CUSIP, "BETA")]:
+        await conn.execute(
+            "insert into cusip_map (cusip, status, security_id, figi, ticker) select %s, "
+            "'matched', security_id, %s, %s from securities where ticker = %s",
+            [cusip, f"BBG{cusip}", ticker, ticker],
         )

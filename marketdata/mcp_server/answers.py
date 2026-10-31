@@ -5,14 +5,16 @@ An answer is the API's envelope without its list of flags (each value carries it
 sources, as_of and the disclaimer. Inside `data` a metric value keeps a short proof: the filing
 it came from (`accession_no`; for a derived, TTM or computed value the latest filing it reads),
 the method and the XBRL concept, named once for a series whose values share it. Every filing a
-value reads is in `sources`, with its SEC link; recent_filings' filings carry their own links,
-so its sources stay empty. The full proof object (each value's contributing filings, the calc
-version, the filing's index page) is the API's and the proof page's. latest_earnings answers
-the API's release as it is, each fact with its full proof; a snapshot's release keeps each
-fact's source quote and cross-check status.
+value reads is in `sources`, with its SEC link; recent_filings' filings and fund_holders'
+holders carry their own links, so their sources stay empty. The full proof object (each value's
+contributing filings, the calc version, the filing's index page) is the API's and the proof
+page's. latest_earnings answers the API's release as it is, each fact with its full proof; a
+snapshot's release keeps each fact's source quote and cross-check status. investor_portfolio
+answers a 13F quarter's largest positions and its changes, each list cut short (E9).
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, SerializerFunctionWrapHandler, model_serializer
@@ -23,6 +25,7 @@ from marketdata.service.compare import Comparison
 from marketdata.service.earnings import EarningsRelease
 from marketdata.service.filings import CompanyFilings, FilingEventView, FilingView
 from marketdata.service.financials import Financials, MetricView
+from marketdata.service.funds import CompanyFunds, FundHoldings, FundPosition, Holder
 from marketdata.service.insiders import CodeTotal, Insider, InsiderActivity
 from marketdata.service.served import Number, Served, Source
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
@@ -451,3 +454,169 @@ def _roles(owners: tuple[Insider, ...]) -> str:
         else:
             roles.append(words.get(role, role))
     return ", ".join(roles)
+
+
+# --- E9: fund portfolios.
+
+
+class PositionLine(BaseModel):
+    """A position, compact: the CUSIP only when no ticker of ours names the security; empty
+    fields left out."""
+
+    model_config = ConfigDict(frozen=True)
+
+    issuer: str | None
+    ticker: str | None
+    cusip: str | None
+    put_call: str | None
+    shares: Number
+    value_usd: Number
+    weight_pct: Number | None
+    change: str | None
+    shares_change: Number | None
+    flags: tuple[str, ...]
+
+    @model_serializer(mode="wrap")
+    def _compact(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        written: dict[str, Any] = handler(self)
+        return {name: value for name, value in written.items() if value not in (None, ())}
+
+
+def _line(position: FundPosition, *, issuer: bool = True) -> PositionLine:
+    return PositionLine(
+        issuer=position.issuer if issuer else None,
+        ticker=position.ticker,
+        cusip=None if position.ticker else position.cusip,
+        put_call=position.put_call,
+        shares=position.shares,
+        value_usd=position.value_usd,
+        weight_pct=position.weight_pct,
+        change=position.change_type,
+        shares_change=position.shares_change,
+        flags=position.quality_flags,
+    )
+
+
+class PortfolioAnswer(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    manager: str
+    manager_cik: int
+    quarter: str
+    report_period: date  # the quarter end the report is about
+    filed_at: date  # of its latest report: 13F data can be up to 45 days old when filed
+    compared_with: date | None  # the quarter end of the report the changes compare with
+    filing_url: str  # the latest report's folder on sec.gov
+    positions: int
+    value_usd: Number
+    changes: dict[str, int]  # positions per change type
+    largest: tuple[PositionLine, ...]  # by value
+    new: tuple[PositionLine, ...]  # each list by value; exited ones by shares sold
+    added: tuple[PositionLine, ...]
+    trimmed: tuple[PositionLine, ...]
+    exited: tuple[PositionLine, ...]  # no shares now; shares_change is what was held before
+    more: tuple[str, ...]  # the lists cut short
+    note: str
+
+
+def portfolio(
+    served: Served[FundHoldings], *, largest: int, per_change: int
+) -> Answer[PortfolioAnswer]:
+    """A manager's quarter: its largest positions and what changed, each list cut short."""
+    data = served.data
+    held = [p for p in data.positions if p.change_type != "exited"]
+    by_kind = {
+        kind: [p for p in data.positions if p.change_type == kind]
+        for kind in ("new", "added", "trimmed", "exited")
+    }
+    by_kind["added"].sort(key=lambda p: -(p.shares_change or 0) * _price(p))
+    by_kind["trimmed"].sort(key=lambda p: (p.shares_change or 0) * _price(p))
+    more = [
+        name
+        for name, rows, cap in (
+            ("largest", held, largest),
+            *((k, v, per_change) for k, v in by_kind.items()),
+        )
+        if len(rows) > cap
+    ]
+    latest = data.filings[-1]
+    return Answer(
+        data=PortfolioAnswer(
+            manager=data.manager,
+            manager_cik=data.manager_cik,
+            quarter=data.quarter,
+            report_period=data.report_period,
+            filed_at=data.filed_at,
+            compared_with=data.previous_period,
+            filing_url=latest.filing_url,
+            positions=data.positions_count,
+            value_usd=data.value_usd,
+            changes={count.change_type: count.positions for count in data.changes},
+            largest=tuple(_line(p) for p in held[:largest]),
+            new=tuple(_line(p) for p in by_kind["new"][:per_change]),
+            added=tuple(_line(p) for p in by_kind["added"][:per_change]),
+            trimmed=tuple(_line(p) for p in by_kind["trimmed"][:per_change]),
+            exited=tuple(_line(p) for p in by_kind["exited"][:per_change]),
+            more=tuple(more),
+            note=data.note,
+        ),
+        sources=served.sources,
+        as_of=served.as_of,
+    )
+
+
+def _price(position: FundPosition) -> Decimal:
+    """Value per share, to rank shares added or sold by their value."""
+    return position.value_usd / position.shares if position.shares else Decimal(0)
+
+
+class HolderLine(BaseModel):
+    """A manager holding the company, with its position in each share class."""
+
+    model_config = ConfigDict(frozen=True)
+
+    manager: str
+    quarter: str
+    filed_at: date
+    filing_url: str  # its latest report's folder on sec.gov
+    positions: tuple[PositionLine, ...]
+
+
+class HoldersAnswer(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    company: str | None
+    holders: tuple[HolderLine, ...]  # by manager name, never by size
+    more_holders: bool
+    note: str
+
+
+def holders(served: Served[CompanyFunds], *, limit: int) -> Answer[HoldersAnswer]:
+    """At most `limit` managers, by name, each with its positions and its report's link, as
+    recent_filings' filings carry theirs: `sources` stays empty."""
+    data = served.data
+    by_manager: dict[int, list[Holder]] = {}
+    for holder in data.holders:
+        by_manager.setdefault(holder.manager_cik, []).append(holder)
+    shown = list(by_manager.values())[:limit]
+    return Answer(
+        data=HoldersAnswer(
+            ticker=data.ticker,
+            company=data.company,
+            holders=tuple(
+                HolderLine(
+                    manager=group[0].manager,
+                    quarter=group[0].quarter,
+                    filed_at=group[0].filed_at,
+                    filing_url=group[0].filing_url,
+                    positions=tuple(_line(h.position, issuer=False) for h in group),
+                )
+                for group in shown
+            ),
+            more_holders=len(by_manager) > limit,
+            note=data.note,
+        ),
+        sources=(),
+        as_of=served.as_of,
+    )

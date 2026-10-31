@@ -27,6 +27,7 @@ from marketdata.service import (
     earnings,
     filings,
     financials,
+    funds,
     insiders,
     snapshot,
 )
@@ -60,6 +61,11 @@ MAX_FORM = 20
 INSIDER_TRADES = 12  # trades insider_activity answers, newest first (E8)
 INSIDER_LINES = 8  # insiders it summarizes, by latest trade
 MAX_CODES = 20
+PORTFOLIO_LARGEST = 20  # positions investor_portfolio lists by value (E9, §10.3)
+PORTFOLIO_CHANGES = 6  # of each change type: new, added, trimmed, exited
+FUND_HOLDERS = 20  # managers fund_holders lists, by name
+MAX_MANAGER = 80
+MAX_QUARTER = 10
 UNIT_WORDS = {"USD": "in USD", "shares": "in shares", "USD/shares": "in USD per share"}
 
 
@@ -129,6 +135,8 @@ class Tools:
             (self.compare_companies, "Compare companies"),
             (self.latest_earnings, "Latest earnings release"),
             (self.insider_activity, "Insider trades"),
+            (self.investor_portfolio, "Investor portfolio"),
+            (self.fund_holders, "Funds holding a company"),
         ):
             server.add_tool(
                 tool,
@@ -363,3 +371,54 @@ class Tools:
                 max_days=MAX_DAYS,
             )
         return answer(answers.insiders(served, max_insiders=INSIDER_LINES))
+
+    async def investor_portfolio(
+        self,
+        manager: Annotated[
+            str,
+            Field(
+                description="A curated investor by name (Berkshire, Pershing Square, Icahn, "
+                "Pabrai ...) or by its CIK; an unknown name gets the list of curated ones.",
+                max_length=MAX_MANAGER,
+            ),
+        ],
+        quarter: Annotated[
+            str | None,
+            Field(
+                description="The quarter, as 2026Q2 or its end date 2026-06-30; by default the "
+                "latest one the investor has reported.",
+                max_length=MAX_QUARTER,
+            ),
+        ] = None,
+    ) -> str:
+        """What a well-known investor reported holding at a quarter end in its 13F filing with
+        the SEC, and what changed from its report for the quarter before: the position count and
+        value, changes per type, the 20 largest positions and at most 6 of each change type:
+        new, added, trimmed (shares up or down more than 1%) and exited, each with shares, value
+        in USD, weight among its long equity positions (percent) and shares changed,
+        split-adjusted when a split happened. Use it for "what does <investor> own" and "what
+        did <investor> buy and sell last quarter". A 13F lists long positions in US-listed
+        securities and options on them at the quarter end, filed up to 45 days later: say the
+        quarter and the filing date. `more` names the lists that were cut short.
+
+        The data is information from public filings, not investment advice.
+        """
+        async with self._connect()() as conn:
+            served = await funds.fund_holdings(conn, manager, quarter=quarter, limit=None)
+        return answer(
+            answers.portfolio(served, largest=PORTFOLIO_LARGEST, per_change=PORTFOLIO_CHANGES)
+        )
+
+    async def fund_holders(self, ticker: Ticker) -> str:
+        """Which of the curated well-known investors held a company's shares in their latest
+        13F filing with the SEC, listed by investor name (never ranked by size): for each, the
+        quarter, the filing date, shares, value in USD, weight in its portfolio (percent) and
+        the change from its quarter before; investors that sold all of it that quarter are
+        listed as exited. Use it for "which famous investors own <company>". A 13F reports
+        positions at a quarter end, filed up to 45 days later.
+
+        The data is information from public filings, not investment advice.
+        """
+        async with self._connect()() as conn:
+            served = await funds.company_funds(conn, ticker)
+        return answer(answers.holders(served, limit=FUND_HOLDERS))

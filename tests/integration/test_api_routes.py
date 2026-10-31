@@ -9,7 +9,7 @@ import httpx2
 import psycopg
 import pytest
 from api_contract import check_envelope
-from api_seed import ACME, Q2_10Q, Q2_RELEASE, Q3_RELEASE, seed
+from api_seed import ACME, MANAGER, Q2_10Q, Q2_RELEASE, Q3_RELEASE, seed
 from fastapi import FastAPI
 
 from marketdata.api.envelope import DISCLAIMER
@@ -28,6 +28,9 @@ ROUTES: list[tuple[str, str, dict[str, str]]] = [
     ("/v1/compare", "/v1/compare", {"tickers": "acme,BETA", "metrics": "revenue,net_income"}),
     ("/v1/changes", "/v1/changes", {}),
     ("/v1/companies/{ticker}/insiders", "/v1/companies/ACME/insiders", {"codes": "all"}),
+    ("/v1/funds", "/v1/funds", {}),
+    ("/v1/funds/{manager_cik}/holdings", f"/v1/funds/{MANAGER}/holdings", {"quarter": "2026Q2"}),
+    ("/v1/companies/{ticker}/funds", "/v1/companies/ACME/funds", {}),
 ]
 
 

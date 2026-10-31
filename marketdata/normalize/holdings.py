@@ -437,11 +437,26 @@ class HeldBoth:
     value_after: Decimal
 
 
-def split_ratio(holders: Sequence[HeldBoth]) -> Fraction | None:
-    """A split (or a reverse split) of a security between two quarter ends: at least two
-    managers' share counts moved by the same whole ratio (10 to 1 for Netflix in November
-    2025, or 1 to 10), and the median price per share moved by its inverse, within a factor of
-    two. One manager moving by a whole ratio is a trade."""
+def split_ratio(holders: Sequence[HeldBoth], reported: Fraction | None = None) -> Fraction | None:
+    """A split (or a reverse split) of a security between two quarter ends, in new shares per
+    old share. Evidence is the issuer's own filings (`reported`: the ratio its XBRL facts give for
+    a split that took effect between the quarter ends; Netflix's 10 for 1 on 2025-11-14) or, for
+    other securities, at least two managers whose share counts moved by the same whole ratio
+    (one manager doing so is a trade). Either way the median price per share must have moved
+    by the inverse, within a factor of two: the curated managers' holders traded through
+    Netflix's split, so none of them moved by exactly 10."""
+    ratio = reported if reported is not None and reported > 0 else _holders_ratio(holders)
+    if ratio is None or ratio == 1:
+        return None
+    before = _median_price([(h.value_before, h.shares_before) for h in holders])
+    after = _median_price([(h.value_after, h.shares_after) for h in holders])
+    if before is None or after is None or after == 0:
+        return None
+    price_move = Fraction(before) / Fraction(after)  # about the ratio after a split
+    return ratio if ratio / 2 <= price_move <= ratio * 2 else None
+
+
+def _holders_ratio(holders: Sequence[HeldBoth]) -> Fraction | None:
     counted: dict[Fraction, int] = {}
     for holder in holders:
         if holder.shares_before <= 0 or holder.shares_after <= 0:
@@ -455,13 +470,6 @@ def split_ratio(holders: Sequence[HeldBoth]) -> Fraction | None:
     ranked = sorted(counted.items(), key=lambda item: -item[1])
     ratio, count = ranked[0]
     if count < MIN_SPLIT_HOLDERS or (len(ranked) > 1 and ranked[1][1] == count):
-        return None
-    before = _median_price([(h.value_before, h.shares_before) for h in holders])
-    after = _median_price([(h.value_after, h.shares_after) for h in holders])
-    if before is None or after is None or after == 0:
-        return None
-    price_move = Fraction(before) / Fraction(after)  # about the ratio after a split
-    if not ratio / 2 <= price_move <= ratio * 2:
         return None
     return ratio
 

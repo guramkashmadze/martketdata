@@ -182,3 +182,34 @@ async def filings_of_facts(
             FactFiling(str(accession), int(cik), form, filed)
             for accession, cik, form, filed in await cur.fetchall()
         ]
+
+
+# E9-S4: stock splits the companies' own filings report, by the day they took effect.
+SPLIT_CONCEPTS = (
+    "StockholdersEquityNoteStockSplitConversionRatio1",
+    "StockholdersEquityNoteStockSplitConversionRatio",
+)
+
+_SPLITS = """
+    select distinct cik, period_end, value from xbrl_facts
+    where cik = any(%(ciks)s) and taxonomy = 'us-gaap' and concept = any(%(concepts)s)
+      and unit = 'pure' and value > 0
+      and period_end > %(after)s and period_end <= %(through)s
+    order by cik, period_end
+"""
+
+
+async def splits(
+    conn: AsyncConnection[Any], ciks: Sequence[int], after: date, through: date
+) -> list[tuple[int, date, Decimal]]:
+    """(CIK, effective day, new shares per old share) of the stock splits these companies'
+    filings report as taking effect after `after` and on or before `through`."""
+    params = {
+        "ciks": list(ciks),
+        "concepts": list(SPLIT_CONCEPTS),
+        "after": after,
+        "through": through,
+    }
+    async with conn.cursor() as cur:
+        await cur.execute(_SPLITS, params)
+        return [(int(cik), day, Decimal(value)) for cik, day, value in await cur.fetchall()]

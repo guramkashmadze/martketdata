@@ -19,6 +19,7 @@ from marketdata.service.financials import (
     Financials,
     get_financials,
 )
+from marketdata.service.funds import CompanyFunds, company_funds
 from marketdata.service.insiders import (
     DEFAULT_DAYS,
     MAX_DAYS,
@@ -198,3 +199,22 @@ async def insiders(
             cursor=cursor,
         )
     )
+
+
+@router.get(
+    "/funds",
+    summary="Curated managers holding the company",
+    response_model=Envelope[CompanyFunds],
+    response_class=EnvelopeResponse,
+    responses={
+        **examples.ok(examples.COMPANY_FUNDS, "The managers holding it, by name."),
+        404: examples.NOT_FOUND,
+    },
+)
+async def funds(conn: Conn, ticker: TickerPath) -> EnvelopeResponse:
+    """The curated 13F managers holding the company's shares (any share class, and its
+    predecessors') in their latest report, by manager name: the quarter end, the filing date,
+    shares, value in USD, weight in the portfolio and the change from the quarter before, with
+    the managers that exited it there. Securities are linked to the company through their FIGI;
+    CUSIPs are as the 13F reports state them."""
+    return respond(await company_funds(conn, ticker))
