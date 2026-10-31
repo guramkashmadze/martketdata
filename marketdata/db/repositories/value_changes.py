@@ -101,6 +101,13 @@ async def record_insider_changes(
     return await _record(conn, "insider_transaction", cik, changes)
 
 
+async def record_position_changes(
+    conn: AsyncConnection[Any], manager_cik: int, changes: Sequence[ValueChange]
+) -> list[int]:
+    """Log changes to a curated manager's stored 13F positions (E9); their ids, in order."""
+    return await _record(conn, "fund_position", manager_cik, changes)
+
+
 async def _record(
     conn: AsyncConnection[Any], entity: str, cik: int, changes: Sequence[ValueChange]
 ) -> list[int]:

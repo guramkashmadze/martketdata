@@ -1,4 +1,4 @@
-"""13F ingest for curated managers (E9-S2): one report, from its documents to stored lines.
+"""13F ingest for curated managers (E9-S2, S4): one report, from its documents to positions.
 
 1. The manager's listing (`filings`, routed by the watcher or queued by the funds backfill)
    names the filing; the manager must be in `managers`.
@@ -9,17 +9,27 @@
 3. normalize/form13f.py parses them; the cover must be the listing manager's and of the
    listing's quarter. The values' unit is decided by the filing date (2023-01-03), unless an
    override in data/f13_overrides.toml pins the filer's (normalize/holdings.py).
-4. The report and its lines are stored in one transaction. A report routed when filed queues
-   the mapping of its CUSIPs (`cusip_map`, ingest/cusips.py).
+4. The report and its lines are stored in one transaction, which builds the manager's quarter
+   again from all its reports (normalize/holdings.py: amendments in filing order, lines merged
+   by CUSIP and put or call, weights), under a lock per manager and quarter. Each stored
+   position whose shares or value change is logged in `value_changes` and announced as
+   `data.changed` (D-027): an amendment's changes, or a correction when the same report is
+   parsed again with another parser version or unit. A report routed when filed queues the
+   mapping of its CUSIPs (`cusip_map`, ingest/cusips.py).
 """
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import structlog
+from psycopg import AsyncConnection
 
-from marketdata.db.repositories import filings, holdings, managers, tasks
+from marketdata.db.repositories import filings, holdings, managers, tasks, value_changes
+from marketdata.db.repositories.holdings import StoredF13Filing
+from marketdata.ingest.announce import announce
 from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.normalize.changes import Reason
 from marketdata.normalize.cusips import CUSIP_MAP, PENDING
 from marketdata.normalize.filing_index import IndexDocument, parse_filing_index
 from marketdata.normalize.filings import F13_FORMS
@@ -31,12 +41,19 @@ from marketdata.normalize.form13f import (
 )
 from marketdata.normalize.holdings import (
     F13Record,
+    FiledLine,
+    PeriodFiling,
+    ServedPosition,
     UnitOverride,
     UnitOverrideError,
     UnitRule,
+    lines_in_force,
     parse_unit_overrides,
+    position_changes,
+    positions,
     value_unit,
 )
+from marketdata.normalize.webhooks import DATA_CHANGED
 from marketdata.sec import urls
 
 log = structlog.get_logger(__name__)
@@ -82,6 +99,8 @@ class F13Report:
     entries_match: bool | None  # the table has the summary page's line count (None: none given)
     totals_match: bool | None  # the values add up to the summary page's total
     fetched: int  # documents fetched now; the others were read from the raw store
+    positions: int  # the manager's positions at the quarter end, after this report
+    changes: int  # stored positions this run changed (value_changes rows)
 
 
 class F13Ingest:
@@ -163,7 +182,10 @@ class F13Ingest:
             table_raw_key=table_key,
         )
         async with self._connect() as conn, conn.transaction():
+            await holdings.lock_period(conn, cik, cover.report_period)
+            previous = await holdings.get_filing(conn, accession_no)
             await holdings.store(conn, record, method=METHOD, version=PARSER_VERSION)
+            built, changes = await _build_quarter(conn, record, previous)
             if live:
                 await tasks.enqueue(conn, CUSIP_MAP, PENDING, {}, force=True)
         report = F13Report(
@@ -178,6 +200,8 @@ class F13Ingest:
                 None if cover.value_total is None else cover.value_total == record.value_sum
             ),
             fetched=sum((index_fetched, cover_fetched, table_fetched)),
+            positions=built,
+            changes=changes,
         )
         log.info(
             "f13_stored",
@@ -191,8 +215,94 @@ class F13Ingest:
             entries_match=report.entries_match,
             totals_match=report.totals_match,
             fetched=report.fetched,
+            positions=built,
+            changes=changes,
         )
         return report
+
+
+async def _build_quarter(
+    conn: AsyncConnection[Any], record: F13Record, previous: StoredF13Filing | None
+) -> tuple[int, int]:
+    """Build the manager's quarter again from all its stored reports; log and announce the
+    stored positions that change. Returns the positions and the changes."""
+    cik, period = record.manager_cik, record.cover.report_period
+    stored_filings = await holdings.period_filings(conn, cik, period)
+    lines = await holdings.lines(conn, [filing.accession_no for filing in stored_filings])
+    by_filing: dict[str, list[FiledLine]] = {}
+    for line in lines:
+        by_filing.setdefault(line.accession_no, []).append(
+            FiledLine(
+                line.accession_no,
+                line.line_no,
+                line.cusip,
+                line.put_call,
+                line.share_type,
+                line.name_of_issuer,
+                line.title_of_class,
+                line.figi,
+                line.shares,
+                line.value_as_filed,
+                line.value_usd,
+                line.other_managers,
+            )
+        )
+    in_force = lines_in_force(
+        [
+            PeriodFiling(
+                filing.accession_no,
+                filing.form,
+                filing.filed_at,
+                filing.amendment_type,
+                tuple(by_filing.get(filing.accession_no, ())),
+            )
+            for filing in stored_filings
+        ]
+    )
+    if in_force.repeated:
+        log.warning(
+            "f13_new_holdings_repeated",
+            cik=cik,
+            report_period=period.isoformat(),
+            lines=[f"{accession} line {line_no}" for accession, line_no in in_force.repeated],
+        )
+    built = positions(in_force)
+    stored = [
+        ServedPosition(position.cusip, position.put_call, position.shares, position.value_usd)
+        for position in await holdings.positions(conn, cik, period)
+    ]
+    reason, detail = _reason(record, previous)
+    found = position_changes(cik, period, stored, built, reason, detail)
+    await holdings.replace_positions(conn, cik, period, built)
+    for change_id in await value_changes.record_position_changes(conn, cik, found):
+        await announce(conn, DATA_CHANGED, str(change_id))
+    return len(built), len(found)
+
+
+def _reason(record: F13Record, previous: StoredF13Filing | None) -> tuple[Reason, str]:
+    """Why a stored position changes: the same report parsed again (a correction), or another
+    report of the quarter (an amendment)."""
+    period = record.cover.report_period.isoformat()
+    if previous is not None:
+        if previous.extractor_version != PARSER_VERSION:
+            what = f"parser version {previous.extractor_version} to {PARSER_VERSION}"
+        elif previous.value_unit != record.unit.unit:
+            what = (
+                f"values read in {record.unit.unit}, not {previous.value_unit} "
+                f"({record.unit.rule})"
+            )
+        else:
+            what = "the report was parsed again"
+        return "correction", f"{record.form} {record.accession_no} for {period}: {what}"
+    if record.form == "13F-HR/A":
+        kind = record.cover.amendment_type or "no amendment type"
+        return "amendment", (
+            f"13F-HR/A {record.accession_no} ({kind}), filed {record.filed_at}, amends the "
+            f"report for {period}"
+        )
+    return "amendment", (
+        f"13F-HR {record.accession_no}, filed {record.filed_at}, reports {period} again"
+    )
 
 
 def _documents(

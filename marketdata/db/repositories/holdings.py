@@ -1,7 +1,10 @@
-"""13F reports and their lines as filed (E9-S2, PLAN.md §7): `f13_filings` and `holdings_raw`.
+"""13F reports, their lines as filed and the positions built from them (E9-S2, S4, PLAN.md
+§7): `f13_filings`, `holdings_raw` and `fund_positions`.
 
 A report is stored whole each time it is parsed: its row is upserted, its lines are upserted by
-number, and lines a new parser version no longer finds are deleted.
+number, and lines a new parser version no longer finds are deleted. A manager's quarter is then
+built again from all its reports, under a lock per manager and quarter, so two reports of one
+quarter stored at once never interleave; only positions that change are written.
 """
 
 from collections.abc import Sequence
@@ -13,7 +16,7 @@ from psycopg import AsyncConnection
 from psycopg.rows import class_row
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.normalize.holdings import F13Record, in_dollars
+from marketdata.normalize.holdings import F13Record, Position, in_dollars
 
 
 class StoredF13Filing(BaseModel):
@@ -232,3 +235,132 @@ async def lines(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list[S
     async with conn.cursor(row_factory=class_row(StoredHolding)) as cur:
         await cur.execute(_LINES, {"accessions": list(accessions)})
         return await cur.fetchall()
+
+
+# --- E9-S4: positions.
+
+
+class StoredPosition(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    manager_cik: int
+    report_period: date
+    cusip: str
+    put_call: str | None
+    share_type: str
+    name_of_issuer: str | None
+    title_of_class: str | None
+    figi: str | None
+    shares: Decimal
+    value_usd: Decimal
+    weight_pct: Decimal | None
+    lines: int
+    source_accessions: list[str]
+    quality_flags: list[str]
+    updated_at: datetime
+
+
+_POSITION_COLUMNS = """
+    manager_cik, report_period, cusip, put_call, share_type, name_of_issuer, title_of_class,
+    figi, shares, value_usd, weight_pct, lines, source_accessions, quality_flags, updated_at
+"""
+_LOCK_PERIOD = """
+    select pg_advisory_xact_lock(
+      hashtextextended('marketdata.f13:' || %(cik)s || ':' || %(period)s, 0))
+"""
+_POSITIONS = f"""
+    select {_POSITION_COLUMNS} from fund_positions
+    where manager_cik = %(cik)s and report_period = %(period)s
+    order by value_usd desc, cusip, put_call nulls first
+"""
+# updated_at moves only when a value changes, so writing an unchanged position changes nothing.
+_UPSERT_POSITION = """
+    insert into fund_positions (
+      manager_cik, report_period, cusip, put_call, share_type, name_of_issuer, title_of_class,
+      figi, shares, value_usd, weight_pct, lines, source_accessions, quality_flags
+    ) values (
+      %(manager_cik)s, %(report_period)s, %(cusip)s, %(put_call)s, %(share_type)s,
+      %(name_of_issuer)s, %(title_of_class)s, %(figi)s, %(shares)s, %(value_usd)s,
+      %(weight_pct)s, %(lines)s, %(source_accessions)s, %(quality_flags)s
+    )
+    on conflict on constraint fund_positions_key do update set
+      share_type = excluded.share_type, name_of_issuer = excluded.name_of_issuer,
+      title_of_class = excluded.title_of_class, figi = excluded.figi,
+      shares = excluded.shares, value_usd = excluded.value_usd,
+      weight_pct = excluded.weight_pct, lines = excluded.lines,
+      source_accessions = excluded.source_accessions,
+      quality_flags = excluded.quality_flags, updated_at = now()
+    where (
+      fund_positions.share_type, fund_positions.name_of_issuer, fund_positions.title_of_class,
+      fund_positions.figi, fund_positions.shares, fund_positions.value_usd,
+      fund_positions.weight_pct, fund_positions.lines, fund_positions.source_accessions,
+      fund_positions.quality_flags
+    ) is distinct from (
+      excluded.share_type, excluded.name_of_issuer, excluded.title_of_class, excluded.figi,
+      excluded.shares, excluded.value_usd, excluded.weight_pct, excluded.lines,
+      excluded.source_accessions, excluded.quality_flags
+    )
+"""
+_DELETE_OTHER_POSITIONS = """
+    delete from fund_positions
+    where manager_cik = %(cik)s and report_period = %(period)s
+      and (cusip, coalesce(put_call, '')) not in (
+        select * from unnest(%(cusips)s::text[], %(put_calls)s::text[]))
+"""
+
+
+async def lock_period(conn: AsyncConnection[Any], manager_cik: int, report_period: date) -> None:
+    """Wait until no other transaction builds this manager's quarter; released at commit."""
+    await conn.execute(_LOCK_PERIOD, {"cik": str(manager_cik), "period": report_period.isoformat()})
+
+
+async def positions(
+    conn: AsyncConnection[Any], manager_cik: int, report_period: date
+) -> list[StoredPosition]:
+    """A manager's stored positions at a quarter end, largest value first."""
+    async with conn.cursor(row_factory=class_row(StoredPosition)) as cur:
+        await cur.execute(_POSITIONS, {"cik": manager_cik, "period": report_period})
+        return await cur.fetchall()
+
+
+async def replace_positions(
+    conn: AsyncConnection[Any],
+    manager_cik: int,
+    report_period: date,
+    built: Sequence[Position],
+) -> tuple[int, int]:
+    """Make the quarter's positions exactly `built`; returns (rows written, rows removed)."""
+    rows = [
+        {
+            "manager_cik": manager_cik,
+            "report_period": report_period,
+            "cusip": position.cusip,
+            "put_call": position.put_call,
+            "share_type": position.share_type,
+            "name_of_issuer": position.name_of_issuer,
+            "title_of_class": position.title_of_class,
+            "figi": position.figi,
+            "shares": position.shares,
+            "value_usd": position.value_usd,
+            "weight_pct": position.weight_pct,
+            "lines": position.lines,
+            "source_accessions": list(position.source_accessions),
+            "quality_flags": list(position.quality_flags),
+        }
+        for position in built
+    ]
+    async with conn.cursor() as cur:
+        written = 0
+        if rows:
+            await cur.executemany(_UPSERT_POSITION, rows, returning=False)
+            written = cur.rowcount
+        await cur.execute(
+            _DELETE_OTHER_POSITIONS,
+            {
+                "cik": manager_cik,
+                "period": report_period,
+                "cusips": [position.cusip for position in built],
+                "put_calls": [position.put_call or "" for position in built],
+            },
+        )
+        return written, cur.rowcount

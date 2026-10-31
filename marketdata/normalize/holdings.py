@@ -17,12 +17,14 @@ changes one (§9.5).
 
 import statistics
 import tomllib
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
+from fractions import Fraction
 from typing import Literal, cast
 
+from marketdata.normalize.changes import Reason, ValueChange
 from marketdata.normalize.form13f import Cover, Holding
 
 VALUE_CUTOFF = date(2023, 1, 3)
@@ -212,3 +214,305 @@ class F13Record:
     def value_sum(self) -> Decimal:
         """The table's values added up, as filed (the summary page states its own total)."""
         return sum((holding.value for holding in self.holdings), Decimal(0))
+
+
+# --- Positions: amendments, merging and weights (E9-S4).
+
+PositionKey = tuple[str, str | None]  # CUSIP, put or call
+WEIGHT_PLACES = Decimal("0.0001")  # percent, to four places
+SHARE_TYPES_DIFFER = "share_types_differ"
+
+
+@dataclass(frozen=True)
+class FiledLine:
+    """A stored line of a report's information table, values in dollars."""
+
+    accession_no: str
+    line_no: int
+    cusip: str
+    put_call: str | None
+    share_type: str
+    name_of_issuer: str | None
+    title_of_class: str | None
+    figi: str | None
+    shares: Decimal
+    value_as_filed: Decimal
+    value_usd: Decimal
+    other_managers: str | None
+
+    def repeats(self, other: "FiledLine") -> bool:
+        """The same holding as `other`, as filed: a line a NEW HOLDINGS amendment re-lists."""
+        return (
+            self.cusip,
+            self.put_call,
+            self.share_type,
+            self.shares,
+            self.value_as_filed,
+            self.other_managers,
+        ) == (
+            other.cusip,
+            other.put_call,
+            other.share_type,
+            other.shares,
+            other.value_as_filed,
+            other.other_managers,
+        )
+
+
+@dataclass(frozen=True)
+class PeriodFiling:
+    """A stored report or amendment of one manager's quarter, with its lines."""
+
+    accession_no: str
+    form: str  # 13F-HR or 13F-HR/A
+    filed_at: date
+    amendment_type: str | None  # RESTATEMENT or NEW HOLDINGS
+    lines: tuple[FiledLine, ...]
+
+
+@dataclass(frozen=True)
+class InForce:
+    """The lines a quarter's reports leave in force, in the order they were filed."""
+
+    lines: tuple[FiledLine, ...]
+    repeated: tuple[tuple[str, int], ...]  # NEW HOLDINGS lines skipped as repeats
+
+
+def lines_in_force(filings: Sequence[PeriodFiling]) -> InForce:
+    """§9.8, in filing order: a report sets the quarter's lines; a RESTATEMENT replaces them
+    (FAQ 58: it resubmits the whole report), and so does a later 13F-HR or an amendment that
+    names no type; a NEW HOLDINGS amendment adds its lines. A NEW HOLDINGS line that repeats a
+    line in force exactly is skipped: ValueAct's amendment for Q3 2024 re-lists the whole
+    report with the one holding it adds."""
+    lines: list[FiledLine] = []
+    repeated: list[tuple[str, int]] = []
+    for filing in sorted(filings, key=lambda filing: (filing.filed_at, filing.accession_no)):
+        if filing.form == "13F-HR/A" and filing.amendment_type == "NEW HOLDINGS":
+            for line in filing.lines:
+                if any(line.repeats(earlier) for earlier in lines):
+                    repeated.append((line.accession_no, line.line_no))
+                else:
+                    lines.append(line)
+        else:
+            lines = list(filing.lines)
+    return InForce(tuple(lines), tuple(repeated))
+
+
+@dataclass(frozen=True)
+class Position:
+    """A manager's holding of one security one way (shares or principal, put or call) at a
+    quarter end: its lines added up."""
+
+    cusip: str
+    put_call: str | None
+    share_type: str
+    name_of_issuer: str | None
+    title_of_class: str | None
+    figi: str | None
+    shares: Decimal
+    value_usd: Decimal
+    weight_pct: Decimal | None  # of the long equity positions; None for options and principal
+    lines: int
+    source_accessions: tuple[str, ...]  # the reports its lines come from, in filing order
+    quality_flags: tuple[str, ...] = ()
+
+    @property
+    def key(self) -> PositionKey:
+        return (self.cusip, self.put_call)
+
+    @property
+    def is_long_equity(self) -> bool:
+        return self.put_call is None and self.share_type == "SH"
+
+
+def positions(in_force: InForce) -> list[Position]:
+    """§9.8: lines merged by CUSIP and put or call (filers split a position across lines, one
+    per other manager), largest value first. Weights are of the long equity positions (shares
+    held outright); puts, calls and principal amounts have none. Lines of one CUSIP filed as
+    both shares and principal keep the type of the larger value, flagged."""
+    groups: dict[PositionKey, list[FiledLine]] = {}
+    for line in in_force.lines:
+        groups.setdefault((line.cusip, line.put_call), []).append(line)
+    merged = []
+    for (cusip, put_call), lines in groups.items():
+        types = {line.share_type for line in lines}
+        largest = max(lines, key=lambda line: line.value_usd)
+        merged.append(
+            Position(
+                cusip=cusip,
+                put_call=put_call,
+                share_type=largest.share_type,
+                name_of_issuer=next((ln.name_of_issuer for ln in lines if ln.name_of_issuer), None),
+                title_of_class=next((ln.title_of_class for ln in lines if ln.title_of_class), None),
+                figi=next((line.figi for line in lines if line.figi), None),
+                shares=sum((line.shares for line in lines), Decimal(0)),
+                value_usd=sum((line.value_usd for line in lines), Decimal(0)),
+                weight_pct=None,
+                lines=len(lines),
+                source_accessions=tuple(dict.fromkeys(line.accession_no for line in lines)),
+                quality_flags=(SHARE_TYPES_DIFFER,) if len(types) > 1 else (),
+            )
+        )
+    total = sum((p.value_usd for p in merged if p.is_long_equity), Decimal(0))
+    weighted = [
+        replace(p, weight_pct=_weight(p.value_usd, total)) if p.is_long_equity else p
+        for p in merged
+    ]
+    return sorted(weighted, key=lambda p: (-p.value_usd, p.cusip, p.put_call or ""))
+
+
+def _weight(value: Decimal, total: Decimal) -> Decimal | None:
+    if total <= 0:
+        return None
+    return (value / total * 100).quantize(WEIGHT_PLACES, rounding=ROUND_HALF_EVEN)
+
+
+# --- Changes from the quarter before (E9-S4), decided when read, with splits.
+
+ChangeType = Literal["new", "added", "trimmed", "unchanged", "exited"]
+CHANGE_BAND = Decimal("0.01")  # more than 1% up is added, more than 1% down trimmed (§9.8)
+MIN_SPLIT_HOLDERS = 2
+MAX_SPLIT = 100
+SPLIT_ADJUSTED = "split_adjusted"
+
+
+@dataclass(frozen=True)
+class PositionChange:
+    """How a position compares with the same manager's quarter before."""
+
+    key: PositionKey
+    change_type: ChangeType
+    shares: Decimal  # now; 0 for an exited position
+    previous_shares: Decimal | None  # as filed the quarter before; None for a new one
+    shares_change: Decimal  # from the previous shares, split-adjusted when there was a split
+    split_ratio: Fraction | None  # new shares per old share, when a split is applied
+
+
+def changes(
+    now: Mapping[PositionKey, Decimal],
+    before: Mapping[PositionKey, Decimal],
+    splits: Mapping[str, Fraction] | None = None,
+) -> dict[PositionKey, PositionChange]:
+    """§9.8's change types, by shares: `new` (not held the quarter before), `added` (shares up
+    more than 1%), `trimmed` (down more than 1%), `unchanged`, `exited` (held the quarter
+    before, not now; zero shares). Shares before a split are compared in the new shares."""
+    splits = splits or {}
+    result: dict[PositionKey, PositionChange] = {}
+    for key, shares in now.items():
+        previous = before.get(key)
+        ratio = splits.get(key[0])
+        if previous is None or previous <= 0:
+            result[key] = PositionChange(key, "new", shares, previous, shares, None)
+            continue
+        adjusted = _adjusted(previous, ratio)
+        move = (shares - adjusted) / adjusted
+        kind: ChangeType = (
+            "added" if move > CHANGE_BAND else "trimmed" if move < -CHANGE_BAND else "unchanged"
+        )
+        result[key] = PositionChange(key, kind, shares, previous, shares - adjusted, ratio)
+    for key, previous in before.items():
+        if key not in now and previous > 0:
+            ratio = splits.get(key[0])
+            change = -_adjusted(previous, ratio)
+            result[key] = PositionChange(key, "exited", Decimal(0), previous, change, ratio)
+    return result
+
+
+def _adjusted(shares: Decimal, ratio: Fraction | None) -> Decimal:
+    if ratio is None:
+        return shares
+    return shares * ratio.numerator / ratio.denominator
+
+
+@dataclass(frozen=True)
+class HeldBoth:
+    """One manager's shares and value of a security at two quarter ends in a row."""
+
+    manager_cik: int
+    shares_before: Decimal
+    value_before: Decimal
+    shares_after: Decimal
+    value_after: Decimal
+
+
+def split_ratio(holders: Sequence[HeldBoth]) -> Fraction | None:
+    """A split (or a reverse split) of a security between two quarter ends: at least two
+    managers' share counts moved by the same whole ratio (10 to 1 for Netflix in November
+    2025, or 1 to 10), and the median price per share moved by its inverse, within a factor of
+    two. One manager moving by a whole ratio is a trade."""
+    counted: dict[Fraction, int] = {}
+    for holder in holders:
+        if holder.shares_before <= 0 or holder.shares_after <= 0:
+            continue
+        ratio = Fraction(holder.shares_after) / Fraction(holder.shares_before)
+        whole = ratio.denominator == 1 or ratio.numerator == 1
+        if whole and ratio != 1 and Fraction(1, MAX_SPLIT) <= ratio <= MAX_SPLIT:
+            counted[ratio] = counted.get(ratio, 0) + 1
+    if not counted:
+        return None
+    ranked = sorted(counted.items(), key=lambda item: -item[1])
+    ratio, count = ranked[0]
+    if count < MIN_SPLIT_HOLDERS or (len(ranked) > 1 and ranked[1][1] == count):
+        return None
+    before = _median_price([(h.value_before, h.shares_before) for h in holders])
+    after = _median_price([(h.value_after, h.shares_after) for h in holders])
+    if before is None or after is None or after == 0:
+        return None
+    price_move = Fraction(before) / Fraction(after)  # about the ratio after a split
+    if not ratio / 2 <= price_move <= ratio * 2:
+        return None
+    return ratio
+
+
+def _median_price(points: Sequence[tuple[Decimal, Decimal]]) -> Decimal | None:
+    prices = [value / shares for value, shares in points if shares > 0 and value > 0]
+    return statistics.median(prices) if prices else None
+
+
+# --- Value changes of stored positions (E9-S4, D-027).
+
+POSITION_FIELDS = ("shares", "value_usd")
+
+
+@dataclass(frozen=True)
+class ServedPosition:
+    """What a stored position serves, for comparison with a quarter built again."""
+
+    cusip: str
+    put_call: str | None
+    shares: Decimal
+    value_usd: Decimal
+
+
+def position_changes(
+    manager_cik: int,
+    report_period: date,
+    stored: Sequence[ServedPosition],
+    built: Sequence[Position],
+    reason: Reason,
+    detail: str,
+) -> list[ValueChange]:
+    """The changes a quarter built again makes to its stored positions: shares or value that
+    differ, and positions it no longer has (a value to null). A position not stored before is
+    not a change: the original report and a NEW HOLDINGS amendment add positions, and either
+    can be stored first."""
+    now = {position.key: position for position in built}
+    found = []
+    for old in stored:
+        key = (old.cusip, old.put_call)
+        new = now.get(key)
+        for name in POSITION_FIELDS:
+            old_value = getattr(old, name)
+            new_value = getattr(new, name) if new is not None else None
+            if old_value == new_value:
+                continue
+            entity_key = {
+                "manager_cik": str(manager_cik),
+                "report_period": report_period.isoformat(),
+                "cusip": old.cusip,
+                "field": name,
+            }
+            if old.put_call is not None:
+                entity_key["put_call"] = old.put_call
+            found.append(ValueChange(entity_key, old_value, new_value, reason, detail))
+    return found
