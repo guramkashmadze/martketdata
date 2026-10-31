@@ -150,7 +150,7 @@ async def test_a_bug_is_500_without_its_details(
     async def broken(*args: object, **kwargs: object) -> None:  # noqa: ASYNC124 - as lookup
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("marketdata.mcp_server.tools.lookup", broken)
+    monkeypatch.setattr("marketdata.service.companies.lookup", broken)
 
     async with connected(api_app, api_key) as client:
         result = await client.call_tool("lookup_company", {"query": "acme"})

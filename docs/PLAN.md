@@ -272,7 +272,7 @@ marketdata/
                          (a connection per request), params.py, examples.py (/docs), request_log.py;
                          E5b: proof_pages/ (render.py, routes.py, templates/), routes/changes.py,
                          routes/status.py
-  mcp_server/            server.py, tools.py
+  mcp_server/            server.py (the /mcp endpoint, key gate, request log), tools.py, answers.py (E6)
   web/                   E15: routes.py, templates/, static/ (vendored htmx and Chart.js)
 data/                    universe.csv, security_overrides.csv, extraction_overrides.yaml, managers.csv
                          (E7b: company_names_ka.csv, glossary_ka.csv, templates/)

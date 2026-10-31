@@ -83,21 +83,28 @@ async def recent_filings(
     ticker: str,
     *,
     form: str | None = None,
+    reports_only: bool = False,
     since: date | None = None,
     limit: int = DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> Served[CompanyFilings]:
     """A company's filings (its predecessors' too), newest first, with their events (hidden
     ones left out); of one form when `form` is given (e.g. 8-K, 'SCHEDULE 13D'), filed on or
-    after `since`. Filings apply to every filer class."""
+    after `since`. Filings apply to every filer class. Without a form, `reports_only` keeps
+    the snapshot's forms: annual, quarterly and current reports and 5% stakes in the company
+    (D-098; the MCP tool's default, D-110)."""
     if not 1 <= limit <= MAX_LIMIT:
         raise InvalidParameter(f"limit must be from 1 to {MAX_LIMIT}, got {limit}")
     security = await resolve_ticker(conn, ticker)
-    forms = [form.strip().upper()] if form else None
+    forms: Sequence[str] | None = [form.strip().upper()] if form else None
+    subject_forms: Sequence[str] | None = None
+    if forms is None and reports_only:
+        forms, subject_forms = SNAPSHOT_FORMS, STAKE_FORMS
     listed, next_cursor = await filings_page(
         conn,
         await group_of(conn, security.cik),
         forms=forms,
+        subject_forms=subject_forms,
         since=since,
         limit=limit,
         cursor=cursor,
