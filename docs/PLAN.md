@@ -220,7 +220,7 @@ Only tasks whose handler is registered are enqueued, so early epics don't fill t
 | Prices | `PriceProvider` interface; first real adapter per OD-4 | E10 (D-031) |
 | Webhook signing | stdlib `hmac` / `hashlib`; secrets encrypted at rest with `cryptography` 50 (Fernet) | Apache-2.0 or BSD-3 (E5b); pulls in cffi (MIT) and pycparser (BSD-3). It was a dev dependency of moto before |
 | API | FastAPI + uvicorn | MIT, BSD-3 |
-| MCP | Official `mcp` Python SDK, Streamable HTTP, mounted in the FastAPI app | |
+| MCP | Official `mcp` Python SDK 2.3 (E6, D-107): `MCPServer` over Streamable HTTP at `/mcp` in the FastAPI app, stateless, answering JSON | MIT. Pulls in mcp-types (MIT), jsonschema (MIT, with attrs, referencing, jsonschema-specifications and rpds-py, all MIT), pyjwt (MIT), python-multipart (Apache-2.0), sse-starlette (BSD-3) and, on Windows only, pywin32 (PSF); anyio, starlette, uvicorn, opentelemetry-api (Apache-2.0) and typing-inspection were locked already. It uses httpx2, not httpx (D-042) |
 | Scheduler | APScheduler 3.11 (D-065) | MIT; pulls in tzlocal (MIT). Only `tasks/scheduler.py` uses it; it ships no type hints, so mypy skips its imports. 4.0 is still an alpha |
 | Object storage | boto3 against the S3 API; local-folder adapter for dev | Cloudflare R2 or Backblaze B2 in production. Apache-2.0 (with botocore, s3transfer; jmespath and urllib3 MIT; python-dateutil Apache-2.0/BSD). Write-once details in D-046 |
 | Logging | structlog (JSON in live and prod, pretty in dev) | MIT/Apache-2.0. Standard-library loggers (uvicorn, alembic, psycopg) share its formatter; logs go to stderr |

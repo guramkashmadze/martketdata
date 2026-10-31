@@ -1,7 +1,8 @@
-"""Domain exceptions raised by service functions (PLAN.md §6). api/errors.py maps them to the
-error envelope (§10.1): InvalidParameter to 400, Unauthorized to 401, Forbidden to 403,
-NotFound to 404, NotApplicable to 422, RateLimited to 429. Messages say how to fix the request
-where possible."""
+"""Domain exceptions raised by service functions (PLAN.md §6), and the error code and status
+each is answered with (§10.1): InvalidParameter 400, Unauthorized 401, Forbidden 403, NotFound
+404, NotApplicable 422, RateLimited 429. The API's error envelope (api/errors.py) and the MCP
+server's tool errors and request log (mcp_server/, E6) both use `answer_of`. Messages say how
+to fix the request where possible."""
 
 
 class DomainError(Exception):
@@ -48,3 +49,29 @@ class Forbidden(AccessDenied):
 class RateLimited(AccessDenied):
     """The key made its `rate_per_min` requests in the last minute; `retry_after` says when one
     leaves it."""
+
+
+# Most specific first: RateLimited and the other access errors share a base class.
+ANSWERS: tuple[tuple[type[DomainError], int, str], ...] = (
+    (InvalidParameter, 400, "invalid_parameter"),
+    (Unauthorized, 401, "unauthorized"),
+    (Forbidden, 403, "forbidden"),
+    (NotFound, 404, "not_found"),
+    (NotApplicable, 422, "not_applicable"),
+    (RateLimited, 429, "rate_limited"),
+)
+
+INTERNAL = (500, "internal")
+INTERNAL_MESSAGE = (
+    "Something went wrong on our side. Try again later; if it keeps failing, tell us the time "
+    "of the request."
+)
+
+
+def answer_of(exc: DomainError) -> tuple[int, str]:
+    """The status and error code a domain error is answered with; 500 `internal` for a domain
+    error no row names."""
+    for kind, status, code in ANSWERS:
+        if isinstance(exc, kind):
+            return status, code
+    return INTERNAL

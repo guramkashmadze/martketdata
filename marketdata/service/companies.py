@@ -1,9 +1,11 @@
 """Company lookup (E2): ticker resolution and what data applies; coverage and the company a
-served value belongs to (E5a). The snapshot builds on these (service/snapshot.py).
+served value belongs to (E5a); companies found by name, ticker or CIK (E6). The snapshot builds
+on these (service/snapshot.py).
 
 Service functions take a database connection and read clean tables only (CLAUDE.md).
 """
 
+import re
 from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import Any, Literal, Protocol
@@ -335,5 +337,92 @@ async def coverage(
         ),
         sources=(),
         as_of=newest(company.updated_at for company in found.values()),
+        quality_flags=(),
+    )
+
+
+# --- E6: companies found by name, ticker or CIK (the MCP tool lookup_company, D-109).
+
+LOOKUP_LIMIT = 10
+MAX_QUERY = 100
+_CIK_DIGITS = 10
+
+
+class CompanyMatch(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str  # the ticker that matched, or the company's primary one
+    other_tickers: tuple[str, ...]  # its other current tickers
+    name: str | None
+    cik: int
+    filer_type: FilerType
+    covered: bool  # whether its earnings and fundamentals are served (§9.1)
+    reason: str  # why they are or aren't
+
+
+class Lookup(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    query: str
+    matches: tuple[CompanyMatch, ...]  # closest first
+
+
+def name_words(text: str) -> str:
+    """A name or a query as the search compares them: lowercase letters and digits, every other
+    run of characters one space ("Coca-Cola Co." gives "coca cola co")."""
+    return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+async def lookup(
+    conn: AsyncConnection[Any], query: str, *, limit: int = LOOKUP_LIMIT
+) -> Served[Lookup]:
+    """Up to `limit` companies whose current ticker, CIK or name matches `query`, closest first:
+    the ticker itself, its share classes, the CIK, then names that are the words, start with
+    them or contain them; within each, companies in the universe first, then by name. Only
+    companies with a current ticker are listed. Raises InvalidParameter for an empty query, one
+    over 100 characters, or one with no letter or digit."""
+    text = query.strip()
+    if not text:
+        raise InvalidParameter("query is empty: give a company name or a ticker, e.g. Apple")
+    if len(text) > MAX_QUERY:
+        raise InvalidParameter(f"query is longer than {MAX_QUERY} characters")
+    words = name_words(text)
+    if not words:
+        raise InvalidParameter(
+            f"query {text!r} has no letter or digit of a company name or ticker; names are "
+            "matched in the Latin alphabet, e.g. Apple or AAPL"
+        )
+    try:
+        ticker: str | None = canonical_ticker(text)
+    except TickerError:
+        ticker = None
+    cik = int(text) if text.isdigit() and len(text) <= _CIK_DIGITS else None
+    found = await companies.search(conn, words=words, ticker=ticker, cik=cik, limit=limit)
+    listed: dict[int, list[Security]] = {}
+    for row in await securities.list_current_for_ciks(conn, [company.cik for company in found]):
+        listed.setdefault(row.cik, []).append(row)
+    matches = []
+    for company in found:
+        tickers = [row.ticker for row in listed.get(company.cik, [])]
+        shown = company.ticker if company.rank == 0 and company.ticker else None
+        shown = shown or primary_ticker(listed.get(company.cik, []))
+        if shown is None:  # the search lists companies with a current ticker only
+            continue
+        fundamentals = capabilities_for(company).of("fundamentals")
+        matches.append(
+            CompanyMatch(
+                ticker=shown,
+                other_tickers=tuple(each for each in tickers if each != shown),
+                name=company.name,
+                cik=company.cik,
+                filer_type=company.filer_type,
+                covered=fundamentals.applies,
+                reason=fundamentals.reason,
+            )
+        )
+    return Served(
+        data=Lookup(query=text, matches=tuple(matches)),
+        sources=(),
+        as_of=newest(company.updated_at for company in found),
         quality_flags=(),
     )

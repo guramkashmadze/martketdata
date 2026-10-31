@@ -13,6 +13,7 @@ dependencies = [
     "httpx2>=2.16",          # SEC client; also what Starlette's TestClient uses (D-042)
     "jinja2>=3.1",           # proof pages (E5b), later the web UI (E15)
     "lxml>=6.1",             # press release tables and text (E7a)
+    "mcp>=2.3",              # the MCP server at /mcp (E6)
     "psycopg[binary]>=3.2",
     "psycopg-pool>=3.2",
     "pydantic>=2.9",

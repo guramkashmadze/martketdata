@@ -95,3 +95,76 @@ async def list_in_universe(conn: AsyncConnection[Any]) -> list[Company]:
     async with conn.cursor(row_factory=class_row(Company)) as cur:
         await cur.execute(_SELECT_IN_UNIVERSE)
         return await cur.fetchall()
+
+
+# --- E6: companies found by ticker, CIK or name (the MCP tool lookup_company).
+
+
+class Found(BaseModel):
+    """A company a search found: `rank` says how (lower is closer), `ticker` is the current
+    ticker that matched, for a ticker match."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cik: int
+    name: str | None
+    filer_type: FilerType
+    in_universe: bool
+    updated_at: datetime
+    rank: int
+    ticker: str | None
+
+
+# Ranks: 0 the ticker; 1 a share class of it (BRK finds BRK-A and BRK-B); 2 the CIK; 3 the whole
+# name; 4 the name starts with the words; 5 it starts with them inside a word; 6 a word in it
+# starts with them; 7 they are elsewhere in it. A name is compared as its lowercase letters and
+# digits, every other run of characters one space, as service/companies.py writes `words`.
+# Companies without a current ticker are left out: every tool takes a ticker.
+_SEARCH = """
+    with found as (
+      select cik, 0 as rank, ticker from securities
+       where valid_to is null and ticker = %(ticker)s::text
+      union all
+      select cik, 1, ticker from securities
+       where valid_to is null and ticker like %(ticker)s::text || '-%%'
+      union all
+      select cik, 2, null from companies where cik = %(cik)s::bigint
+      union all
+      select cik,
+             case when words = %(words)s::text then 3
+                  when words like %(words)s::text || ' %%' then 4
+                  when words like %(words)s::text || '%%' then 5
+                  when ' ' || words like '%% ' || %(words)s::text || '%%' then 6
+                  else 7 end,
+             null
+        from (select cik, trim(regexp_replace(lower(name), '[^a-z0-9]+', ' ', 'g')) as words
+                from companies where name is not null) named
+       where words like '%%' || %(words)s::text || '%%'
+    ),
+    best as (
+      select distinct on (cik) cik, rank, ticker
+        from found
+       where exists (select 1 from securities s where s.cik = found.cik and s.valid_to is null)
+       order by cik, rank, ticker
+    )
+    select c.cik, c.name, c.filer_type, c.in_universe, c.updated_at, best.rank, best.ticker
+      from best join companies c using (cik)
+     order by best.rank, c.in_universe desc, c.name, c.cik
+     limit %(limit)s
+"""
+
+
+async def search(
+    conn: AsyncConnection[Any],
+    *,
+    words: str | None,
+    ticker: str | None,
+    cik: int | None,
+    limit: int,
+) -> list[Found]:
+    """Companies with a current ticker whose ticker, CIK or name matches, closest first, then
+    universe companies first, then by name. `words` are lowercase letters and digits separated
+    by single spaces; None leaves the name out, as None leaves out the ticker or the CIK."""
+    async with conn.cursor(row_factory=class_row(Found)) as cur:
+        await cur.execute(_SEARCH, {"words": words, "ticker": ticker, "cik": cik, "limit": limit})
+        return await cur.fetchall()

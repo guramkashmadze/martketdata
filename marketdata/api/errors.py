@@ -9,7 +9,6 @@ Proof pages (E5b-S3) answer the same errors as an HTML page; a 401 asks the brow
 Basic credentials (the API key as the password).
 """
 
-from collections.abc import Sequence
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -21,13 +20,10 @@ from starlette.exceptions import HTTPException
 from marketdata.api.auth import PROOF_REALM
 from marketdata.api.proof_pages.render import error_page
 from marketdata.service.errors import (
+    ANSWERS,
+    INTERNAL_MESSAGE,
     DomainError,
-    Forbidden,
-    InvalidParameter,
-    NotApplicable,
-    NotFound,
     RateLimited,
-    Unauthorized,
 )
 
 
@@ -39,21 +35,6 @@ class ErrorDetail(BaseModel):
 class ErrorEnvelope(BaseModel):
     error: ErrorDetail
 
-
-# Most specific first: RateLimited and the other access errors share a base class.
-_DOMAIN: Sequence[tuple[type[DomainError], int, str]] = (
-    (InvalidParameter, 400, "invalid_parameter"),
-    (Unauthorized, 401, "unauthorized"),
-    (Forbidden, 403, "forbidden"),
-    (NotFound, 404, "not_found"),
-    (NotApplicable, 422, "not_applicable"),
-    (RateLimited, 429, "rate_limited"),
-)
-
-INTERNAL_MESSAGE = (
-    "Something went wrong on our side. Try again later; if it keeps failing, tell us the time "
-    "of the request."
-)
 
 # For the OpenAPI document: the errors every /v1 data route can answer.
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -93,7 +74,7 @@ def _answer(
 
 
 async def domain_error(request: Request, exc: Exception) -> Response:
-    for kind, status, code in _DOMAIN:
+    for kind, status, code in ANSWERS:
         if isinstance(exc, kind):
             retry_after = exc.retry_after if isinstance(exc, RateLimited) else None
             headers = {"Retry-After": str(retry_after)} if retry_after is not None else None
