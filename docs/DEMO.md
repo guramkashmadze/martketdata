@@ -247,6 +247,20 @@ The same report, with how fresh the data is, without a key:
 curl -s $BASE/v1/status | jq '.data | {freshness, golden: .accuracy.golden.earnings, cross_check: .accuracy.cross_check.rate, latency: .accuracy.latency}'
 ```
 
+## 6. The same data in an AI chat (everyone)
+
+The MCP server at `/mcp` gives AI clients the same data with the same key (E6). Connect Claude
+Code to the server started above:
+
+```bash
+claude mcp add --transport http marketdata $BASE/mcp --header "X-API-Key: $KEY"
+```
+
+Then ask it: "How did Apple's revenue and free cash flow change over the last 8 quarters?" It
+calls `get_financials` for both metrics and answers with each quarter's value and the 10-Q or
+10-K it came from, with SEC links. `docs/MCP.md` sets up Claude Desktop, Cursor, VS Code and
+the MCP Inspector, and lists the tools and example questions, one of them in Georgian.
+
 ## The integration on one page
 
 - **Auth.** `X-API-Key: mdk_...` on every `/v1` request (`/v1/status` needs none). The operator
@@ -271,6 +285,8 @@ curl -s $BASE/v1/status | jq '.data | {freshness, golden: .accuracy.golden.earni
   HMAC-SHA256 of "<t>.<raw body>">`. Check it in constant time and reject a `t` more than five
   minutes off (scripts/webhook_receiver.py); answer 2xx within 10 seconds; dedupe on `id`;
   don't rely on order. Failed deliveries are tried again about 1 and 10 minutes later.
+- **AI chats.** MCP at `/mcp` (Streamable HTTP) with the same `X-API-Key`: six read-only tools
+  over the same data, compact answers under about 8 KB (`docs/MCP.md`).
 - **What we never do.** No advice, ratings, targets or rankings; no end-user data in requests,
   responses or events; we never contact a client's users. Every response says: Information
   from public filings. Not investment advice.
