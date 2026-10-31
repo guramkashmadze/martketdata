@@ -278,6 +278,54 @@ def backfill_earnings(
     )
 
 
+@groups["backfill"].command("insiders")
+def backfill_insiders(
+    quarters: Annotated[
+        int,
+        typer.Option(min=1, max=40, help="How many quarters back, three months each."),
+    ] = 8,
+    force: Annotated[
+        bool,
+        typer.Option(help="Parse Forms 4 that were parsed before again (a new parser)."),
+    ] = False,
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="Only this universe company (repeatable); default: all."),
+    ] = None,
+) -> None:
+    """Queue an insiders backfill for each universe company whose insiders file Forms 4
+    (domestic filers and foreign private issuers); the worker runs them.
+
+    Each task brings the company's filings up to date, loads its predecessors' filings, then
+    queues the parsing of every Form 4 and 4/A on their own listings filed in the window,
+    behind live work. Exits with 1 when no universe company applies.
+    """
+    settings = _settings()
+    since = task_scheduler.months_before(datetime.now(UTC).date(), quarters * 3)
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        ciks = await _universe_ciks(conn, tickers) if tickers else None
+        return await task_scheduler.enqueue_insiders_backfills(conn, since, force=force, ciks=ciks)
+
+    queued = _queue(settings, work)
+    if not queued:
+        raise _fail("No universe company files Forms 4: run `marketdata ingest security-master`.")
+    start = since.isoformat()
+    mine = [task for task in queued if task.status == "queued" and task.payload["since"] == start]
+    typer.echo(
+        f"Queued {len(mine)} insiders backfills back to {since} for {len(queued)} universe "
+        "companies; the worker runs them."
+    )
+    if len(mine) < len(queued):
+        typer.echo(
+            f"  {len(queued) - len(mine)} were already pending and keep their own start date."
+        )
+    typer.echo(
+        "Follow them with `marketdata tasks list --kind insiders_backfill` and "
+        "`--kind form4_parse`."
+    )
+
+
 @groups["backfill"].command("facts")
 def backfill_facts(
     tickers: Annotated[

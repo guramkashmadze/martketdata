@@ -1,8 +1,9 @@
 """E3-S5: `marketdata backfill filings --years N` queues one backfill per universe company; the
 worker runs them. E7a: `marketdata backfill earnings --quarters N` queues one earnings backfill
 per domestic universe company. E4a: `marketdata backfill facts` queues one facts refresh per
-domestic universe company, and both take `--ticker`. The CLI commits, so the test removes what
-it wrote."""
+domestic universe company, and both take `--ticker`. E8: `marketdata backfill insiders
+--quarters N` queues one insiders backfill per domestic filer or foreign private issuer in the
+universe. The CLI commits, so the test removes what it wrote."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -14,11 +15,12 @@ from typer.testing import CliRunner
 
 from marketdata import cli
 from marketdata.normalize.filings import FACTS_REFRESH
-from marketdata.tasks.kinds import EARNINGS_BACKFILL, FILINGS_BACKFILL
+from marketdata.tasks.kinds import EARNINGS_BACKFILL, FILINGS_BACKFILL, INSIDERS_BACKFILL
 from marketdata.tasks.scheduler import months_before, years_before
 
 CIKS = (320193, 1652044)
 FUND = 884394  # SPY: in the universe, but earnings apply to domestic filers only (§9.1)
+FOREIGN = 1046179  # TSM: its directors and officers file Forms 4 since March 2026 (E8)
 
 
 @pytest.fixture
@@ -38,10 +40,11 @@ def universe(
     with psycopg.connect(migrated_database, autocommit=True) as conn:
         conn.execute(
             "delete from tasks where kind = any(%s)",
-            [[FILINGS_BACKFILL, EARNINGS_BACKFILL, FACTS_REFRESH]],
+            [[FILINGS_BACKFILL, EARNINGS_BACKFILL, FACTS_REFRESH, INSIDERS_BACKFILL]],
         )
-        conn.execute("delete from securities where cik = any(%s)", [list(CIKS) + [FUND]])
-        conn.execute("delete from companies where cik = any(%s)", [list(CIKS) + [FUND]])
+        others = list(CIKS) + [FUND, FOREIGN]
+        conn.execute("delete from securities where cik = any(%s)", [others])
+        conn.execute("delete from companies where cik = any(%s)", [others])
 
 
 def test_one_backfill_per_universe_company(universe: str) -> None:
@@ -144,3 +147,27 @@ def test_a_ticker_outside_the_domestic_universe_is_refused(universe: str) -> Non
         assert conn.execute(
             "select count(*) from tasks where kind = %s", [FACTS_REFRESH]
         ).fetchone() == (0,)
+
+
+def test_insiders_backfills_cover_domestic_filers_and_foreign_issuers(universe: str) -> None:
+    with psycopg.connect(universe, autocommit=True) as conn:
+        for cik, filer_type in ((FUND, "fund"), (FOREIGN, "foreign_private_issuer")):
+            conn.execute(
+                "insert into companies (cik, name, filer_type, in_universe) "
+                "values (%s, 'test', %s, true)",
+                [cik, filer_type],
+            )
+    since = months_before(datetime.now(UTC).date(), 24)
+
+    result = CliRunner().invoke(cli.app, ["backfill", "insiders"])
+
+    assert result.exit_code == 0, result.output
+    assert f"Queued 3 insiders backfills back to {since} for 3 universe companies" in result.stdout
+    with psycopg.connect(universe) as conn:
+        rows = conn.execute(
+            "select key, payload from tasks where kind = %s order by key", [INSIDERS_BACKFILL]
+        ).fetchall()
+    assert rows == [
+        (str(cik), {"cik": cik, "since": since.isoformat(), "force": False})
+        for cik in sorted((*CIKS, FOREIGN), key=str)
+    ]

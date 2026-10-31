@@ -13,19 +13,28 @@
    result doesn't depend on which filing came first. Each served trade that changes, by an
    amendment, a duplicate's removal or a new parser version, is logged in `value_changes` and
    announced as `data.changed` (D-027).
+
+The backfill (`marketdata backfill insiders`, E8-S4) works per company: it watches the company
+so its listings are current and loads its predecessors' filings (D-068), then queues a
+`form4_parse` task for each Form 4 or 4/A on their own listings filed in the window, behind
+live work (D-067). Each filing's XML is parsed like a live one: one SEC request per filing,
+none for an XML stored before (D-070).
 """
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import structlog
 from psycopg import AsyncConnection
 
-from marketdata.db.repositories import filings, insiders, value_changes
+from marketdata.db.repositories import filings, insiders, predecessors, tasks, value_changes
 from marketdata.db.repositories.insiders import StoredLine, supersession_of
 from marketdata.ingest.announce import announce
 from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.ingest.watcher import FilingsWatcher
 from marketdata.normalize.changes import ValueChange
+from marketdata.normalize.filings import FORM4_PARSE, INSIDER_FORMS
 from marketdata.normalize.form4 import (
     METHOD,
     PARSER_VERSION,
@@ -221,3 +230,53 @@ class Form4Ingest:
                 continue
             return name, raw_key, data, fetched
         raise Form4Refused(f"{accession_no}: the filing folder has no Form 4 XML")
+
+
+@dataclass(frozen=True)
+class InsidersBackfillReport:
+    cik: int
+    since: date
+    predecessors: tuple[int, ...]  # whose filings were loaded too
+    queued: tuple[str, ...]  # accession numbers whose form4_parse task is queued
+
+
+class InsidersBackfill:
+    def __init__(self, fetcher: RawFetcher, connect: Connect, kinds: frozenset[str]) -> None:
+        self._fetcher = fetcher
+        self._connect = connect
+        self._kinds = kinds  # registered task kinds (§4)
+
+    async def run(self, cik: int, since: date, *, force: bool = False) -> InsidersBackfillReport:
+        """Queue the Forms 4 and 4/A about `cik` and its predecessors filed on or after
+        `since`. `force` parses filings parsed before again (a new parser version)."""
+        if FORM4_PARSE not in self._kinds:
+            raise RuntimeError(f"{FORM4_PARSE} is not a registered task kind")
+        async with self._connect() as conn:
+            earlier = await predecessors.predecessors_of(conn, cik)
+        watcher = FilingsWatcher(self._fetcher, self._connect, self._kinds)
+        await watcher.watch(cik)
+        for predecessor in earlier:
+            await watcher.backfill(predecessor, since)
+        queued: list[str] = []
+        async with self._connect() as conn, conn.transaction():
+            listed = await filings.issuer_listings(
+                conn, [cik, *earlier], sorted(INSIDER_FORMS), since
+            )
+            for filing in listed:
+                await tasks.enqueue(
+                    conn,
+                    FORM4_PARSE,
+                    filing.accession_no,
+                    {"cik": filing.cik, "accession_no": filing.accession_no},
+                    force=force,
+                    priority=tasks.PRIORITY_BACKFILL,
+                )
+                queued.append(filing.accession_no)
+        log.info(
+            "insiders_backfill_queued",
+            cik=cik,
+            since=since.isoformat(),
+            predecessors=earlier,
+            queued=len(queued),
+        )
+        return InsidersBackfillReport(cik, since, tuple(earlier), tuple(queued))

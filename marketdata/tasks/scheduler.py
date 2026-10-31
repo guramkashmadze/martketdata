@@ -35,6 +35,7 @@ from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
     FILINGS_BACKFILL,
     FILINGS_WATCH,
+    INSIDERS_BACKFILL,
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
 )
@@ -129,6 +130,34 @@ async def enqueue_public_float(conn: AsyncConnection[Any], day: date) -> Task:
         force=True,
         priority=queue.PRIORITY_BACKFILL,
     )
+
+
+async def enqueue_insiders_backfills(
+    conn: AsyncConnection[Any],
+    since: date,
+    *,
+    force: bool = False,
+    ciks: Collection[int] | None = None,
+) -> list[Task]:
+    """On demand (`marketdata backfill insiders`): one insiders_backfill per universe company
+    whose insiders file Forms 4 (domestic filers and foreign private issuers, E8), or per one
+    of `ciks`, back to `since`, behind live and periodic work (D-067). `force` parses filings
+    parsed before again."""
+    payload = {"since": since.isoformat(), "force": force}
+    universe = await companies.list_in_universe(conn)
+    return [
+        await queue.enqueue(
+            conn,
+            INSIDERS_BACKFILL,
+            str(company.cik),
+            {"cik": company.cik, **payload},
+            force=True,
+            priority=queue.PRIORITY_BACKFILL,
+        )
+        for company in universe
+        if company.filer_type in ("domestic", "foreign_private_issuer")
+        and (ciks is None or company.cik in ciks)
+    ]
 
 
 async def _domestic_universe(

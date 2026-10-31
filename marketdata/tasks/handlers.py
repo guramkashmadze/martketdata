@@ -14,7 +14,7 @@ from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
 from marketdata.ingest.facts import FactsLoader
-from marketdata.ingest.form4 import Form4Ingest, Form4Refused
+from marketdata.ingest.form4 import Form4Ingest, Form4Refused, InsidersBackfill
 from marketdata.ingest.public_float import PublicFloatLoader
 from marketdata.ingest.security_master import (
     SecurityMasterLoader,
@@ -31,6 +31,7 @@ from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
     FILINGS_BACKFILL,
     FILINGS_WATCH,
+    INSIDERS_BACKFILL,
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
 )
@@ -133,6 +134,14 @@ async def parse_insider_filing(context: TaskContext, task: Task) -> None:
         await Form4Ingest(context.fetcher, context.connect).run(cik, accession_no)
     except (Form4Refused, SecFileError) as exc:
         raise TaskRefused(str(exc)) from exc
+
+
+async def backfill_insiders(context: TaskContext, task: Task) -> None:
+    """One company's Forms 4 back to the payload's `since` date (E8-S4): queues a form4_parse
+    task for each, after loading its predecessors' filings."""
+    cik, since = _cik(task), _since(task)
+    backfill = InsidersBackfill(context.fetcher, context.connect, context.kinds)
+    await backfill.run(cik, since, force=task.payload.get("force") is True)
 
 
 async def load_public_float(context: TaskContext, task: Task) -> None:
@@ -240,6 +249,7 @@ def build_registry(
     registry.register(EARNINGS_BACKFILL, backfill_earnings)
     registry.register(FACTS_REFRESH, refresh_facts)
     registry.register(FORM4_PARSE, parse_insider_filing)
+    registry.register(INSIDERS_BACKFILL, backfill_insiders)
     registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
     registry.register(WEBHOOK_PUBLISH, publish_event)
     registry.register(

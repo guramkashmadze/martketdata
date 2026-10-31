@@ -96,6 +96,14 @@ _OF_FORMS = f"""
     order by accession_no, cik
 """
 
+# E8: the Forms 4 of these issuers, from their own listings (no file number, D-063).
+_ISSUER_LISTINGS = f"""
+    select distinct on (accession_no) {_COLUMNS} from filings
+    where cik = any(%(ciks)s) and form = any(%(forms)s) and file_number is null
+      and filed_at >= %(since)s
+    order by accession_no, cik
+"""
+
 # E5a: every listing of these filings (a joint filing or a 13D is listed under two companies).
 _BY_ACCESSION = f"""
     select {_COLUMNS} from filings where accession_no = any(%(accessions)s)
@@ -224,6 +232,18 @@ async def of_forms(
     """These companies' filings of these forms, each accession once, oldest first."""
     async with conn.cursor(row_factory=class_row(Filing)) as cur:
         await cur.execute(_OF_FORMS, {"ciks": list(ciks), "forms": list(forms)})
+        listed = await cur.fetchall()
+    return sorted(listed, key=lambda filing: (filing.filed_at, filing.accession_no))
+
+
+async def issuer_listings(
+    conn: AsyncConnection[Any], ciks: Sequence[int], forms: Sequence[str], since: date
+) -> list[Filing]:
+    """These companies' own listings (no file number) of these forms filed on or after `since`,
+    each accession once, oldest first: the Forms 4 about them, not their trades in others."""
+    params = {"ciks": list(ciks), "forms": list(forms), "since": since}
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_ISSUER_LISTINGS, params)
         listed = await cur.fetchall()
     return sorted(listed, key=lambda filing: (filing.filed_at, filing.accession_no))
 
