@@ -2,6 +2,7 @@
 
 import pytest
 
+from marketdata.openfigi.client import MAPPING_URL
 from marketdata.sec import urls
 from marketdata.sec.urls import SecUrl
 
@@ -157,9 +158,9 @@ def test_insider_13f_and_nport_data_sets() -> None:
     assert urls.www_path(link) == "https://www.sec.gov" + link
 
 
-def test_openfigi_is_listed_but_not_an_sec_url() -> None:
-    assert urls.OPENFIGI_MAPPING == "https://api.openfigi.com/v3/mapping"
-    assert urls.parse(urls.OPENFIGI_MAPPING) is None
+def test_openfigi_is_not_an_sec_url() -> None:
+    # E9-S3: OpenFIGI's URL lives with its own client, which calls nothing else (D-121).
+    assert urls.parse(MAPPING_URL) is None
 
 
 # --- Parsing URLs back ---

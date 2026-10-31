@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     # filers whose 13F values are in another unit than the filing date says (E9-S2).
     managers_file: Path = Path("data/managers.csv")
     f13_overrides_file: Path = Path("data/f13_overrides.toml")
+    # E9-S3. Optional: OpenFIGI maps CUSIPs without a key at a tenth of the rate (D-121).
+    openfigi_api_key: SecretStr | None = None
 
     @property
     def base_url(self) -> str | None:

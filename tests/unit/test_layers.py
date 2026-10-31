@@ -22,6 +22,7 @@ IO_MODULES = (
     "marketdata.ingest",
     "marketdata.llm",
     "marketdata.mcp_server",
+    "marketdata.openfigi",
     "marketdata.prices",
     "marketdata.sec",
     "marketdata.service",
@@ -141,6 +142,32 @@ def test_sec_package_is_transport_and_storage_only() -> None:
         for name in ("api", "db", "ingest", "mcp_server", "service", "tasks", "web", "webhooks")
     )
     assert _violations(("marketdata.sec",), banned) == []
+
+
+def test_openfigi_package_is_transport_only() -> None:
+    """E9-S3: openfigi/ calls OpenFIGI; storing and recording what it says is ingest/'s job."""
+    banned = tuple(
+        f"marketdata.{name}"
+        for name in ("api", "db", "ingest", "mcp_server", "service", "tasks", "web", "webhooks")
+    )
+    assert _violations(("marketdata.openfigi",), banned) == []
+
+
+def test_openfigi_is_named_only_in_its_package() -> None:
+    found = []
+    for module, tree in _modules().items():
+        if _within(module, ("marketdata.openfigi",)):
+            continue
+        docstrings = _docstring_nodes(tree)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstrings
+                and "openfigi.com" in node.value.lower()
+            ):
+                found.append(f"{module}:{node.lineno}")
+    assert found == []
 
 
 def test_sql_lives_only_in_repositories() -> None:

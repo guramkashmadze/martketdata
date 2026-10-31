@@ -12,6 +12,7 @@ import structlog
 
 from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
+from marketdata.ingest.cusips import CusipMapper
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
 from marketdata.ingest.f13 import F13Ingest, F13Refused, read_unit_overrides
 from marketdata.ingest.facts import FactsLoader
@@ -23,11 +24,13 @@ from marketdata.ingest.security_master import (
     read_predecessors,
 )
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
+from marketdata.normalize.cusips import CUSIP_MAP, MappingError
 from marketdata.normalize.filings import EARNINGS_EXTRACT, F13_PARSE, FACTS_REFRESH, FORM4_PARSE
 from marketdata.normalize.holdings import UnitOverrideError
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError
 from marketdata.normalize.webhooks import WEBHOOK_DELIVER, WEBHOOK_PUBLISH
+from marketdata.openfigi.client import OpenFigiClient, OpenFigiError, OpenFigiUnavailable
 from marketdata.sec import urls
 from marketdata.tasks.kinds import (
     EARNINGS_BACKFILL,
@@ -144,10 +147,25 @@ async def parse_13f_filing(context: TaskContext, task: Task) -> None:
     stored. A filing that isn't a curated manager's 13F, or a broken unit overrides file, is
     refused: retrying can't help."""
     cik, accession_no = _cik(task), _accession(task)
+    live = task.payload.get("live") is True
     try:
         overrides = read_unit_overrides(context.settings.f13_overrides_file)
-        await F13Ingest(context.fetcher, context.connect, overrides).run(cik, accession_no)
+        ingest = F13Ingest(context.fetcher, context.connect, overrides)
+        await ingest.run(cik, accession_no, live=live)
     except (F13Refused, SecFileError, UnitOverrideError) as exc:
+        raise TaskRefused(str(exc)) from exc
+
+
+async def map_cusips(context: TaskContext, task: Task) -> None:
+    """The CUSIPs of stored 13F lines not mapped yet, asked about on OpenFIGI (E9-S3). OpenFIGI
+    refusing the request (a bad key) or answering out of shape is refused: retrying can't
+    help; its rate limit and outages are retried."""
+    try:
+        async with OpenFigiClient.from_settings(context.settings) as client:
+            await CusipMapper(client, context.fetcher, context.connect).run()
+    except OpenFigiUnavailable:
+        raise
+    except (OpenFigiError, MappingError) as exc:
         raise TaskRefused(str(exc)) from exc
 
 
@@ -266,6 +284,7 @@ def build_registry(
     registry.register(FORM4_PARSE, parse_insider_filing)
     registry.register(INSIDERS_BACKFILL, backfill_insiders)
     registry.register(F13_PARSE, parse_13f_filing)
+    registry.register(CUSIP_MAP, map_cusips)
     registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
     registry.register(WEBHOOK_PUBLISH, publish_event)
     registry.register(

@@ -24,9 +24,6 @@ INSIDER_DATA_SETS = f"{WWW}/dera/data/form-345"
 F13_DATA_SETS = f"{WWW}/dera/data/form-13f"
 NPORT_DATA_SETS = f"{WWW}/data-research/sec-markets-data/form-n-port-data-sets"
 
-# Not an SEC URL, so never fetched through SecClient (it refuses other hosts). Used from E9.
-OPENFIGI_MAPPING = "https://api.openfigi.com/v3/mapping"
-
 MAX_CIK = 9_999_999_999
 _ACCESSION = re.compile(r"^(\d{10})-?(\d{2})-?(\d{6})$")
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")

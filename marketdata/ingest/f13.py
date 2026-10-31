@@ -9,7 +9,8 @@
 3. normalize/form13f.py parses them; the cover must be the listing manager's and of the
    listing's quarter. The values' unit is decided by the filing date (2023-01-03), unless an
    override in data/f13_overrides.toml pins the filer's (normalize/holdings.py).
-4. The report and its lines are stored in one transaction.
+4. The report and its lines are stored in one transaction. A report routed when filed queues
+   the mapping of its CUSIPs (`cusip_map`, ingest/cusips.py).
 """
 
 from dataclasses import dataclass
@@ -17,8 +18,9 @@ from pathlib import Path
 
 import structlog
 
-from marketdata.db.repositories import filings, holdings, managers
+from marketdata.db.repositories import filings, holdings, managers, tasks
 from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.normalize.cusips import CUSIP_MAP, PENDING
 from marketdata.normalize.filing_index import IndexDocument, parse_filing_index
 from marketdata.normalize.filings import F13_FORMS
 from marketdata.normalize.form13f import (
@@ -90,8 +92,9 @@ class F13Ingest:
         self._connect = connect
         self._overrides = overrides
 
-    async def run(self, cik: int, accession_no: str) -> F13Report:
-        """Fetch, parse and store the 13F-HR or 13F-HR/A `accession_no` from `cik`'s listing."""
+    async def run(self, cik: int, accession_no: str, *, live: bool = False) -> F13Report:
+        """Fetch, parse and store the 13F-HR or 13F-HR/A `accession_no` from `cik`'s listing.
+        A `live` report (routed when filed) queues the mapping of its new CUSIPs."""
         accession_no = urls.accession_no(accession_no)
         async with self._connect() as conn:
             listed = [
@@ -161,6 +164,8 @@ class F13Ingest:
         )
         async with self._connect() as conn, conn.transaction():
             await holdings.store(conn, record, method=METHOD, version=PARSER_VERSION)
+            if live:
+                await tasks.enqueue(conn, CUSIP_MAP, PENDING, {}, force=True)
         report = F13Report(
             accession_no=accession_no,
             manager_cik=cik,

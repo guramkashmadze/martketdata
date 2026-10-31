@@ -26,7 +26,7 @@ from marketdata.db.repositories import raw_objects
 from marketdata.db.repositories.raw_objects import RawObject
 from marketdata.sec import urls
 from marketdata.sec.client import SecClient
-from marketdata.sec.raw_store import RawStore, RawStoreError, key_for_url, sha256
+from marketdata.sec.raw_store import RawStore, RawStoreError, check_key, key_for_url, sha256
 
 # A pool's `connection` method: a connection whose transaction commits on exit.
 Connect = Callable[[], AbstractAsyncContextManager[AsyncConnection[Any]]]
@@ -90,6 +90,13 @@ class RawFetcher:
     async def read(self, key: str) -> bytes:
         """A file stored earlier, from the raw store; no SEC request."""
         return await self._store.get(key)
+
+    async def keep(
+        self, url: str, key: str, data: bytes, content_type: str | None, fetched_at: datetime
+    ) -> None:
+        """Keep bytes from another source than the SEC (E9: OpenFIGI's requests and responses)
+        in the raw store, recorded in raw_objects, before they are parsed."""
+        await self._keep(url, check_key(key), data, content_type, fetched_at)
 
     async def _keep(
         self, url: str, key: str, data: bytes, content_type: str | None, fetched_at: datetime
