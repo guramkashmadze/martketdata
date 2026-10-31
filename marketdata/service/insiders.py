@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from marketdata.db.repositories import insiders
 from marketdata.db.repositories.insiders import StoredFiling, StoredLine
+from marketdata.normalize.insider_data_set import OurFiling
 from marketdata.normalize.insiders import LineKey
 from marketdata.sec import urls
 
@@ -101,3 +102,25 @@ def _serving(stored: dict[LineKey, StoredLine], key: LineKey) -> StoredLine | No
             return None
         line = stored.get((line.superseded_by, line.superseded_line))
     return None
+
+
+async def filed_in(
+    conn: AsyncConnection[Any], ciks: Sequence[int], first: date, last: date
+) -> dict[str, OurFiling]:
+    """The Forms 4 about these issuers filed from `first` to `last` as we parsed them, every
+    line as filed, superseded or not (E8-S4: compared with the SEC's data set)."""
+    stored = await insiders.filed_between(conn, ciks, first, last)
+    lines: dict[str, list[StoredLine]] = {filing.accession_no: [] for filing in stored}
+    for line in await insiders.lines(conn, list(lines)):
+        lines[line.accession_no].append(line)
+    return {
+        filing.accession_no: OurFiling(
+            filing.accession_no,
+            filing.issuer_cik,
+            filing.form,
+            filing.filed_at,
+            filing.rule_10b5_1,
+            lines[filing.accession_no],
+        )
+        for filing in stored
+    }

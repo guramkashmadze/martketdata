@@ -32,6 +32,7 @@ from marketdata.ingest.cross_check import (
 from marketdata.ingest.facts import RebuildReport, rebuild_all
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.golden import GoldenLoad, load_golden
+from marketdata.ingest.insider_data_set import fetch_data_set
 from marketdata.ingest.sec_lock import SecProcessBusy, sec_process_lock
 from marketdata.ingest.security_master import (
     LoadReport,
@@ -43,6 +44,12 @@ from marketdata.ingest.security_master import (
 )
 from marketdata.log import configure_logging
 from marketdata.normalize.golden import GoldenFileError
+from marketdata.normalize.insider_data_set import (
+    FilingCheck,
+    quarter_dates,
+    read_data_set,
+    reconcile,
+)
 from marketdata.normalize.metrics import CALC_VERSION
 from marketdata.normalize.public_float import Suggestion
 from marketdata.normalize.quality import DESCRIPTIONS
@@ -51,6 +58,7 @@ from marketdata.normalize.universe import DataFileError, SecurityOverride, Unive
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
 from marketdata.service import clients as api_clients
+from marketdata.service import insiders as insider_service
 from marketdata.service import webhooks as webhook_service
 from marketdata.service.accuracy import AccuracyReport, Rate, accuracy_report
 from marketdata.service.companies import (
@@ -95,6 +103,7 @@ _GROUPS = [
     ("clients", "Create and list API clients.", "E5a"),
     ("keys", "Create, list and revoke API keys.", "E5a"),
     ("webhooks", "Manage webhook destinations and send test events.", "E5b"),
+    ("insiders", "Insider trades from Form 4, checked against the SEC's data set.", "E8"),
     ("usage", "API and MCP usage per client.", "E11"),
 ]
 
@@ -304,7 +313,7 @@ def backfill_insiders(
     since = task_scheduler.months_before(datetime.now(UTC).date(), quarters * 3)
 
     async def work(conn: AsyncConnection[Any]) -> list[Task]:
-        ciks = await _universe_ciks(conn, tickers) if tickers else None
+        ciks = await _universe_ciks(conn, tickers, insiders=True) if tickers else None
         return await task_scheduler.enqueue_insiders_backfills(conn, since, force=force, ciks=ciks)
 
     queued = _queue(settings, work)
@@ -375,17 +384,26 @@ def backfill_public_float() -> None:
     typer.echo("Follow it with `marketdata tasks list --kind public_float_load`.")
 
 
-async def _universe_ciks(conn: AsyncConnection[Any], tickers: list[str]) -> list[int]:
-    """The CIKs of these tickers, each of a domestic universe company (InvalidParameter if
-    not)."""
+async def _universe_ciks(
+    conn: AsyncConnection[Any], tickers: list[str], *, insiders: bool = False
+) -> list[int]:
+    """The CIKs of these tickers, each of a domestic universe company, or for insiders (E8) a
+    domestic filer or foreign private issuer (InvalidParameter if not)."""
+    classes = ("domestic", "foreign_private_issuer") if insiders else ("domestic",)
     ciks = []
     for text in tickers:
         security = await resolve_ticker(conn, text)
-        if not security.in_universe or security.filer_type != "domestic":
+        if not security.in_universe or security.filer_type not in classes:
             where = "in the universe" if security.in_universe else "outside the universe"
+            loaded = (
+                "insider Forms 4 are loaded for domestic filers and foreign private issuers "
+                "in the universe only"
+                if insiders
+                else "facts and earnings are loaded for domestic universe companies only"
+            )
             raise InvalidParameter(
-                f"{security.ticker} is a {security.filer_type} company {where}: facts and "
-                "earnings are loaded for domestic universe companies only (PLAN.md §9.1)"
+                f"{security.ticker} is a {security.filer_type} company {where}: {loaded} "
+                "(PLAN.md §9.1)"
             )
         ciks.append(security.cik)
     return ciks
@@ -401,6 +419,80 @@ def _queue(
         raise _fail(str(exc), 2) from None
     except NotFound as exc:
         raise _fail(str(exc)) from None
+
+
+# E8-S4: a sample across sectors and filers: a heavy filer of Forms 4 under 10b5-1 plans
+# (TEAM), joint filers (CRWV), two share classes (GOOG), a bank (JPM) and a foreign issuer (TSM).
+RECONCILE_SAMPLE = ("AAPL", "ACN", "CRWV", "GOOG", "JPM", "META", "NFLX", "TEAM", "TSM", "WMT")
+
+
+@groups["insiders"].command("reconcile")
+def insiders_reconcile(
+    quarter: Annotated[str, typer.Option(help="The data set's quarter, e.g. 2026q3.")],
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="A company to compare (repeatable); default: a sample."),
+    ] = None,
+) -> None:
+    """Compare our parse of each Form 4 with the SEC's Insider Transactions Data Set.
+
+    The quarter's ZIP is fetched once, raw first (later runs read the raw store), so this
+    takes the SEC slot. For each company, every Form 4 and 4/A filed in the quarter is compared
+    on both sides: form, filing date, 10b5-1 box and each trade; differences are listed.
+    """
+    settings = _settings()
+    try:
+        first, last = quarter_dates(quarter)
+        sec = SecClient.from_settings(settings)
+        store = create_raw_store(settings)
+    except ValueError as exc:
+        raise _fail(str(exc), 2) from None
+    except SettingsError as exc:
+        raise _fail(str(exc), 2) from None
+    database_url = str(settings.database_url)
+    wanted = tickers or list(RECONCILE_SAMPLE)
+
+    async def run() -> tuple[str, bool, dict[int, str], list[FilingCheck]]:
+        async with (
+            sec_process_lock(database_url, "marketdata insiders reconcile"),
+            sec,
+            create_pool(database_url, max_size=2) as pool,
+        ):
+            async with pool.connection() as conn:
+                ciks = await _universe_ciks(conn, wanted, insiders=True)
+                names = dict(zip(ciks, [text.upper() for text in wanted], strict=True))
+                ours = await insider_service.filed_in(conn, ciks, first, last)
+            fetcher = RawFetcher(sec, store, pool.connection)
+            key, data, fetched = await fetch_data_set(fetcher, pool.connection, quarter)
+        return key, fetched, names, reconcile(ours, read_data_set(data, ciks))
+
+    try:
+        key, fetched, names, checks = asyncio.run(run())
+    except InvalidParameter as exc:
+        raise _fail(str(exc), 2) from None
+    except (NotFound, SecError, SecFileError, RawStoreError, SecProcessBusy) as exc:
+        raise _fail(str(exc)) from None
+    source = "fetched now" if fetched else "read from the raw store"
+    typer.echo(
+        f"The SEC's insider data set {quarter} ({key}, {source}) against our parse of each "
+        f"Form 4 and 4/A filed {first} to {last}:"
+    )
+    for cik, ticker in names.items():
+        mine = [check for check in checks if check.issuer_cik == cik]
+        count = Counter(check.status for check in mine)
+        typer.echo(
+            f"  {ticker:<6} {len(mine):>4} filings: {count['same']} same, {count['differs']} "
+            f"differ, {count['only_ours']} only ours, {count['only_data_set']} only in the data "
+            f"set; {sum(check.lines for check in mine)} trades"
+        )
+    differing = [check for check in checks if check.status != "same"]
+    if differing:
+        typer.echo("")
+        typer.echo("Differences:")
+    for check in differing:
+        typer.echo(f"  {check.accession_no} ({names[check.issuer_cik]}): {check.status}")
+        for difference in check.differences:
+            typer.echo(f"    {difference}")
 
 
 @app.command("scheduler")

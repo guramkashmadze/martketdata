@@ -259,6 +259,12 @@ def filing_key(cik: int, accession: str, file: str) -> str:
     return check_key(f"raw/sec/{cik}/{urls.accession_no(accession)}/{file}")
 
 
+def data_set_key(data_set: str, file: str) -> str:
+    """Where a file of an SEC data set is kept (E8), e.g.
+    raw/sec/datasets/form345/2026q3_form345.zip; a landing page under its fetch time."""
+    return check_key(f"raw/sec/datasets/{data_set}/{file}")
+
+
 def api_response_key(
     endpoint: str, fetched_at: datetime, *, cik: int | None = None, parts: tuple[str, ...] = ()
 ) -> str:

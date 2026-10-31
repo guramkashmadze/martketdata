@@ -192,6 +192,12 @@ _FILINGS = f"""
     select {_FILING_COLUMNS} from insider_filings where accession_no = any(%(accessions)s)
     order by filed_at, accession_no
 """
+# E8-S4: the filings about these issuers filed in a date range (the reconciliation).
+_FILED_BETWEEN = f"""
+    select {_FILING_COLUMNS} from insider_filings
+    where issuer_cik = any(%(ciks)s) and filed_at between %(first)s and %(last)s
+    order by filed_at, accession_no
+"""
 _OWNERS = f"""
     select {_OWNER_COLUMNS} from insider_owners where accession_no = any(%(accessions)s)
     order by accession_no, position
@@ -286,6 +292,15 @@ async def filings(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list
     """These filings, oldest first."""
     async with conn.cursor(row_factory=class_row(StoredFiling)) as cur:
         await cur.execute(_FILINGS, {"accessions": list(accessions)})
+        return await cur.fetchall()
+
+
+async def filed_between(
+    conn: AsyncConnection[Any], ciks: Sequence[int], first: date, last: date
+) -> list[StoredFiling]:
+    """The filings about these issuers filed from `first` to `last`, oldest first."""
+    async with conn.cursor(row_factory=class_row(StoredFiling)) as cur:
+        await cur.execute(_FILED_BETWEEN, {"ciks": list(ciks), "first": first, "last": last})
         return await cur.fetchall()
 
 
