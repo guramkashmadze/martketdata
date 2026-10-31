@@ -80,9 +80,9 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Done | 2026-10-30. S1: webhooks through an outbox: the code that changes the data writes the event in the same transaction, `webhook_publish` builds the §9.11 envelope around the API's own object and `webhook_deliver` sends it signed to a checked public address, three attempts about 1 and 10 minutes apart, 50 failed deliveries in a row switching the destination off; `earnings.verified` only for releases routed live (`earnings_releases.live`), `financials.updated` when a facts refresh adds rows or changes values, `data.changed` per value change, `filing.event` per new filing with a high-importance label (D-100 to D-102); `marketdata webhooks create|list|disable|enable|test`, the secret printed once and stored encrypted (Fernet); `scripts/webhook_receiver.py`, the reference receiver the tests check deliveries with; migration `0013`. S2: `GET /v1/changes`, newest first, each change with the value served now and its proof (D-103). S3: proof pages for releases and metric values, Jinja2, HTTP Basic auth with an `api` key (D-104). S4: `marketdata quality accuracy` and `GET /v1/status` (no key) from golden values loaded into the database (migration `0014`), the time to verified over live releases only, D-028's tolerance kept (D-105). S5: `docs/DEMO.md`, run on the dev database: Apple's Q3 2026 release matched its 10-Q on all four slots; a webhook of each type delivered to the reference receiver, the first after one retry; accuracy: golden release slots 135 of 138, golden metric values 658 of 684, cross-check 99.7%, extraction 82.5%, no live release yet. The demo found the decrypted signing secret in a logged traceback: tracebacks carry no local values now (D-106). Lint gate and 1,334 tests green on local PostgreSQL 18. 4 edge cases logged. CI on main is green ([run 41175252635](https://github.com/guramkashmadze/martketdata/actions/runs/41175252635), commit `e13283e`) |
 | E6 | MCP server | 11 | E5a | Done | 2026-10-31. Milestone M1 with E7c. S1: the official `mcp` SDK 2.3 (`MCPServer`) at exactly `/mcp` in the API's app, Streamable HTTP, stateless with JSON answers; a key gate checks `X-API-Key` (api scope) as on `/v1`, and a refused request gets the error envelope (401, 403, 429) and a row with the path `/mcp`; each tool call writes `api_requests` (method `MCP`, the tool's name, the status of its outcome); only this machine's host and PUBLIC_BASE_URL's are accepted (D-107). S2: `lookup_company` (ticker, share class, CIK or name, D-109), `company_snapshot`, `get_financials`, `recent_filings` (reports and stakes unless a form is asked for, D-110), `compare_companies` and `latest_earnings`, each answering from the API's service function; compact answers (D-108): the envelope without its flag list, a short proof on each value, every filing read in `sources`; at most 16 metrics and 40 values a call (25 in a comparison), 20 filings. S3: `docs/MCP.md` (Claude Code, Claude Desktop through `mcp-remote` or a custom connector, Cursor, VS Code, the MCP Inspector; five example questions, one in Georgian), linked from `docs/DEMO.md`. No migration. On the dev database the official Python SDK's client connected to the running API over HTTP (the 2025 handshake and 2026-07-28), listed the six tools and called each, every call logged with its key, tool and status; the demo question's call (Apple's revenue and free cash flow, 8 quarters) answered 3.4 KB with its 10-Qs and 10-K. Largest answers across eight companies: 7.7 KB (BRK-B's snapshot, a five-company comparison). Lint gate and 1,375 tests green on local PostgreSQL 18. 9 edge cases logged. The Inspector and an AI client weren't run here (§16). CI on main is green ([run 41200224914](https://github.com/guramkashmadze/martketdata/actions/runs/41200224914), commit `6294f03`) |
 | E8 | Insider trades | 12 (D-111) | E5a, E6 | Done | 2026-10-31. Built before E7c, E10 and E15 (D-111); its UI section moved to E15-S2. S1: `normalize/form4.py` reads a Form 4 or 4/A's XML (the primary document without EDGAR's `xsl…/` folder): owners and roles, both tables numbered in document order, footnote ids per field, the filing's 10b5-1 box (`aff10b5One`, `1`/`0` or `true`/`false`); 7 real fixtures. S2: migration `0015` (`insider_filings`, `insider_owners`, `insider_transactions`; `value_changes` takes `insider_transaction`, D-116); `form4_parse` registered, so the watcher routes new Forms 4 on issuer listings (D-063); data kind `insiders` for domestic filers and foreign private issuers, whose insiders file since March 2026 (D-117). S3: a 4/A supersedes only what it restates or corrects, a filing made twice counts once, decided for the whole insider group whatever the order (D-114); served trades that change are value changes, `data.changed` and `/v1/changes` items (D-115); the rules handle all 56 of the universe's 4/As of two years. S4: `backfill insiders --quarters 8` from each filing's XML (D-113); `insiders reconcile --quarter` against the SEC's data set. S5: `GET /v1/companies/{ticker}/insiders` per insider group, day, code and security with proof, totals and summaries, `codes=P,S` by default (D-112, D-118); MCP `insider_activity`, under 8 KB (D-119); `docs/MCP.md`, `docs/DEMO.md` part 7. Dev database: 10,403 Forms 4 of 66 issuers (with XOM's predecessor) filed 2024-10-31 to 2026-10-23, parsed in 21.5 minutes with no failure or retry, every XML at its name; 37,312 lines, 117 superseded by 4/As and 52 by two duplicate filings, 65 changes announced; 525 filings of seven foreign issuers. Reconciliation, 2026 Q3, ten companies: 430 filings, 310 equal to the data set and 120 equal but for its rounding to two decimals, none different or missing. Demo: NVIDIA's 365 days through REST (51 ms) and the official MCP client over HTTP (6.1 KB; heaviest answer 7.4 KB, Micron). Lint gate and 1,499 tests green on local PostgreSQL 18. 15 edge cases logged. CI on main is green ([run 41209803839](https://github.com/guramkashmadze/martketdata/actions/runs/41209803839), commit `198d80c`) |
-| E10 | Prices, end-of-day and licensed | 13 | E5a, OD-4 | Not started | D-031 |
-| E15 | Web UI | 14–15 | E5b, E6; E10 for price fields | Not started | Milestone M2. E15-S2 adds the insider section of the company page (D-111) |
-| E9 | 13F fund portfolios | 16 | E5a, E6, E15 | Not started | Milestone M3 |
+| E9 | 13F fund portfolios | 13 (D-120) | E5a, E6 | In progress | Milestone M3. Built before E7c, E10 and E15 (D-120); its UI part moved to E15-S2 and E15-S6 |
+| E10 | Prices, end-of-day and licensed | 14 | E5a, OD-4 | Not started | D-031 |
+| E15 | Web UI | 15–16 | E5b, E6; E10 for price fields | Not started | Milestone M2. E15-S2 adds the insider section (D-111) and the "held by" section (D-120) of the company page; E15-S6 the fund pages (D-120) |
 | E11 | Operations and production readiness | 17–18 | E15, E9 | Not started | Milestone M4 |
 | E7b | Georgian localization and content controls | on demand | E5a, OD-6, OD-8, OD-9 | Not started | When a client or our UI needs Georgian (D-026) |
 | E12 | LLM fallback extractor and guidance direction | later | E7a report, OD-2 | Not started | Needed: the E7a hit rate is 81.2%, below OD-10's 90% (D-080); first for releases printed as pictures. When to build it is open (§16) |
@@ -1573,7 +1573,30 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 
 **Demo:** insider activity for a company over 365 days via REST and via an AI client.
 
-### E10 — Prices, end-of-day and licensed (session 13)
+### E9 — 13F fund portfolios (session 13, D-120) → Milestone M3
+
+**Goal:** what well-known investors hold and how that changed, plus which of them hold a given company.
+**Depends on:** E5a and E6 (E3 for the watcher). Built before E7c, E10 and E15 (D-120); its UI part moved to E15-S2 and E15-S6.
+
+- **E9-S1 Curated managers.** As a user, I want to follow well-known investors by name.
+  - AC: `data/managers.csv` with 20–30 managers; each CIK looked up on EDGAR and noted; migration creates `managers`; loader command; the watcher includes manager CIKs.
+- **E9-S2 13F parser.** As a developer, I want information tables parsed and normalized so values are comparable across years.
+  - AC: migration creates `holdings_raw`; parser handles the §9.8 fields, unit normalization (cutoff verified and recorded in §15) and RESTATEMENT / NEW HOLDINGS amendments.
+  - AC: the cross-manager `unit_suspect` check (§9.8, D-023) is implemented and tested.
+  - AC: fixtures for one older filing (thousands), one recent filing (dollars) and one RESTATEMENT amendment.
+- **E9-S3 CUSIP mapping.** As a developer, I want CUSIPs mapped to our securities so positions link to companies.
+  - AC: migration creates `cusip_map`; OpenFIGI client with its own rate limit and caching; unmatched and ambiguous cases stored with status.
+- **E9-S4 Positions and changes.** As a user, I want to see a fund's biggest positions and what it bought or sold last quarter.
+  - AC: migration creates `fund_positions`; §9.8 merge, weights and change types implemented with tests.
+- **E9-S5 Backfill.** As the operator, I want eight quarters of history for curated managers.
+  - AC: `pdm run marketdata backfill funds --quarters 8` from per-filing XML (or the SEC 13F datasets if simpler).
+- **E9-S6 Serve.** As an API integrator and AI chat user, I want portfolios and holders available through the API and MCP.
+  - AC: `GET /v1/funds`, `GET /v1/funds/{manager_cik}/holdings`, `GET /v1/companies/{ticker}/funds` and MCP `investor_portfolio`; each shows report period and filing date.
+  - The fund pages and the "held by" section of the company page are E15-S6's and E15-S2's (D-120).
+
+**Demo:** "What did <manager> buy and sell last quarter?" answered by an AI client with links to the 13F filing.
+
+### E10 — Prices, end-of-day and licensed (session 14)
 
 **Goal:** end-of-day prices and the price-based metrics that need them, in every channel the vendor license allows (D-031).
 **Depends on:** E5a; OD-4.
@@ -1593,7 +1616,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Out of scope:** real-time or intraday prices; corporate-action history beyond what the vendor provides.
 **Demo:** a snapshot showing market cap and P/E with the price date, and the same request from a channel outside the license returning `price_not_licensed`.
 
-### E15 — Web UI (sessions 14–15) → Milestone M2
+### E15 — Web UI (sessions 15–16) → Milestone M2
 
 **Goal:** a small, fast, read-only website where invited testers (later, anyone) can look up a company and check every number (D-034).
 **Depends on:** E5b, E6; E10 for price fields (the UI can launch without them).
@@ -1606,6 +1629,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
   - AC: search by ticker or name; the company page per §9.14 (identity, class, latest release, 8-quarter core-metric history with a chart, latest close where licensed, recent filings with labels).
   - AC: every number links to its proof page; funds and foreign issuers get a "what we cover" page instead of an error.
   - AC: an insider section on the company page from E8's `service.insiders` (§9.7): totals, insiders and the latest trades, each with links to its Form 4 filings (moved from E8-S5, D-111).
+  - AC: a "held by" section on the company page from E9's `service.funds`: the curated managers holding the company, each with its report period, filing date and a link to its 13F filing (moved from E9-S6, D-120).
 - **E15-S3 Compare page.** As a UI visitor, I want 2–5 companies side by side.
   - AC: a compare page built on `service.compare`, with proof links.
 - **E15-S4 Proof and status pages in the UI.** As a data evaluator, I want proof and accuracy one click away.
@@ -1613,31 +1637,11 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 - **E15-S5 Quality.** As the operator, I want the UI tested like the API.
   - AC: render tests for each page with seeded data; a test that every number on the company page has a proof link; pages work at phone width; basic accessibility checks (labels, contrast, keyboard navigation).
 
-**Out of scope:** accounts, watchlists, alerts, Georgian (E7b); the fund section (added by E9).
+- **E15-S6 Fund pages.** As a UI visitor, I want to see what a well-known investor holds and how that changed.
+  - AC: a page per curated manager from E9's `service.funds` (§9.8): positions with weights and change types, showing report period and filing date, each linking to its 13F filing; a page listing the curated managers (moved from E9-S6, D-120).
+
+**Out of scope:** accounts, watchlists, alerts, Georgian (E7b).
 **Demo:** open a company page on the live VM, click a revenue figure, and land on its proof page with the SEC quote and the 10-Q cross-check.
-
-### E9 — 13F fund portfolios (session 16) → Milestone M3
-
-**Goal:** what well-known investors hold and how that changed, plus which of them hold a given company.
-**Depends on:** E5a, E6 and E15 (E3 for the watcher).
-
-- **E9-S1 Curated managers.** As a user, I want to follow well-known investors by name.
-  - AC: `data/managers.csv` with 20–30 managers; each CIK looked up on EDGAR and noted; migration creates `managers`; loader command; the watcher includes manager CIKs.
-- **E9-S2 13F parser.** As a developer, I want information tables parsed and normalized so values are comparable across years.
-  - AC: migration creates `holdings_raw`; parser handles the §9.8 fields, unit normalization (cutoff verified and recorded in §15) and RESTATEMENT / NEW HOLDINGS amendments.
-  - AC: the cross-manager `unit_suspect` check (§9.8, D-023) is implemented and tested.
-  - AC: fixtures for one older filing (thousands), one recent filing (dollars) and one RESTATEMENT amendment.
-- **E9-S3 CUSIP mapping.** As a developer, I want CUSIPs mapped to our securities so positions link to companies.
-  - AC: migration creates `cusip_map`; OpenFIGI client with its own rate limit and caching; unmatched and ambiguous cases stored with status.
-- **E9-S4 Positions and changes.** As a user, I want to see a fund's biggest positions and what it bought or sold last quarter.
-  - AC: migration creates `fund_positions`; §9.8 merge, weights and change types implemented with tests.
-- **E9-S5 Backfill.** As the operator, I want eight quarters of history for curated managers.
-  - AC: `pdm run marketdata backfill funds --quarters 8` from per-filing XML (or the SEC 13F datasets if simpler).
-- **E9-S6 Serve.** As an API integrator and AI chat user, I want portfolios and holders available through the API and MCP.
-  - AC: `GET /v1/funds`, `GET /v1/funds/{manager_cik}/holdings`, `GET /v1/companies/{ticker}/funds` and MCP `investor_portfolio`; each shows report period and filing date.
-  - AC: fund pages and a "held by" section on the UI company page, showing report period and filing date (§9.14).
-
-**Demo:** "What did <manager> buy and sell last quarter?" answered by an AI client with links to the 13F filing.
 
 ### E11 — Operations and production readiness (sessions 17–18) → Milestone M4
 
@@ -1879,6 +1883,7 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-117 | 2026-10-31 | Foreign private issuers' insider trades (E8, capability `insiders`): the data kind applies to domestic filers and foreign private issuers in the universe, not to funds, other filers or companies outside it. Their directors and officers file Forms 4 since March 2026; prices are served as filed with their footnotes, not flagged, which supersedes the kickoff's "a flag and no USD value" for prices not in dollars | Seven universe FPIs have 525 Forms 4 since 2026-03-24 (TSM 256). Every sampled filing converts the price into dollars and states the rate (Sony and Toyota from yen, TSMC from New Taiwan dollars); Alibaba's footnote gives the Hong Kong dollar range, its price is in dollars |
 | D-118 | 2026-10-31 | Serving insider trades (E8-S5, §9.7, §10.2): per insider group (a filing's owners), trade date, code, security and table: shares summed, the price weighted by shares over the lines that give one (four decimals), the value as shares times price (exact), the last line's holdings when the lines share one ownership, the filing's 10b5-1 box, the footnotes, flags (`price_not_reported`, `price_partly_reported`, `direction_differs_from_code`) and a proof listing each Form 4 and its lines with the checks passed. Totals per code and one summary per insider group and code cover the window; insiders are listed by latest trade, never by size; trades by date, a page at a time. `days` is 1 to 730 (90 by default), counted back from today (UTC) by trade date | Joint filers (Magnetar's four entities, South32 and its subsidiary) would otherwise count a trade once per owner; Alphabet's Class A and Class C shares mustn't be added. Ordering by value would rank insiders (D-029) |
 | D-119 | 2026-10-31 | MCP `insider_activity` (E8-S5, §10.3): the API's service in a compact answer: totals per code, at most 8 insider summaries with their roles and 12 trades (each with its Form 4's accession number, without the roles), the trades' filings in `sources`, `more_insiders` and `more_trades`; `days` to 365; the seven tools share the request log and rate | A busy window (12 insiders, 30 days of sales, long titles) measured 10.2 KB with 15 trades, 10 insiders and roles on each trade; 7.3 KB (7,446 bytes) with these caps, under §10.3's 8 KB |
+| D-120 | 2026-10-31 | Build order: E9 (13F fund portfolios) is built now, after E8 and before E7c, E10 and E15, a change to D-032's and D-111's order (Guram's choice); E7c still waits on OD-1 and E10 on OD-4. E9-S6's UI part moves to E15: the "held by" section of the company page to E15-S2 and the fund pages to a new E15-S6, both built on E9's service functions with links to the 13F filings; E9 serves portfolios through REST and MCP | Only that part of E9 depends on E15, and neither page exists before E15, as D-111 found for E8's insider section |
 
 ---
 
