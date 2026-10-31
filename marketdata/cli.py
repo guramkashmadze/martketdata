@@ -22,6 +22,7 @@ from marketdata.config import Settings, SettingsError, load_settings, require_we
 from marketdata.db.pool import create_pool
 from marketdata.db.repositories import predecessors
 from marketdata.db.repositories.clients import ApiKey, Client
+from marketdata.db.repositories.managers import Manager
 from marketdata.db.repositories.tasks import TASK_STATUSES, Task, TaskCount
 from marketdata.db.repositories.webhooks import Delivery, Destination
 from marketdata.ingest.cross_check import (
@@ -33,6 +34,7 @@ from marketdata.ingest.facts import RebuildReport, rebuild_all
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.golden import GoldenLoad, load_golden
 from marketdata.ingest.insider_data_set import fetch_data_set
+from marketdata.ingest.managers import ManagersLoader, ManagersReport, read_managers
 from marketdata.ingest.sec_lock import SecProcessBusy, sec_process_lock
 from marketdata.ingest.security_master import (
     LoadReport,
@@ -58,6 +60,7 @@ from marketdata.normalize.universe import DataFileError, SecurityOverride, Unive
 from marketdata.sec.client import SecClient, SecError
 from marketdata.sec.raw_store import RawStoreError, create_raw_store
 from marketdata.service import clients as api_clients
+from marketdata.service import funds as fund_service
 from marketdata.service import insiders as insider_service
 from marketdata.service import webhooks as webhook_service
 from marketdata.service.accuracy import AccuracyReport, Rate, accuracy_report
@@ -104,6 +107,7 @@ _GROUPS = [
     ("keys", "Create, list and revoke API keys.", "E5a"),
     ("webhooks", "Manage webhook destinations and send test events.", "E5b"),
     ("insiders", "Insider trades from Form 4, checked against the SEC's data set.", "E8"),
+    ("managers", "The curated 13F managers: load them from MANAGERS_FILE and list them.", "E9"),
     ("usage", "API and MCP usage per client.", "E11"),
 ]
 
@@ -500,12 +504,99 @@ def insiders_reconcile(
             typer.echo(f"    {difference}")
 
 
+@groups["managers"].command("load")
+def managers_load() -> None:
+    """Load the curated 13F managers from MANAGERS_FILE (PLAN.md §9.8).
+
+    The file is checked first. Then each manager's submissions are fetched through the SEC
+    client, raw first, so this takes the SEC slot: the worker must not be running. A manager is
+    written, with EDGAR's name, when EDGAR has its CIK and it has filed a 13F-HR; one the file
+    no longer lists stays, not curated. Exits with 2, changing nothing, when the file has
+    problems, and with 1 when a manager failed its check (the others are written).
+    """
+    settings = _settings()
+    try:
+        entries = read_managers(settings.managers_file)
+    except DataFileError as exc:
+        raise _fail(str(exc), 2) from None
+    try:
+        sec = SecClient.from_settings(settings)
+        store = create_raw_store(settings)
+    except SettingsError as exc:
+        raise _fail(str(exc), 2) from None
+    database_url = str(settings.database_url)
+
+    async def run() -> ManagersReport:
+        async with (
+            sec_process_lock(database_url, "marketdata managers load"),
+            sec,
+            create_pool(database_url, max_size=2) as pool,
+        ):
+            fetcher = RawFetcher(sec, store, pool.connection)
+            return await ManagersLoader(fetcher, pool.connection).load(entries)
+
+    try:
+        report = asyncio.run(run())
+    except (SecError, RawStoreError, SecProcessBusy) as exc:
+        raise _fail(str(exc)) from None
+    for line in _managers_load_lines(report, str(settings.managers_file)):
+        typer.echo(line)
+    if report.failures:
+        raise typer.Exit(1)
+
+
+def _managers_load_lines(report: ManagersReport, managers_file: str) -> list[str]:
+    checked = len(report.checks) - len(report.failures)
+    lines = [
+        f"Managers ({managers_file}): {len(report.checks)} listed, {checked} checked on EDGAR, "
+        f"{report.written} rows written."
+    ]
+    for check in report.checks:
+        entry = check.entry
+        if check.error is not None:
+            lines.append(
+                f"  {entry.manager_cik:>10}  {entry.display_name:<30} FAILED: {check.error}"
+            )
+            continue
+        latest = f"latest 13F-HR for {check.latest_period}, filed {check.latest_filed}"
+        lines.append(f"  {entry.manager_cik:>10}  {entry.display_name:<30} {check.name}; {latest}")
+    if report.uncurated:
+        ciks = ", ".join(str(cik) for cik in report.uncurated)
+        lines.append(f"No longer curated, kept with the holdings they filed: {ciks}.")
+    lines.append("The scheduler watches the curated managers from its next run.")
+    return lines
+
+
+@groups["managers"].command("list")
+def managers_list(
+    every: Annotated[
+        bool, typer.Option("--all", help="Also the managers no longer curated.")
+    ] = False,
+) -> None:
+    """List the curated 13F managers by display name, with EDGAR's name for each. Reads the
+    database only."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> list[Manager]:
+        return await fund_service.list_managers(conn, curated=not every)
+
+    listed = _in_transaction(settings, work)
+    if not listed:
+        typer.echo("No managers yet: run `marketdata managers load`.")
+        return
+    typer.echo(f"  {'CIK':>10}  {'DISPLAY NAME':<30} EDGAR NAME")
+    for manager in listed:
+        mark = "" if manager.curated else " (no longer curated)"
+        typer.echo(f"  {manager.manager_cik:>10}  {manager.display_name:<30} {manager.name}{mark}")
+
+
 @app.command("scheduler")
 def scheduler() -> None:
     """Enqueue periodic tasks until stopped (SIGTERM or Ctrl-C); the worker runs them.
 
-    Every 10 minutes, a filings watch for each universe company; daily at 06:00 UTC, the
-    security-master load (at once if started later in the day and it hasn't run).
+    Every 10 minutes, a filings watch for each universe company and curated 13F manager; daily
+    at 06:00 UTC, the security-master load (at once if started later in the day and it hasn't
+    run).
     """
     settings = _settings()
     asyncio.run(task_scheduler.serve(settings))

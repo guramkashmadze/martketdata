@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     # E5b. The golden sets `marketdata quality accuracy` loads (tests/golden/ in the repository).
     golden_dir: Path = Path("tests/golden")
 
+    # E9. The curated 13F managers (PLAN.md §9.8), loaded by `marketdata managers load`.
+    managers_file: Path = Path("data/managers.csv")
+
     @property
     def base_url(self) -> str | None:
         """PUBLIC_BASE_URL without its trailing slash."""

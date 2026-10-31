@@ -1,7 +1,7 @@
 """Scheduler process: enqueues periodic tasks and never does the work itself (E3-S3).
 
-- Every 10 minutes, and once at start: one `filings_watch` task per universe company, keyed by
-  its CIK (E9 adds the curated managers). They are enqueued with force, so a watch that
+- Every 10 minutes, and once at start: one `filings_watch` task per universe company and per
+  curated 13F manager (E9), keyed by its CIK. They are enqueued with force, so a watch that
   finished, or died, runs again; one still queued, running or waiting to retry is left alone.
 - Daily at 06:00 UTC: one `security_master` task keyed by the date. If the scheduler starts
   after 06:00, it enqueues the day's load at once; a load already done or dead that day is
@@ -26,7 +26,7 @@ from psycopg import AsyncConnection
 
 from marketdata.config import Settings
 from marketdata.db.pool import create_pool
-from marketdata.db.repositories import companies
+from marketdata.db.repositories import companies, managers
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.fetch import Connect
 from marketdata.normalize.filings import FACTS_REFRESH
@@ -47,11 +47,12 @@ log = structlog.get_logger(__name__)
 
 
 async def enqueue_watches(conn: AsyncConnection[Any]) -> list[Task]:
-    """One filings_watch per universe company; finished ones are queued again."""
-    universe = await companies.list_in_universe(conn)
+    """One filings_watch per universe company and curated manager (one for a CIK that is
+    both, like Berkshire Hathaway); finished ones are queued again."""
+    universe = [company.cik for company in await companies.list_in_universe(conn)]
+    ciks = dict.fromkeys(universe + await managers.curated_ciks(conn))
     return [
-        await queue.enqueue(conn, FILINGS_WATCH, str(company.cik), {"cik": company.cik}, force=True)
-        for company in universe
+        await queue.enqueue(conn, FILINGS_WATCH, str(cik), {"cik": cik}, force=True) for cik in ciks
     ]
 
 

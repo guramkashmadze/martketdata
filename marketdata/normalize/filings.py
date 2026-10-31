@@ -243,12 +243,22 @@ class Route:
 
 
 def route(
-    filing: FilingRow, *, filer_type: FilerType, curated_manager: bool = False
+    filing: FilingRow,
+    *,
+    filer_type: FilerType,
+    curated_manager: bool = False,
+    manager_only: bool = False,
 ) -> list[Route]:
     """§4's task routing for a newly seen filing. Earnings and facts are produced for domestic
     filers only (§9.1); Form 4 is parsed from the issuer's listing (E8); 13F only for curated
-    managers (E9)."""
+    managers (E9). `manager_only`: the filer is watched as a curated manager only, not as a
+    universe company, so nothing but its 13F reports is routed (Markel Group's own 10-Qs and
+    Forms 4 are not covered)."""
     accession = {"cik": filing.cik, "accession_no": filing.accession_no}
+    if filing.form in F13_FORMS:
+        return [Route(F13_PARSE, filing.accession_no, accession)] if curated_manager else []
+    if manager_only:
+        return []
     if filing.form in PERIODIC_FORMS and filer_type == "domestic":
         return [Route(FACTS_REFRESH, str(filing.cik), {"cik": filing.cik}, force=True)]
     if (
@@ -259,8 +269,6 @@ def route(
         return [Route(EARNINGS_EXTRACT, filing.accession_no, accession)]
     if filing.form in INSIDER_FORMS and filing.file_number is None:
         return [Route(FORM4_PARSE, filing.accession_no, accession)]
-    if filing.form in F13_FORMS and curated_manager:
-        return [Route(F13_PARSE, filing.accession_no, accession)]
     return []
 
 

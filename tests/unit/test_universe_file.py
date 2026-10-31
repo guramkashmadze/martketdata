@@ -1,6 +1,6 @@
 """E2-S1: the universe file and the security overrides file are checked line by line, and
 universe tickers are matched to the companies that list them (PLAN.md §9.1). E7a-S1: so is the
-predecessors file (D-068)."""
+predecessors file (D-068); E9-S1: and the curated managers file (§9.8)."""
 
 from datetime import date
 
@@ -9,9 +9,11 @@ import pytest
 from marketdata.normalize.universe import (
     ClosedTicker,
     DataFileError,
+    ManagerEntry,
     Predecessor,
     UniverseEntry,
     match_universe,
+    parse_managers,
     parse_predecessors,
     parse_security_overrides,
     parse_universe,
@@ -184,3 +186,48 @@ def test_predecessor_problems_are_reported() -> None:
         "succession",
         "line 7: CIK 3 has no note; say what happened",
     )
+
+
+def test_managers_give_a_display_name_a_cik_and_a_note() -> None:
+    entries = parse_managers(
+        "display_name,manager_cik,notes\n"
+        'Berkshire Hathaway,1067983,"EDGAR: BERKSHIRE HATHAWAY INC; 13F-HR, Q2 2026"\n'
+        "Markel Group,0001096343,EDGAR: MARKEL GROUP INC.\n"
+    )
+
+    assert entries == [
+        ManagerEntry(
+            2, "Berkshire Hathaway", 1067983, "EDGAR: BERKSHIRE HATHAWAY INC; 13F-HR, Q2 2026"
+        ),
+        ManagerEntry(3, "Markel Group", 1096343, "EDGAR: MARKEL GROUP INC."),
+    ]
+
+
+def test_manager_problems_are_reported() -> None:
+    text = (
+        "display_name,manager_cik,notes\n"
+        "Berkshire Hathaway,1067983,ok\n"
+        "Berkshire,BRK-B,a ticker instead of a CIK\n"
+        "Berkshire again,1067983,listed twice\n"
+        "berkshire hathaway,1096343,the same name in another case\n"
+        ",1336528,no name\n"
+        "Pershing Square,2026053,\n"
+    )
+
+    with pytest.raises(DataFileError) as raised:
+        parse_managers(text)
+
+    assert raised.value.problems == (
+        "line 3: manager_cik must be a CIK (a whole number), found 'BRK-B'",
+        "line 4: CIK 1067983 is already listed on line 2",
+        "line 5: 'berkshire hathaway' is already a display name on line 2",
+        "line 6: CIK 1336528 has no display_name",
+        "line 7: CIK 2026053 has no note; say what EDGAR shows for it (its name there and its "
+        "13F reports)",
+    )
+
+
+@pytest.mark.parametrize("text", ["", "display_name,manager_cik,notes\n"])
+def test_a_managers_file_needs_its_header_and_a_manager(text: str) -> None:
+    with pytest.raises(DataFileError):
+        parse_managers(text)

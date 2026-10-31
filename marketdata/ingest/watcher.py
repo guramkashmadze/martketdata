@@ -13,7 +13,9 @@ A watch of one company:
    records the file processed.
 
 A company's first watch only records what is there: history goes through each epic's backfill,
-so the first watch routes nothing.
+so the first watch routes nothing. A curated 13F manager (E9) is watched like a company; one
+that isn't also a universe company has only its 13F reports routed, and none of its filings
+announced.
 
 The backfill (E3-S5) watches the company, then reads the older pages its file lists, as far back
 as asked. Those filings are more than a year old and never routed. A page's acceptance times
@@ -27,7 +29,7 @@ from typing import Any
 
 import structlog
 
-from marketdata.db.repositories import companies, filings, tasks, watch_state
+from marketdata.db.repositories import companies, filings, managers, tasks, watch_state
 from marketdata.ingest.announce import announce
 from marketdata.ingest.fetch import Connect, Fetched, RawFetcher
 from marketdata.normalize.filings import (
@@ -166,10 +168,18 @@ class FilingsWatcher:
             if watched and state is not None:
                 company = await companies.get(conn, cik)
                 filer_type = company.filer_type if company else "unknown"
+                manager = await managers.get(conn, cik)
+                curated = manager is not None and manager.curated
+                manager_only = curated and not (company is not None and company.in_universe)
                 for row in plan.new:
                     if row.accession_no not in inserted:
                         continue
-                    for work in route(row, filer_type=filer_type):
+                    for work in route(
+                        row,
+                        filer_type=filer_type,
+                        curated_manager=curated,
+                        manager_only=manager_only,
+                    ):
                         if work.kind in self._kinds:
                             await tasks.enqueue(
                                 conn,
@@ -180,7 +190,9 @@ class FilingsWatcher:
                                 priority=tasks.PRIORITY_LIVE,
                             )
                             routed.append(f"{work.kind} {work.key}")
-                    if announces_filing(row.form, row.items_8k, row.file_number):
+                    if not manager_only and announces_filing(
+                        row.form, row.items_8k, row.file_number
+                    ):
                         await announce(conn, FILING_EVENT, f"{row.accession_no}:{row.cik}")
             if watched:
                 await watch_state.record_change(

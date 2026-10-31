@@ -18,6 +18,8 @@ GROUPS = [
     "clients",
     "keys",
     "webhooks",
+    "insiders",
+    "managers",
     "usage",
 ]
 

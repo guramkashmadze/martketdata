@@ -10,6 +10,7 @@ import pytest
 
 from marketdata.normalize.filings import (
     EARNINGS_EXTRACT,
+    F13_PARSE,
     FACTS_REFRESH,
     FORM4_PARSE,
     FilingRow,
@@ -145,3 +146,30 @@ def test_routing_follows_section_four() -> None:
     assert route(owner, filer_type="domestic") == []
     assert route(_row("f", form="13F-HR"), filer_type="domestic") == []
     assert route(_row("g", form="SCHEDULE 13D"), filer_type="domestic") == []
+
+
+def test_13f_reports_are_routed_for_curated_managers_only() -> None:
+    report, amendment = _row("h", form="13F-HR"), _row("i", form="13F-HR/A")
+    notice = _row("j", form="13F-NT")
+    for filing in (report, amendment):
+        [work] = route(filing, filer_type="unknown", curated_manager=True, manager_only=True)
+        assert (work.kind, work.key, work.payload, work.force) == (
+            F13_PARSE,
+            filing.accession_no,
+            {"cik": 320193, "accession_no": filing.accession_no},
+            False,
+        )
+        assert route(filing, filer_type="unknown") == []  # not a curated manager
+    assert route(notice, filer_type="unknown", curated_manager=True, manager_only=True) == []
+    # A curated manager that is a universe company too (Berkshire) keeps the company's routes.
+    both = {"filer_type": "domestic", "curated_manager": True}
+    assert [r.kind for r in route(_row("k", form="10-Q"), **both)] == [FACTS_REFRESH]
+    assert [r.kind for r in route(report, **both)] == [F13_PARSE]
+
+
+def test_a_manager_only_filer_routes_nothing_but_its_13f() -> None:
+    only = {"filer_type": "domestic", "curated_manager": True, "manager_only": True}
+    earnings = _row("l", items_8k=("2.02",))
+    assert route(earnings, **only) == []
+    assert route(_row("m", form="10-Q"), **only) == []
+    assert route(_row("n", form="4"), **only) == []  # Markel Group's own insiders

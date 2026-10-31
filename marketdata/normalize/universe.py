@@ -10,6 +10,9 @@ misleads (see tickers.py), each with the SEC page that shows the right type.
 earlier registrant whose filings hold its history (D-068): ExxonMobil Holdings Corp took XOM's
 ticker on 2026-07-01, and its earlier earnings releases are under Exxon Mobil Corp (34088).
 
+`data/managers.csv` (`display_name,manager_cik,notes`) lists the curated 13F managers (E9,
+PLAN.md §9.8): each CIK is looked up on EDGAR, never guessed, and its note says what was found.
+
 The files are checked before anything is fetched, and every problem is reported at once with
 its line number.
 """
@@ -30,6 +33,7 @@ from marketdata.normalize.tickers import (
 UNIVERSE_COLUMNS = ("ticker", "note")
 OVERRIDE_COLUMNS = ("ticker", "security_type", "source_url")
 PREDECESSOR_COLUMNS = ("cik", "predecessor_cik", "source_url", "note")
+MANAGER_COLUMNS = ("display_name", "manager_cik", "notes")
 _SECURITY_TYPES: dict[str, SecurityType] = {name: name for name in SECURITY_TYPES}
 
 
@@ -166,6 +170,60 @@ def parse_predecessors(text: str, source: str = "data/predecessors.csv") -> list
     if problems:
         raise DataFileError(source, problems)
     return links
+
+
+@dataclass(frozen=True)
+class ManagerEntry:
+    """A curated 13F manager (E9): our name for it, its CIK and how the CIK was found."""
+
+    line: int
+    display_name: str
+    manager_cik: int
+    notes: str
+
+
+def parse_managers(text: str, source: str = "data/managers.csv") -> list[ManagerEntry]:
+    """The curated managers. A CIK and a display name (in any case) are listed once each, and
+    every manager needs a note saying what EDGAR showed for its CIK."""
+    problems: list[str] = []
+    entries: list[ManagerEntry] = []
+    first_cik: dict[int, int] = {}
+    first_name: dict[str, int] = {}
+    for line, row in _rows(text, MANAGER_COLUMNS, source, problems):
+        cik = _cik(row["manager_cik"])
+        if cik is None:
+            problems.append(
+                f"line {line}: manager_cik must be a CIK (a whole number), found "
+                f"{row['manager_cik']!r}"
+            )
+            continue
+        if cik in first_cik:
+            problems.append(f"line {line}: CIK {cik} is already listed on line {first_cik[cik]}")
+            continue
+        first_cik[cik] = line
+        name = row["display_name"]
+        if not name:
+            problems.append(f"line {line}: CIK {cik} has no display_name")
+            continue
+        if name.lower() in first_name:
+            problems.append(
+                f"line {line}: {name!r} is already a display name on line "
+                f"{first_name[name.lower()]}"
+            )
+            continue
+        first_name[name.lower()] = line
+        if not row["notes"]:
+            problems.append(
+                f"line {line}: CIK {cik} has no note; say what EDGAR shows for it (its name "
+                "there and its 13F reports)"
+            )
+            continue
+        entries.append(ManagerEntry(line, name, cik, row["notes"]))
+    if not problems and not entries:
+        problems.append("the file lists no managers")
+    if problems:
+        raise DataFileError(source, problems)
+    return entries
 
 
 def _cik(text: str) -> int | None:

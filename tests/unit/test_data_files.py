@@ -16,6 +16,7 @@ from marketdata.normalize.security_master import (
     parse_fund_list,
 )
 from marketdata.normalize.universe import (
+    parse_managers,
     parse_predecessors,
     parse_security_overrides,
     parse_universe,
@@ -77,6 +78,18 @@ def test_predecessors_point_at_a_filing_of_the_company_now() -> None:
         parsed = urls.parse(link.source_url)
         assert parsed is not None and parsed.endpoint == "filing"
         assert parsed.cik == link.cik  # the successor's 8-K12B
+
+
+def test_the_managers_file_lists_20_to_30_managers_each_with_what_edgar_showed() -> None:
+    entries = parse_managers((ROOT / "data" / "managers.csv").read_text())
+
+    assert 20 <= len(entries) <= 30  # E9-S1
+    assert len({entry.manager_cik for entry in entries}) == len(entries)
+    assert all(entry.notes.startswith("EDGAR, 2026-") for entry in entries)
+    by_cik = {entry.manager_cik: entry.display_name for entry in entries}
+    assert by_cik[1067983] == "Berkshire Hathaway"  # also the universe company BRK-B
+    assert by_cik[2026053] == "Pershing Square"  # not 1336528, which files only a 13F-NT now
+    assert 1649339 not in by_cik  # Scion: no 13F since its Q3 2025 report
 
 
 def test_the_extraction_overrides_file_parses_and_cites_sec_filings() -> None:

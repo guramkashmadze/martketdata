@@ -1432,6 +1432,16 @@
     "size_bytes": 152401,
     "sha256": "5f29ed0c43529dca319199d592e504a97b3628143a918d60d5852904b9f62c14"
   },
+  "submissions/MKL-manager-20261031.json": {
+    "url": "https://data.sec.gov/submissions/CIK0001096343.json",
+    "fetched_at": "2026-10-31T15:04:34+00:00",
+    "original_size_bytes": 164540,
+    "original_sha256": "2105a09316c3e0ac93c6b3a14841701b8a7c7374411102a0dec35959516db17a",
+    "trim": "submissions: newest 60 of 1000 rows in filings.recent",
+    "size_bytes": 11255,
+    "sha256": "7cc5bd302f7f087fa778516d9b9e764ccac15b75f4f1db93825636be711c8c2a",
+    "raw_key": "raw/sec/api/submissions/1096343/20261031T150434.439867Z.json"
+  },
   "submissions/SHOP.json": {
     "url": "https://data.sec.gov/submissions/CIK0001594805.json",
     "fetched_at": "2026-10-25T10:51:27+00:00",
