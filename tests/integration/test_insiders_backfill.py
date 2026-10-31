@@ -1,7 +1,8 @@
-"""E8-S4: the insiders backfill brings a company's listings up to date, then queues one
-form4_parse task per Form 4 or 4/A on its own listing filed in the window, behind live work
-(D-067); a listing with a file number is the company's trade in another company's shares and
-isn't queued (D-063). A predecessor's Forms 4 are loaded and queued too (D-068)."""
+"""E8-S4: the insiders backfill queues one form4_parse task per Form 4 or 4/A on a company's
+own stored listing filed in the window, behind live work (D-067); a listing with a file number
+is the company's trade in another company's shares and isn't queued (D-063). A predecessor's
+Forms 4 are loaded and queued too (D-068). The company isn't watched, so nothing new is routed
+as live work."""
 
 import json
 from datetime import date
@@ -16,7 +17,7 @@ from marketdata.db.repositories import filings, predecessors
 from marketdata.db.repositories.predecessors import CompanyPredecessor
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.form4 import InsidersBackfill, InsidersBackfillReport
-from marketdata.normalize.filings import FORM4_PARSE, FilingRow
+from marketdata.normalize.filings import FORM4_PARSE, FilingRow, parse_submissions
 from marketdata.sec import urls
 from marketdata.sec.raw_store import LocalRawStore
 from marketdata.tasks import queue
@@ -84,12 +85,14 @@ async def test_the_forms_4_on_the_companys_own_listing_in_the_window_are_queued(
         "001-36743",
     )
     await filings.insert_new(conn, [owner_listing])  # Apple's own trade in another company
+    await filings.insert_new(conn, list(parse_submissions(APPLE.read_bytes()).filings))
 
-    report = await _backfill(conn, tmp_path, AAPL, {urls.submissions(AAPL): APPLE.read_bytes()})
+    report = await _backfill(conn, tmp_path, AAPL, {})  # no SEC request
 
     expected = _own_forms_4(APPLE, SINCE)
     assert len(expected) > 20
     assert report.queued == tuple(expected)
+    assert await queue.list_tasks(conn, kind="earnings_extract") == []
     tasks = {task.key: task for task in await queue.list_tasks(conn, kind=FORM4_PARSE)}
     assert sorted(tasks) == sorted(expected)
     first = tasks[expected[0]]
@@ -107,10 +110,7 @@ async def test_a_predecessors_forms_4_are_loaded_and_queued(conn: Conn, tmp_path
         [CompanyPredecessor(cik=XOM, predecessor_cik=EXXON, source_url=XOM_8K12B, note="test")],
     )
     predecessor = SEC_FIXTURES / "submissions" / "XOM-predecessor-34088.json"
-    routes: dict[str, bytes | int] = {
-        urls.submissions(XOM): (SEC_FIXTURES / "submissions" / "XOM.json").read_bytes(),
-        urls.submissions(EXXON): predecessor.read_bytes(),
-    }
+    routes: dict[str, bytes | int] = {urls.submissions(EXXON): predecessor.read_bytes()}
 
     report = await _backfill(conn, tmp_path, XOM, routes)
 
@@ -122,7 +122,8 @@ async def test_a_predecessors_forms_4_are_loaded_and_queued(conn: Conn, tmp_path
 
 async def test_force_queues_filings_parsed_before_again(conn: Conn, tmp_path: Path) -> None:
     await _company(conn, AAPL)
-    routes: dict[str, bytes | int] = {urls.submissions(AAPL): APPLE.read_bytes()}
+    await filings.insert_new(conn, list(parse_submissions(APPLE.read_bytes()).filings))
+    routes: dict[str, bytes | int] = {}
     first = await _backfill(conn, tmp_path, AAPL, routes)
     await conn.execute("update tasks set status = 'done' where kind = %s", [FORM4_PARSE])
 

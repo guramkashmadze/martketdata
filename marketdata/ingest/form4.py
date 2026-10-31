@@ -14,11 +14,12 @@
    amendment, a duplicate's removal or a new parser version, is logged in `value_changes` and
    announced as `data.changed` (D-027).
 
-The backfill (`marketdata backfill insiders`, E8-S4) works per company: it watches the company
-so its listings are current and loads its predecessors' filings (D-068), then queues a
-`form4_parse` task for each Form 4 or 4/A on their own listings filed in the window, behind
-live work (D-067). Each filing's XML is parsed like a live one: one SEC request per filing,
-none for an XML stored before (D-070).
+The backfill (`marketdata backfill insiders`, E8-S4) works per company, like the earnings
+backfill: it loads its predecessors' filings (D-068), then queues a `form4_parse` task for each
+Form 4 or 4/A on their own stored listings filed in the window (E3's filings backfill and the
+watcher keep them), behind live work (D-067). It doesn't watch the company: a watch would route
+the newest filings as live work. Each filing's XML is parsed like a live one: one SEC request
+per filing, none for an XML stored before (D-070).
 """
 
 from dataclasses import dataclass
@@ -254,7 +255,6 @@ class InsidersBackfill:
         async with self._connect() as conn:
             earlier = await predecessors.predecessors_of(conn, cik)
         watcher = FilingsWatcher(self._fetcher, self._connect, self._kinds)
-        await watcher.watch(cik)
         for predecessor in earlier:
             await watcher.backfill(predecessor, since)
         queued: list[str] = []
