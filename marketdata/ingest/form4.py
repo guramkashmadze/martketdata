@@ -7,15 +7,25 @@
    lists the XML.
 2. normalize/form4.py parses it; its issuer must be the listing's company (D-063: the issuer's
    listing has no file number, an owner's has the issuer's).
-3. The filing, its owners and its trades are stored in one transaction.
+3. The filing, its owners and its trades are stored in one transaction, with what that changes
+   for the insider group (the filings the same owners made about the issuer): the lines a 4/A
+   or a filing made twice supersedes are decided again for the whole group (E8-S3), so the
+   result doesn't depend on which filing came first. Each served trade that changes, by an
+   amendment, a duplicate's removal or a new parser version, is logged in `value_changes` and
+   announced as `data.changed` (D-027).
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 import structlog
+from psycopg import AsyncConnection
 
-from marketdata.db.repositories import filings, insiders
+from marketdata.db.repositories import filings, insiders, value_changes
+from marketdata.db.repositories.insiders import StoredLine, supersession_of
+from marketdata.ingest.announce import announce
 from marketdata.ingest.fetch import Connect, RawFetcher
+from marketdata.normalize.changes import ValueChange
 from marketdata.normalize.form4 import (
     METHOD,
     PARSER_VERSION,
@@ -23,8 +33,16 @@ from marketdata.normalize.form4 import (
     xml_document_name,
     xml_names_in_index,
 )
-from marketdata.normalize.insiders import FilingRecord
+from marketdata.normalize.insiders import (
+    FilingRecord,
+    GroupFiling,
+    LineKey,
+    group_supersessions,
+    reparse_changes,
+    supersession_changes,
+)
 from marketdata.normalize.security_master import SecFileError
+from marketdata.normalize.webhooks import DATA_CHANGED
 from marketdata.sec import urls
 from marketdata.sec.client import SecNotFound
 
@@ -45,6 +63,7 @@ class Form4Report:
     lines: int
     raw_key: str
     fetched: bool  # False: the XML was read from the raw store
+    changes: int  # served trades this run changed (value_changes rows)
 
 
 class Form4Ingest:
@@ -81,7 +100,7 @@ class Form4Ingest:
             )
         record = FilingRecord(accession_no, listing.filed_at, doc_name, raw_key, form4)
         async with self._connect() as conn, conn.transaction():
-            await insiders.store(conn, record, method=METHOD, version=PARSER_VERSION)
+            changes = await self._store(conn, record)
         report = Form4Report(
             accession_no=accession_no,
             cik=cik,
@@ -90,6 +109,7 @@ class Form4Ingest:
             lines=len(form4.lines),
             raw_key=raw_key,
             fetched=fetched,
+            changes=len(changes),
         )
         log.info(
             "form4_stored",
@@ -99,8 +119,75 @@ class Form4Ingest:
             owners=report.owners,
             lines=report.lines,
             fetched=fetched,
+            changes=report.changes,
         )
         return report
+
+    async def _store(self, conn: AsyncConnection[Any], record: FilingRecord) -> list[ValueChange]:
+        """Store the filing, decide its insider group's supersessions again, and log and
+        announce the served trades that changed."""
+        previous = await insiders.get_filing(conn, record.accession_no)
+        stored = await insiders.lines(conn, [record.accession_no])
+        await insiders.store(conn, record, method=METHOD, version=PARSER_VERSION)
+        changes: list[ValueChange] = []
+        if previous is not None:
+            changes += reparse_changes(
+                record.accession_no,
+                {line.line_no: line for line in stored if line.superseded_by is None},
+                record.form4.lines,
+                old_version=previous.extractor_version,
+                new_version=PARSER_VERSION,
+            )
+        known = {(line.accession_no, line.line_no) for line in stored}
+        changes += await self._supersede(conn, record, known)
+        issuer = record.form4.issuer_cik
+        for change_id in await value_changes.record_insider_changes(conn, issuer, changes):
+            await announce(conn, DATA_CHANGED, str(change_id))
+        return changes
+
+    async def _supersede(
+        self, conn: AsyncConnection[Any], record: FilingRecord, known: set[LineKey]
+    ) -> list[ValueChange]:
+        """Decide which lines of the filing's insider group are superseded; the changes to
+        served trades. `known`: the filing's lines stored before this run."""
+        group = await insiders.group_filings(conn, record.form4.issuer_cik, record.owner_ciks)
+        stored = await insiders.lines(conn, [filing.accession_no for filing in group])
+        lines: dict[LineKey, StoredLine] = {
+            (line.accession_no, line.line_no): line for line in stored
+        }
+        decision = group_supersessions(
+            [
+                GroupFiling(
+                    filing.accession_no,
+                    filing.form,
+                    filing.filed_at,
+                    filing.original_filed_at,
+                    [line for line in stored if line.accession_no == filing.accession_no],
+                )
+                for filing in group
+            ]
+        )
+        now = {key: supersession_of(line) for key, line in lines.items()}
+        updates = [
+            (key, decision.superseded.get(key))
+            for key in lines
+            if now[key] != decision.superseded.get(key)
+        ]
+        await insiders.set_superseded(conn, updates)
+        if record.accession_no in decision.unmatched:
+            log.warning(
+                "amendment_unmatched",
+                cik=record.form4.issuer_cik,
+                accession_no=record.accession_no,
+                original_filed_at=str(record.form4.original_filed_at),
+                owner_ciks=list(record.owner_ciks),
+            )
+        before = {
+            key: state
+            for key, state in now.items()
+            if key[0] != record.accession_no or key in known
+        }
+        return supersession_changes(lines, before, decision.superseded)
 
     async def _xml(
         self, cik: int, accession_no: str, primary_doc: str | None

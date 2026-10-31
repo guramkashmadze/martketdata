@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+<ownershipDocument>
+
+    <schemaVersion>X0508</schemaVersion>
+
+    <documentType>4/A</documentType>
+
+    <periodOfReport>2025-08-26</periodOfReport>
+
+    <dateOfOriginalSubmission>2025-08-28</dateOfOriginalSubmission>
+
+    <issuer>
+        <issuerCik>0001769628</issuerCik>
+        <issuerName>CoreWeave, Inc.</issuerName>
+        <issuerTradingSymbol>CRWV</issuerTradingSymbol>
+    </issuer>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0002058103</rptOwnerCik>
+            <rptOwnerName>McBee Brannin</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerStreet1>C/O COREWEAVE, INC.</rptOwnerStreet1>
+            <rptOwnerStreet2>290 WEST MT. PLEASANT AVENUE, SUITE 4100</rptOwnerStreet2>
+            <rptOwnerCity>LIVINGSTON</rptOwnerCity>
+            <rptOwnerState>NJ</rptOwnerState>
+            <rptOwnerZipCode>07039</rptOwnerZipCode>
+            <rptOwnerStateDescription></rptOwnerStateDescription>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>false</isDirector>
+            <isOfficer>true</isOfficer>
+            <isTenPercentOwner>false</isTenPercentOwner>
+            <isOther>false</isOther>
+            <officerTitle>Chief Development Officer</officerTitle>
+            <otherText></otherText>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <aff10b5One>1</aff10b5One>
+
+    <nonDerivativeTable>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Class A Common Stock</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2025-08-26</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>0</equitySwapInvolved>
+                <footnoteId id="F1"/>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>104295</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>91.1197</value>
+                    <footnoteId id="F2"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>270705</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>I</value>
+                </directOrIndirectOwnership>
+                <natureOfOwnership>
+                    <value>Brannin J. McBee 2022 Irrevocable Trust</value>
+                    <footnoteId id="F3"/>
+                </natureOfOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+    </nonDerivativeTable>
+
+    <derivativeTable></derivativeTable>
+
+    <footnotes>
+        <footnote id="F1">The reported transaction represents a sale effected pursuant to a Rule 10b5-1 trading plan adopted by the reporting person on May 20, 2025.</footnote>
+        <footnote id="F2">The price reported in Column 4 is a weighted average price. These shares were sold in multiple transactions at prices ranging from $90.43 to $91.42, inclusive. The reporting person undertakes to provide to the Issuer, any security holder of the Issuer, or the staff of the Securities and Exchange Commission, upon request, full information regarding the number of shares sold at each separate price within the ranges set forth in this footnote 2 and in footnotes 3 through 6.</footnote>
+        <footnote id="F3">The reported securities are directly held by the Brannin J. McBee 2022 Irrevocable Trust, of which the reporting person's spouse and minor child are beneficiaries and for which the reporting person's spouse serves as trustee.</footnote>
+    </footnotes>
+
+    <remarks>The Form 4 filed on August 28, 2025 to report the reporting person's 10b5-1 sales on August 26, 2025 is amended herein to correct a typographical error in column 4 of Table I.  The correct code for the transaction is a code &quot;D&quot; for disposition, consistent with the disclosure in the row.  The Form inadvertently set forth a code &quot;A&quot; in column 4 of this row when originally filed.  The Form 4 remains otherwise unmodified.</remarks>
+
+    <ownerSignature>
+        <signatureName>/s/ Kristen McVeety, as Attorney-in-Fact</signatureName>
+        <signatureDate>2025-08-29</signatureDate>
+    </ownerSignature>
+</ownershipDocument>

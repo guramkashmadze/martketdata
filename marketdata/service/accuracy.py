@@ -91,6 +91,7 @@ class ChangeCounts(BaseModel):
     since: datetime  # the last 90 days
     earnings_facts: dict[str, int]  # by reason
     financial_metrics: dict[str, int]
+    insider_trades: dict[str, int]  # E8: by reason, correction or amendment
 
 
 class AccuracyReport(BaseModel):
@@ -142,6 +143,10 @@ async def accuracy_report(
             since=since,
             earnings_facts={
                 reason: counted.get(("earnings_fact", reason), 0) for reason in REASONS
+            },
+            insider_trades={
+                reason: counted.get(("insider_transaction", reason), 0)
+                for reason in ("correction", "amendment")
             },
             financial_metrics={
                 reason: counted.get(("financial_metric", reason), 0) for reason in REASONS

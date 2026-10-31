@@ -7,6 +7,11 @@ the new value and why, `correction` (our rules, an override or the calc version 
 changed a release's values). Each change is served with its company, what changed (a release's
 slot, or a metric's period), the reason and detail, and the value as it is served now with its
 proof (§9.10), since a value may have changed again later. Newest first, a page at a time.
+
+E8: an insider trade changes when a 4/A corrects or drops a Form 4's line, when a filing made
+twice is served once, or when a new parser version reads the line otherwise. Its change names
+the filing and line, the shares before and after (the rest is in the detail), the filing that
+serves the trade now and the trade as served now with its proof.
 """
 
 from collections.abc import Mapping, Sequence
@@ -23,6 +28,7 @@ from marketdata.service.companies import CompanyRef, company_refs, group_of, res
 from marketdata.service.earnings import EarningsFact, EarningsRelease, FactProof, get_earnings
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.financials import MetricProof, MetricView, metric_refs, metric_view
+from marketdata.service.insiders import InsiderProof, ServedLine, served_now
 from marketdata.service.pages import (
     BAD_CURSOR,
     DEFAULT_LIMIT,
@@ -45,6 +51,7 @@ from marketdata.service.served import (
 type Reason = Literal["correction", "restatement", "amendment"]
 REASONS: tuple[Reason, ...] = ("correction", "restatement", "amendment")
 GONE = "the value is no longer stored"
+NOT_SERVED = "the trade is no longer served: the detail says why"
 
 
 class ValueChange(BaseModel):
@@ -56,7 +63,7 @@ class ValueChange(BaseModel):
     changed_at: datetime
     reason: Reason
     detail: str | None  # e.g. the rules versions, or the filing that restates
-    entity: Literal["earnings_fact", "financial_metric"]
+    entity: Literal["earnings_fact", "financial_metric", "insider_transaction"]
     ticker: str | None
     cik: int  # the company's, also for a value its predecessor filed
     company: str | None
@@ -64,7 +71,9 @@ class ValueChange(BaseModel):
     accession_no: str | None  # an earnings fact: the release (8-K or 8-K/A) it belongs to
     amends: str | None  # an 8-K/A: the release whose values it changed
     slot: str | None  # an earnings fact: revenue, operating_income, net_income, eps_diluted
-    field: str  # value, or prior_value: the same quarter a year earlier
+    line_no: int | None = None  # an insider trade: its line in the Form 4 (`accession_no`)
+    served_from: str | None = None  # an insider trade: the filing that serves it now
+    field: str  # value, or prior_value: the same quarter a year earlier; shares for a trade
     metric: str | None  # a metric value
     period_type: str | None  # a metric value: Q, FY or TTM
     period_end: date | None
@@ -74,7 +83,7 @@ class ValueChange(BaseModel):
     value: Number | None  # what is served now, with the proof below
     reasons: tuple[str, ...]  # why the value served now is null
     quality_flags: tuple[str, ...]
-    proof: FactProof | MetricProof | None
+    proof: FactProof | MetricProof | InsiderProof | None
 
 
 class ChangeFeed(BaseModel):
@@ -187,7 +196,12 @@ async def _build(
         (row.cik, row.metric, row.period_type, row.period_end): metric_view(row)
         for row in await financial_metrics.rows_at(conn, keys)
     }
-    changes = tuple(_change(change, companies[change.cik], releases, rows) for change in stored)
+    trades = await served_now(
+        conn, [_line_key(change) for change in stored if change.entity == "insider_transaction"]
+    )
+    changes = tuple(
+        _change(change, companies[change.cik], releases, rows, trades) for change in stored
+    )
     views = list(rows.values())
     flags = [
         FlagRef(
@@ -204,6 +218,16 @@ async def _build(
         sources=merge_sources(
             *(served.sources for served in releases.values()),
             await sources_of(conn, metric_refs(views)),
+            [
+                Source(
+                    accession_no=trade.proof.accession_no,
+                    form=trade.proof.form,
+                    filed_at=trade.proof.filed_at,
+                    url=trade.proof.filing_url,
+                )
+                for trade in trades.values()
+                if trade is not None
+            ],
         ),
         as_of=newest(
             [
@@ -225,11 +249,16 @@ def _metric_key(change: StoredChange) -> tuple[int, str, str, date]:
     )
 
 
+def _line_key(change: StoredChange) -> tuple[str, int]:
+    return (str(change.entity_key["accession_no"]), int(change.entity_key["line_no"]))
+
+
 def _change(
     change: StoredChange,
     company: CompanyRef,
     releases: Mapping[str, Served[EarningsRelease]],
     rows: Mapping[tuple[int, str, str, date], MetricView],
+    trades: Mapping[tuple[str, int], ServedLine | None],
 ) -> ValueChange:
     key = change.entity_key
     field = str(key.get("field", "value"))
@@ -268,6 +297,26 @@ def _change(
             reasons=fact.reasons if fact is not None else (GONE,),
             quality_flags=fact.quality_flags if fact is not None else (),
             proof=fact.proof if fact is not None else None,
+        )
+    if change.entity == "insider_transaction":
+        accession, line_no = _line_key(change)
+        trade = trades.get((accession, line_no))
+        return ValueChange(
+            **common,
+            entity="insider_transaction",
+            accession_no=accession,
+            amends=None,
+            slot=None,
+            line_no=line_no,
+            served_from=str(key["served_from"]) if key.get("served_from") else None,
+            metric=None,
+            period_type=None,
+            period_end=trade.line.trade_date if trade is not None else None,
+            unit="shares",
+            value=trade.line.shares if trade is not None else None,
+            reasons=() if trade is not None else (NOT_SERVED,),
+            quality_flags=(),
+            proof=trade.proof if trade is not None else None,
         )
     metric_key = _metric_key(change)
     view = rows.get(metric_key)

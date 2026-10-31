@@ -16,7 +16,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict
 
 from marketdata.normalize.form4 import Line, Owner
-from marketdata.normalize.insiders import FilingRecord
+from marketdata.normalize.insiders import FilingRecord, LineKey, SupersedeReason, Supersession
 
 
 class StoredFiling(BaseModel):
@@ -57,6 +57,8 @@ class StoredOwner(BaseModel):
 
 
 class StoredLine(BaseModel):
+    """A line as stored; `supersession` says what supersedes it, if anything (E8-S3)."""
+
     model_config = ConfigDict(frozen=True)
 
     accession_no: str
@@ -175,6 +177,17 @@ _DELETE_LINES_AFTER = """
 """
 
 _GET_FILING = f"select {_FILING_COLUMNS} from insider_filings where accession_no = %(a)s"
+# E8-S3: an insider group, the filings the same owners made about one issuer.
+_GROUP = f"""
+    select {_FILING_COLUMNS} from insider_filings
+    where issuer_cik = %(issuer_cik)s and owner_ciks = %(owner_ciks)s::bigint[]
+    order by filed_at, accession_no
+"""
+_SET_SUPERSEDED = """
+    update insider_transactions
+    set superseded_by = %(by)s, superseded_line = %(by_line)s, superseded_reason = %(reason)s
+    where accession_no = %(accession_no)s and line_no = %(line_no)s
+"""
 _FILINGS = f"""
     select {_FILING_COLUMNS} from insider_filings where accession_no = any(%(accessions)s)
     order by filed_at, accession_no
@@ -232,6 +245,35 @@ async def store(
             {"accession_no": record.accession_no, "last": len(form4.lines)},
         )
         return sorted(int(row[0]) for row in await cur.fetchall())
+
+
+async def group_filings(
+    conn: AsyncConnection[Any], issuer_cik: int, owner_ciks: Sequence[int]
+) -> list[StoredFiling]:
+    """Every filing the same owners (their sorted CIKs) made about one issuer, oldest first."""
+    async with conn.cursor(row_factory=class_row(StoredFiling)) as cur:
+        await cur.execute(_GROUP, {"issuer_cik": issuer_cik, "owner_ciks": sorted(owner_ciks)})
+        return await cur.fetchall()
+
+
+async def set_superseded(
+    conn: AsyncConnection[Any], updates: Sequence[tuple[LineKey, Supersession | None]]
+) -> None:
+    """Mark lines superseded (or served again, with None)."""
+    async with conn.cursor() as cur:
+        await cur.executemany(
+            _SET_SUPERSEDED,
+            [
+                {
+                    "accession_no": accession_no,
+                    "line_no": line_no,
+                    "by": supersession.by if supersession else None,
+                    "by_line": supersession.by_line if supersession else None,
+                    "reason": supersession.reason if supersession else None,
+                }
+                for (accession_no, line_no), supersession in updates
+            ],
+        )
 
 
 async def get_filing(conn: AsyncConnection[Any], accession_no: str) -> StoredFiling | None:
@@ -303,3 +345,11 @@ def _line(
         "method": method,
         "extractor_version": version,
     }
+
+
+def supersession_of(line: StoredLine) -> Supersession | None:
+    """What supersedes a stored line; None while it is served."""
+    if line.superseded_by is None or line.superseded_reason not in ("amendment", "duplicate"):
+        return None
+    reason: SupersedeReason = "amendment" if line.superseded_reason == "amendment" else "duplicate"
+    return Supersession(line.superseded_by, line.superseded_line, reason)

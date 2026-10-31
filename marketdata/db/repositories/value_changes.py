@@ -94,6 +94,13 @@ async def record_metric_changes(
     return await _record(conn, "financial_metric", cik, changes)
 
 
+async def record_insider_changes(
+    conn: AsyncConnection[Any], cik: int, changes: Sequence[ValueChange]
+) -> list[int]:
+    """Log changes to served insider trades (E8); their ids, in order."""
+    return await _record(conn, "insider_transaction", cik, changes)
+
+
 async def _record(
     conn: AsyncConnection[Any], entity: str, cik: int, changes: Sequence[ValueChange]
 ) -> list[int]:

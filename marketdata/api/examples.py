@@ -522,6 +522,7 @@ STATUS: Served[StatusReport] = Served(
                 since=STATUS_AT - timedelta(days=90),
                 earnings_facts={"correction": 30, "restatement": 0, "amendment": 0},
                 financial_metrics={"correction": 0, "restatement": 0, "amendment": 0},
+                insider_trades={"correction": 0, "amendment": 0},
             ),
         ),
     ),

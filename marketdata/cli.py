@@ -1212,7 +1212,9 @@ def _accuracy_lines(report: AccuracyReport, loaded: GoldenLoad | None) -> list[s
         f"Value changes since {_utc(changes.since)} UTC (90 days): earnings values "
         + ", ".join(f"{reason} {count}" for reason, count in changes.earnings_facts.items())
         + "; metric values "
-        + ", ".join(f"{reason} {count}" for reason, count in changes.financial_metrics.items()),
+        + ", ".join(f"{reason} {count}" for reason, count in changes.financial_metrics.items())
+        + "; insider trades "
+        + ", ".join(f"{reason} {count}" for reason, count in changes.insider_trades.items()),
         "",
         "Information from public filings. Not investment advice.",
     ]
