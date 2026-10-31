@@ -86,7 +86,7 @@ async def _not_listed(conn: AsyncConnection[Any], ticker: str) -> str:
     )
 
 
-DataKind = Literal["earnings", "fundamentals"]
+DataKind = Literal["earnings", "fundamentals", "insiders"]
 
 
 class Capability(BaseModel):
@@ -140,7 +140,8 @@ class Classified(Protocol):
 
 
 def capabilities_for(company: Classified) -> Capabilities:
-    """In the MVP, earnings and fundamentals apply to domestic filers in the universe only."""
+    """In the MVP, earnings and fundamentals apply to domestic filers in the universe only;
+    insider trades to domestic filers and foreign private issuers in the universe (E8)."""
     if company.filer_type in _NOT_APPLICABLE:
         earnings, fundamentals = _NOT_APPLICABLE[company.filer_type]
         applies = False
@@ -161,8 +162,34 @@ def capabilities_for(company: Classified) -> Capabilities:
         kinds=(
             Capability(kind="earnings", applies=applies, reason=earnings),
             Capability(kind="fundamentals", applies=applies, reason=fundamentals),
+            _insiders(company),
         ),
     )
+
+
+def _insiders(company: Classified) -> Capability:
+    """Insider trades come from the Form 4s an issuer's directors, officers and 10% owners file;
+    foreign private issuers' directors and officers file them since March 2026."""
+    if company.filer_type == "fund":
+        return _not_insiders("A fund: insider Form 4 filings don't apply.")
+    if company.filer_type == "other":
+        return _not_insiders("Files no 10-K or 10-Q, so insider Form 4 filings aren't covered.")
+    if not company.in_universe:
+        return _not_insiders("Not in the covered universe.")
+    if company.filer_type == "unknown":
+        return _not_insiders("Not classified yet: its SEC filings could not be loaded.")
+    if company.filer_type == "foreign_private_issuer":
+        reason = (
+            "A foreign private issuer in the covered universe: the Form 4 filings of its "
+            "directors and officers apply, filed since March 2026."
+        )
+    else:
+        reason = "A domestic filer in the covered universe: its insiders' Form 4 filings apply."
+    return Capability(kind="insiders", applies=True, reason=reason)
+
+
+def _not_insiders(reason: str) -> Capability:
+    return Capability(kind="insiders", applies=False, reason=reason)
 
 
 def require(security: ResolvedSecurity, kind: DataKind) -> None:

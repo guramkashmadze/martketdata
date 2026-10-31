@@ -2,13 +2,20 @@
 a 10b5-1 sale with derivative lines, joint filers, a 4/A, a filing from before the 10b5-1 box,
 a foreign private issuer's converted price."""
 
+import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
-from marketdata.normalize.form4 import Form4, Line, parse_form4, xml_document_name
+from marketdata.normalize.form4 import (
+    Form4,
+    Line,
+    parse_form4,
+    xml_document_name,
+    xml_names_in_index,
+)
 from marketdata.normalize.security_master import SecFileError
 
 FILINGS = Path(__file__).resolve().parents[1] / "fixtures" / "sec" / "filings"
@@ -35,6 +42,19 @@ def test_the_xml_is_the_primary_document_without_its_rendering_folder(
     primary_doc: str, xml: str
 ) -> None:
     assert xml_document_name(primary_doc) == xml
+
+
+def test_a_folder_index_lists_its_xml_files_in_order() -> None:
+    names = ["0001140361-26-040127.txt", "form4.xml", "ex24.htm", "Second.XML"]
+    index = {"directory": {"item": [{"name": name} for name in names]}}
+
+    assert xml_names_in_index(json.dumps(index).encode(), "x") == ["form4.xml", "Second.XML"]
+
+
+@pytest.mark.parametrize("data", [b"{}", b"not json", b'{"directory": {"item": "x"}}'])
+def test_an_index_without_a_listing_is_refused(data: bytes) -> None:
+    with pytest.raises(SecFileError, match="no directory listing"):
+        xml_names_in_index(data, "0001140361-26-040127")
 
 
 def test_a_filing_gives_its_issuer_owner_and_10b5_1_box() -> None:

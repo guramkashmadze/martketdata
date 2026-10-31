@@ -19,6 +19,7 @@ Pure: takes the document's bytes and returns its issuer, owners, trades and foot
 - Owners' addresses and signatures are not kept.
 """
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -120,6 +121,21 @@ def xml_document_name(primary_doc: str) -> str:
     """The XML behind a Form 4's primary document: EDGAR lists its rendering
     (`xslF345X06/form4.xml`), whose XML is `form4.xml` in the filing folder (PLAN.md §8)."""
     return _XSL_FOLDER.sub("", primary_doc.strip())
+
+
+def xml_names_in_index(index: bytes, accession_no: str) -> list[str]:
+    """The XML files a filing folder's index.json lists, in its order."""
+    try:
+        items = json.loads(index)["directory"]["item"]
+    except ValueError, KeyError, TypeError:
+        raise SecFileError(f"{accession_no}: index.json has no directory listing") from None
+    if not isinstance(items, list):
+        raise SecFileError(f"{accession_no}: index.json has no directory listing")
+    return [
+        str(item["name"])
+        for item in items
+        if isinstance(item, dict) and str(item.get("name", "")).lower().endswith(".xml")
+    ]
 
 
 def parse_form4(data: bytes, where: str = "Form 4") -> Form4:

@@ -21,6 +21,7 @@ E5A_INDEXES = {
     "earnings_releases_by_acceptance",
 }
 WEBHOOK_TABLES = {"webhook_destinations", "webhook_events", "webhook_deliveries"}
+INSIDER_TABLES = {"insider_filings", "insider_owners", "insider_transactions"}
 
 
 def _tables(url: str) -> set[str]:
@@ -47,8 +48,17 @@ def _indexes(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0014(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0014"
+def test_head_is_0015(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0015"
+
+
+def _value_change_entities(url: str) -> str:
+    with psycopg.connect(url) as conn:
+        row = conn.execute(
+            "select pg_get_constraintdef(oid) from pg_constraint "
+            "where conname = 'value_changes_entity_check'"
+        ).fetchone()
+    return str(row[0]) if row else ""
 
 
 def _units(url: str) -> str:
@@ -71,6 +81,13 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert _tables(migrated_database) >= WEBHOOK_TABLES
     assert "live" in _columns(migrated_database, "earnings_releases")
     assert "value_changes_by_cik" in _indexes(migrated_database)
+    assert "golden_values" in _tables(migrated_database)
+    assert _tables(migrated_database) >= INSIDER_TABLES
+    assert "insider_transaction" in _value_change_entities(migrated_database)
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & INSIDER_TABLES == set()
+    assert "insider_transaction" not in _value_change_entities(migrated_database)
     assert "golden_values" in _tables(migrated_database)
 
     command.downgrade(alembic_config, "-1")
@@ -131,6 +148,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     command.upgrade(alembic_config, "head")
     assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES | WEBHOOK_TABLES
     assert "golden_values" in _tables(migrated_database)
+    assert _tables(migrated_database) >= INSIDER_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:

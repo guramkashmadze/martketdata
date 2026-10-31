@@ -51,7 +51,7 @@ async def test_coverage_lists_universe_tickers_with_their_class_and_kinds(seeded
     fund = listed[3]
     assert (fund.filer_type, [(k.kind, k.applies) for k in fund.kinds]) == (
         "fund",
-        [("earnings", False), ("fundamentals", False)],
+        [("earnings", False), ("fundamentals", False), ("insiders", False)],
     )
     assert fund.kinds[1].reason == "A fund: fundamentals don't apply."
     assert all(kind.applies for kind in listed[0].kinds)

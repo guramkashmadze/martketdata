@@ -14,6 +14,7 @@ from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
 from marketdata.ingest.facts import FactsLoader
+from marketdata.ingest.form4 import Form4Ingest, Form4Refused
 from marketdata.ingest.public_float import PublicFloatLoader
 from marketdata.ingest.security_master import (
     SecurityMasterLoader,
@@ -21,8 +22,8 @@ from marketdata.ingest.security_master import (
     read_predecessors,
 )
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
-from marketdata.normalize.filings import EARNINGS_EXTRACT, FACTS_REFRESH
-from marketdata.normalize.security_master import SnapshotRefused
+from marketdata.normalize.filings import EARNINGS_EXTRACT, FACTS_REFRESH, FORM4_PARSE
+from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError
 from marketdata.normalize.webhooks import WEBHOOK_DELIVER, WEBHOOK_PUBLISH
 from marketdata.sec import urls
@@ -121,6 +122,17 @@ async def refresh_facts(context: TaskContext, task: Task) -> None:
     backfill: its companyfacts and its predecessors' stored and loaded. A new filing the SEC's
     file doesn't list yet makes the task retry (FactsNotPublished)."""
     await FactsLoader(context.fetcher, context.connect).refresh(_cik(task))
+
+
+async def parse_insider_filing(context: TaskContext, task: Task) -> None:
+    """One Form 4 or 4/A (E8), routed from the issuer's listing or queued by the insiders
+    backfill: its XML stored, parsed and its trades stored. A document that isn't a Form 4 of
+    the listing's company is refused: retrying can't help."""
+    cik, accession_no = _cik(task), _accession(task)
+    try:
+        await Form4Ingest(context.fetcher, context.connect).run(cik, accession_no)
+    except (Form4Refused, SecFileError) as exc:
+        raise TaskRefused(str(exc)) from exc
 
 
 async def load_public_float(context: TaskContext, task: Task) -> None:
@@ -227,6 +239,7 @@ def build_registry(
     registry.register(EARNINGS_EXTRACT, extract_earnings)
     registry.register(EARNINGS_BACKFILL, backfill_earnings)
     registry.register(FACTS_REFRESH, refresh_facts)
+    registry.register(FORM4_PARSE, parse_insider_filing)
     registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
     registry.register(WEBHOOK_PUBLISH, publish_event)
     registry.register(

@@ -1,5 +1,6 @@
 """E2-S5: which data kinds apply to a company, with the reason (PLAN.md §9.1, D-018). In the MVP,
-earnings and fundamentals apply to domestic filers in the universe only."""
+earnings and fundamentals apply to domestic filers in the universe only; insider trades (E8) to
+domestic filers and foreign private issuers in the universe."""
 
 from datetime import UTC, datetime
 
@@ -30,6 +31,7 @@ def test_a_domestic_filer_in_the_universe_gets_earnings_and_fundamentals() -> No
     assert [(c.kind, c.applies) for c in capabilities.kinds] == [
         ("earnings", True),
         ("fundamentals", True),
+        ("insiders", True),
     ]
     assert capabilities.of("fundamentals").reason == (
         "A domestic filer in the covered universe: its 10-K and 10-Q apply."
@@ -83,3 +85,38 @@ def test_everyone_else_gets_a_reason(
         earnings,
         fundamentals,
     )
+
+
+def test_a_foreign_issuer_in_the_universe_gets_insiders_only() -> None:
+    """Section 16 reports reached foreign private issuers' directors and officers in March 2026:
+    TSM's first Form 4 on its listing is of 2026-03-24 (EDGE_CASES.md, E8)."""
+    capabilities = capabilities_for(company("foreign_private_issuer", in_universe=True))
+
+    assert [(c.kind, c.applies) for c in capabilities.kinds] == [
+        ("earnings", False),
+        ("fundamentals", False),
+        ("insiders", True),
+    ]
+    assert capabilities.of("insiders").reason == (
+        "A foreign private issuer in the covered universe: the Form 4 filings of its directors "
+        "and officers apply, filed since March 2026."
+    )
+
+
+@pytest.mark.parametrize(
+    ("filer_type", "in_universe", "reason"),
+    [
+        ("fund", True, "A fund: insider Form 4 filings don't apply."),
+        ("fund", False, "A fund: insider Form 4 filings don't apply."),
+        ("other", True, "Files no 10-K or 10-Q, so insider Form 4 filings aren't covered."),
+        ("domestic", False, "Not in the covered universe."),
+        ("foreign_private_issuer", False, "Not in the covered universe."),
+        ("unknown", True, "Not classified yet: its SEC filings could not be loaded."),
+    ],
+)
+def test_insiders_dont_apply_to_the_rest(
+    filer_type: FilerType, in_universe: bool, reason: str
+) -> None:
+    insiders = capabilities_for(company(filer_type, in_universe)).of("insiders")
+
+    assert (insiders.applies, insiders.reason) == (False, reason)

@@ -359,6 +359,11 @@ _APPLIES = (
         applies=True,
         reason="A domestic filer in the covered universe: its 10-K and 10-Q apply.",
     ),
+    Capability(
+        kind="insiders",
+        applies=True,
+        reason="A domestic filer in the covered universe: its insiders' Form 4 filings apply.",
+    ),
 )
 COVERAGE: Served[Coverage] = Served(
     data=Coverage(
@@ -387,6 +392,11 @@ COVERAGE: Served[Coverage] = Served(
                         kind="fundamentals",
                         applies=False,
                         reason="A fund: fundamentals don't apply.",
+                    ),
+                    Capability(
+                        kind="insiders",
+                        applies=False,
+                        reason="A fund: insider Form 4 filings don't apply.",
                     ),
                 ),
             ),
