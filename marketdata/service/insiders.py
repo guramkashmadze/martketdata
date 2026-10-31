@@ -301,6 +301,7 @@ async def insider_activity(
                 line.accession_no,
                 tuple(filings[line.accession_no].owner_ciks),
                 filings[line.accession_no].rule_10b5_1,
+                filings[line.accession_no].filed_at,
                 line,
             )
             for line in lines

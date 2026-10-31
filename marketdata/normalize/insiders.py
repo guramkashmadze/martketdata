@@ -458,7 +458,9 @@ def _text(value: object) -> str:
 # its managers are one group, so a sale isn't counted once per owner), trade date, code and
 # security (Alphabet's Class A and Class C shares aren't added together), and table: shares
 # summed, the price weighted by shares over the lines that give one, and the value as the sum
-# of shares times price. The average is rounded to four decimals; the value is exact.
+# of shares times price. The average is rounded to four decimals; the value is exact. Flags
+# never change a value: no price on any line (Berkshire's footnote-only average), on some lines,
+# a sale that acquires or a purchase that disposes, a trade dated after its filing.
 
 PRICE_PLACES = Decimal("0.0001")
 
@@ -470,6 +472,7 @@ class FiledTrade:
     accession_no: str
     owner_ciks: tuple[int, ...]
     rule_10b5_1: bool | None  # the filing's box
+    filed_at: date
     line: TradeLine
 
 
@@ -535,6 +538,8 @@ def _trade_group(members: Sequence[FiledTrade]) -> TradeGroup:
             checks.append("direction_matches_code")
         else:
             flags.append("direction_differs_from_code")
+    if any(member.line.trade_date > member.filed_at for member in members):
+        flags.append("trade_date_after_filing")  # a filer's typo: Alphabet's 2027-01-25
     if not priced:
         flags.append("price_not_reported")
     elif priced < len(lines):
