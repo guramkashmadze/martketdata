@@ -18,7 +18,7 @@ from marketdata.normalize.insiders import (
 )
 
 FILINGS = Path(__file__).resolve().parents[1] / "fixtures" / "sec" / "filings"
-CRWV, GOOGL, NOW, ATI = 1769628, 1652044, 1065280, 1835632
+CRWV, GOOGL, NFLX, MRVL = 1769628, 1652044, 1065280, 1835632
 
 
 def _form4(cik: int, accession: str, name: str) -> Form4:
@@ -97,9 +97,9 @@ def test_a_corrected_trade_date_supersedes_the_line_with_the_wrong_date() -> Non
 
 
 def test_a_4a_that_adds_omitted_trades_supersedes_nothing() -> None:
-    """The 4/A adds a performance award's vesting the Form 4 of 2026-01-20 left out."""
-    original = _filed(ATI, "0001628280-26-002747", "wk-form4_1768950915.xml", date(2026, 1, 20))
-    amendment = _amendment(ATI, "0001193125-26-032163", "ownership.xml", date(2026, 1, 30))
+    """Marvell: the 4/A adds a performance award's vesting the Form 4 of 2026-01-20 left out."""
+    original = _filed(MRVL, "0001628280-26-002747", "wk-form4_1768950915.xml", date(2026, 1, 20))
+    amendment = _amendment(MRVL, "0001193125-26-032163", "ownership.xml", date(2026, 1, 30))
 
     decision = group_supersessions([original, amendment])
 
@@ -107,11 +107,11 @@ def test_a_4a_that_adds_omitted_trades_supersedes_nothing() -> None:
 
 
 def test_a_filing_made_twice_is_served_once_and_a_4a_adds_its_second_part() -> None:
-    """ServiceNow's director filed the same Form 4 twice on 2025-06-02, then a 4/A with the
-    second part of its sales."""
-    first = _filed(NOW, "0001062993-25-010708", "form4.xml", date(2025, 6, 2))
-    copy = _filed(NOW, "0001062993-25-010709", "form4.xml", date(2025, 6, 2))
-    second_part = _amendment(NOW, "0001062993-25-011280", "form4a.xml", date(2025, 6, 9))
+    """A Netflix director's trusts' sales: the same Form 4 filed twice on 2025-06-02, then a
+    4/A with the second part of its sales."""
+    first = _filed(NFLX, "0001062993-25-010708", "form4.xml", date(2025, 6, 2))
+    copy = _filed(NFLX, "0001062993-25-010709", "form4.xml", date(2025, 6, 2))
+    second_part = _amendment(NFLX, "0001062993-25-011280", "form4a.xml", date(2025, 6, 9))
 
     decision = group_supersessions([copy, second_part, first])
 

@@ -18,13 +18,14 @@ from marketdata.sec.raw_store import LocalRawStore
 from marketdata.service.changes import changes_feed
 
 Conn = psycopg.AsyncConnection[Any]
-CRWV, GOOGL, NOW = 1769628, 1652044, 1065280
+CRWV, GOOGL, NFLX = 1769628, 1652044, 1065280
 
 # CoreWeave: a trust's sale of 2025-08-26 had the wrong acquired-or-disposed code; the 4/A
 # restates that one line of ten.
 ORIGINAL = ("0001415889-25-023219", "4", date(2025, 8, 28), "form4-08282025_080845.xml")
 AMENDMENT = ("0001415889-25-023333", "4/A", date(2025, 8, 29), "form4a-08302025_120842.xml")
-# ServiceNow: one Form 4 filed twice on 2025-06-02, then a 4/A with its second part.
+# Netflix (a director's trusts): one Form 4 filed twice on 2025-06-02, then a 4/A with its
+# second part.
 FIRST = ("0001062993-25-010708", "4", date(2025, 6, 2), "form4.xml")
 COPY = ("0001062993-25-010709", "4", date(2025, 6, 2), "form4.xml")
 SECOND_PART = ("0001062993-25-011280", "4/A", date(2025, 6, 9), "form4a.xml")
@@ -145,16 +146,16 @@ async def test_a_4a_with_no_lines_leaves_its_filing_served(conn: Conn, tmp_path:
 async def test_a_filing_made_twice_is_served_once_whichever_copy_comes_first(
     conn: Conn, tmp_path: Path
 ) -> None:
-    await _store(conn, tmp_path, NOW, COPY)
-    copy_served = await _store(conn, tmp_path, NOW, FIRST)
-    await _store(conn, tmp_path, NOW, SECOND_PART)
+    await _store(conn, tmp_path, NFLX, COPY)
+    copy_served = await _store(conn, tmp_path, NFLX, FIRST)
+    await _store(conn, tmp_path, NFLX, SECOND_PART)
 
     assert await _superseded(conn, COPY[0]) == {n: (FIRST[0], n, "duplicate") for n in range(1, 31)}
     assert await _superseded(conn, FIRST[0]) == {}
     assert await _superseded(conn, SECOND_PART[0]) == {}  # its 14 sales are new trades
     # The copy was served until the first one arrived: each of its trades now served once.
     assert copy_served.changes == 30
-    changes = await value_changes.page(conn, [NOW], limit=100)
+    changes = await value_changes.page(conn, [NFLX], limit=100)
     assert {(change.reason, change.new_value) for change in changes} == {("correction", None)}
 
 
