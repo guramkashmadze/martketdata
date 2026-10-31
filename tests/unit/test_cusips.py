@@ -42,9 +42,10 @@ def test_the_check_digit_is_checked(cusip: str, valid: bool) -> None:
     assert valid_cusip(cusip) is valid
 
 
-def test_each_cusip_is_asked_for_on_its_us_listing() -> None:
-    assert mapping_jobs(["037833100"]) == [
-        {"idType": "ID_CUSIP", "idValue": "037833100", "exchCode": "US"}
+def test_each_cusip_is_asked_for_on_its_us_listing_and_a_cins_as_one() -> None:
+    assert mapping_jobs(["037833100", "H1467J104"]) == [
+        {"idType": "ID_CUSIP", "idValue": "037833100", "exchCode": "US"},
+        {"idType": "ID_CINS", "idValue": "H1467J104", "exchCode": "US"},  # Chubb, in Zurich
     ]
 
 

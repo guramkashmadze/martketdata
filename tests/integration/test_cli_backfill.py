@@ -4,7 +4,8 @@ per domestic universe company. E4a: `marketdata backfill facts` queues one facts
 domestic universe company, and both take `--ticker`. E8: `marketdata backfill insiders
 --quarters N` queues one insiders backfill per domestic filer or foreign private issuer in the
 universe. E9: `marketdata backfill funds --quarters N` queues one funds backfill per curated
-manager. The CLI commits, so the test removes what it wrote."""
+manager, and `marketdata backfill cusips` the CUSIP mapping. The CLI commits, so the test removes
+what it wrote."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ import pytest
 from typer.testing import CliRunner
 
 from marketdata import cli
+from marketdata.normalize.cusips import CUSIP_MAP
 from marketdata.normalize.filings import FACTS_REFRESH
 from marketdata.normalize.holdings import backfill_start
 from marketdata.tasks.kinds import (
@@ -221,3 +223,20 @@ def test_funds_backfills_cover_the_curated_managers(universe: str) -> None:
         (str(cik), {"cik": cik, "since": since.isoformat(), "force": False})
         for cik in (1067983, 1096343)
     ]
+
+
+def test_the_cusip_mapping_is_queued_and_can_ask_unmatched_cusips_again(universe: str) -> None:
+    plain = CliRunner().invoke(cli.app, ["backfill", "cusips"])
+
+    assert plain.exit_code == 0, plain.output
+    assert "CUSIP mapping of the CUSIPs never asked about: queued" in plain.stdout
+    with psycopg.connect(universe, autocommit=True) as conn:
+        conn.execute("update tasks set status = 'done' where kind = %s", [CUSIP_MAP])
+    again = CliRunner().invoke(cli.app, ["backfill", "cusips", "--recheck"])
+    with psycopg.connect(universe) as conn:
+        row = conn.execute(
+            "select payload, status from tasks where kind = %s", [CUSIP_MAP]
+        ).fetchone()
+
+    assert "and those not matched" in again.stdout
+    assert row == ({"recheck": True}, "queued")

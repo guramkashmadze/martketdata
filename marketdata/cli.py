@@ -392,6 +392,28 @@ def backfill_funds(
     )
 
 
+@groups["backfill"].command("cusips")
+def backfill_cusips(
+    recheck: Annotated[
+        bool,
+        typer.Option(help="Ask again about the CUSIPs not matched, without waiting 30 days."),
+    ] = False,
+) -> None:
+    """Queue the mapping of the stored 13F lines' CUSIPs to FIGIs and tickers on OpenFIGI; the
+    worker runs it (E9-S3). Without OPENFIGI_API_KEY it asks 10 CUSIPs a request, 25 requests a
+    minute; with a key, 100 and 250."""
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        return [await task_scheduler.enqueue_cusip_map(conn, recheck=recheck)]
+
+    [task] = _queue(settings, work)
+    state = "queued" if task.status == "queued" else f"already {task.status}"
+    which = "never asked about, and those not matched," if recheck else "never asked about"
+    typer.echo(f"CUSIP mapping of the CUSIPs {which}: {state}; the worker runs it.")
+    typer.echo("Follow it with `marketdata tasks list --kind cusip_map`.")
+
+
 @groups["backfill"].command("facts")
 def backfill_facts(
     tickers: Annotated[

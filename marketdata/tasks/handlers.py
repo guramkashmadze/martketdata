@@ -12,7 +12,7 @@ import structlog
 
 from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
-from marketdata.ingest.cusips import CusipMapper
+from marketdata.ingest.cusips import RECHECK_AFTER, CusipMapper
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
 from marketdata.ingest.f13 import F13Ingest, F13Refused, FundsBackfill, read_unit_overrides
 from marketdata.ingest.facts import FactsLoader
@@ -170,12 +170,15 @@ async def backfill_funds(context: TaskContext, task: Task) -> None:
 
 
 async def map_cusips(context: TaskContext, task: Task) -> None:
-    """The CUSIPs of stored 13F lines not mapped yet, asked about on OpenFIGI (E9-S3). OpenFIGI
-    refusing the request (a bad key) or answering out of shape is refused: retrying can't
-    help; its rate limit and outages are retried."""
+    """The CUSIPs of stored 13F lines not mapped yet, asked about on OpenFIGI (E9-S3); with
+    `recheck` in the payload, the unmatched ones are asked again at once rather than after 30
+    days. OpenFIGI refusing the request (a bad key) or answering out of shape is refused:
+    retrying can't help; its rate limit and outages are retried."""
+    recheck = timedelta(0) if task.payload.get("recheck") is True else RECHECK_AFTER
     try:
         async with OpenFigiClient.from_settings(context.settings) as client:
-            await CusipMapper(client, context.fetcher, context.connect).run()
+            mapper = CusipMapper(client, context.fetcher, context.connect, recheck_after=recheck)
+            await mapper.run()
     except OpenFigiUnavailable:
         raise
     except (OpenFigiError, MappingError) as exc:

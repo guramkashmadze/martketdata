@@ -1,7 +1,9 @@
 """CUSIPs from 13F filings mapped to FIGIs and tickers through OpenFIGI (E9-S3, PLAN.md §9.8).
 
-Pure. A CUSIP is asked for as `ID_CUSIP` on the US composite listing (`exchCode` US), so a
-listed share gives one FIGI and its ticker. The answer for each CUSIP is:
+Pure. A CUSIP is asked for on the US composite listing (`exchCode` US), so a listed share gives
+one FIGI and its ticker: as `ID_CUSIP`, or as `ID_CINS` when it starts with a letter. 13F
+tables give issuers incorporated outside the US (Chubb, Eaton, ASML, Spotify) their CINS number
+in the CUSIP field, and OpenFIGI finds none of them as a CUSIP. The answer for each is:
 
 - `matched`: one FIGI. The position links to our security with that ticker, when we list it.
 - `unmatched`: no FIGI (OpenFIGI's "No identifier found": bonds, delisted shares, unlisted
@@ -44,9 +46,14 @@ def valid_cusip(cusip: str) -> bool:
     return (10 - total % 10) % 10 == int(cusip[8])
 
 
+def id_type(cusip: str) -> str:
+    """CINS numbers (an issuer outside the US) start with a letter, CUSIPs with a digit."""
+    return "ID_CINS" if cusip[:1].isalpha() else "ID_CUSIP"
+
+
 def mapping_jobs(cusips: Sequence[str]) -> list[dict[str, str]]:
     """One OpenFIGI job per CUSIP, for its US composite listing."""
-    return [{"idType": "ID_CUSIP", "idValue": cusip, "exchCode": "US"} for cusip in cusips]
+    return [{"idType": id_type(cusip), "idValue": cusip, "exchCode": "US"} for cusip in cusips]
 
 
 class MappingError(ValueError):

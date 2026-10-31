@@ -52,6 +52,9 @@ ANSWERS: dict[str, Any] = {
 }
 
 
+NOT_FOUND = {"warning": "No identifier found."}
+
+
 class FakeOpenFigi:
     def __init__(self) -> None:
         self.asked: list[list[str]] = []
@@ -59,9 +62,17 @@ class FakeOpenFigi:
     def handle(self, request: httpx2.Request) -> httpx2.Response:
         jobs = json.loads(request.content)
         self.asked.append([job["idValue"] for job in jobs])
+        # OpenFIGI finds an issuer outside the US only by its CINS number (Chubb's starts with H).
         return httpx2.Response(
             200,
-            json=[ANSWERS.get(job["idValue"], {"warning": "No identifier found."}) for job in jobs],
+            json=[
+                (
+                    ANSWERS.get(job["idValue"], NOT_FOUND)
+                    if job["idType"] == ("ID_CINS" if job["idValue"][0].isalpha() else "ID_CUSIP")
+                    else NOT_FOUND
+                )
+                for job in jobs
+            ],
         )
 
 

@@ -29,6 +29,7 @@ from marketdata.db.pool import create_pool
 from marketdata.db.repositories import companies, managers
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.fetch import Connect
+from marketdata.normalize.cusips import CUSIP_MAP, PENDING
 from marketdata.normalize.filings import FACTS_REFRESH
 from marketdata.tasks import queue
 from marketdata.tasks.kinds import (
@@ -185,6 +186,20 @@ async def enqueue_funds_backfills(
         for cik in await managers.curated_ciks(conn)
         if ciks is None or cik in ciks
     ]
+
+
+async def enqueue_cusip_map(conn: AsyncConnection[Any], *, recheck: bool = False) -> Task:
+    """On demand (`marketdata backfill cusips`): one cusip_map task, behind live and periodic
+    work, for the CUSIPs never asked about; `recheck` asks about the unmatched ones again too
+    (after a fix, or once an OpenFIGI key is set)."""
+    return await queue.enqueue(
+        conn,
+        CUSIP_MAP,
+        PENDING,
+        {"recheck": recheck},
+        force=True,
+        priority=queue.PRIORITY_BACKFILL,
+    )
 
 
 async def _domestic_universe(
