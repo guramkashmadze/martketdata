@@ -1,8 +1,9 @@
 # MCP guide
 
-The platform's data in AI chats (E6): Claude, ChatGPT, Gemini and other clients that speak the
-Model Context Protocol connect to `/mcp` with an API key and answer questions about US public
-companies with numbers from SEC filings, each with its proof and its SEC link. The server only
+The platform's data in AI chats (E6; insider trades from E8): Claude, ChatGPT, Gemini and other
+clients that speak the Model Context Protocol connect to `/mcp` with an API key and answer
+questions about US public companies with numbers from SEC filings, each with its proof and its
+SEC link. The server only
 reads: it never calls a model, and nothing it answers is written by one (D-014).
 
 Information from public filings. Not investment advice.
@@ -154,11 +155,21 @@ flags. The full proof of any value is one `/v1` call or proof page away (D-108).
 | `recent_filings` | What a company filed or announced, with plain-language labels | `ticker`, `form`, `days` (90 by default) | 20 filings, 365 days |
 | `compare_companies` | Two to five companies side by side, never ranked | `tickers`, `metrics`, `period` (TTM by default) | 25 values |
 | `latest_earnings` | The latest results release, each value with its full proof and the cross-check against the 10-Q or 10-K | `ticker` | |
+| `insider_activity` | Whether directors, officers and 10% owners bought or sold, from their Forms 4 | `ticker`, `days` (90 by default), `codes` (P and S by default; `["all"]`) | 12 trades, 8 insiders, 365 days |
 
 Without `metrics`, `get_financials` and `compare_companies` use revenue, operating income, net
 income, diluted EPS and free cash flow. Without `form`, `recent_filings` lists annual,
 quarterly and current reports and 5% stakes in the company, not prospectuses or insider forms
 (D-110). Amounts are in base units: USD, shares, USD per share; margins and growth are percents.
+
+`insider_activity` (E8) answers totals per transaction code over the window, each insider's
+trades summed (newest activity first, never ordered by size) and the newest trades: per insider,
+day, code and security, the shares, the average price weighted by shares (USD) and the value
+(USD), the filing's 10b5-1 box (a trade in it was made under a pre-arranged plan) and the Form 4
+it comes from. Codes P and S are purchases and sales in the open market or privately; A, M, F
+and G are awards, exercises, shares withheld for tax and gifts. A 4/A replaces the lines it
+corrects and a filing made twice counts once. It covers domestic companies and, from March
+2026, foreign private issuers, whose insiders report prices converted to dollars.
 
 A tool that can't answer says why, as the API does: `invalid_parameter` (with what to change),
 `not_found`, or `not_applicable` for a fund, a foreign private issuer or a company outside the

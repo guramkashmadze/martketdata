@@ -46,6 +46,7 @@ TOOLS = {
     "recent_filings",
     "compare_companies",
     "latest_earnings",
+    "insider_activity",  # E8 (test_mcp_insiders.py)
 }
 MAX_ANSWER = 8 * 1024  # bytes (§10.3)
 
@@ -116,9 +117,7 @@ def _same_envelope(answer: dict[str, Any], rest: dict[str, Any]) -> None:
         assert answer[key] == rest[key], key
 
 
-async def test_the_six_tools_are_listed_with_their_arguments(
-    api_app: FastAPI, api_key: str
-) -> None:
+async def test_the_tools_are_listed_with_their_arguments(api_app: FastAPI, api_key: str) -> None:
     async with connected(api_app, api_key) as client:
         listed = {tool.name: tool for tool in (await client.list_tools()).tools}
 

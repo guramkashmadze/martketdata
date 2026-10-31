@@ -7,10 +7,12 @@ were cross-checked with the 10-Q. Its third-quarter release failed verification.
 10-K is older than the filings backfill, so only its facts name it. BETA is a second company to
 compare with; FNDX is a fund and FPIX a foreign private issuer; OUTC is a domestic filer outside
 the universe. E5b: one value change of each reason, the predecessor's restatement among them.
+E8: ACME's chief executive sold shares ten days ago in two lines of one Form 4 under a 10b5-1
+plan, and gave some away.
 """
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -28,6 +30,7 @@ PROSPECTUS = "0001001000-26-000030"
 Q3_RELEASE = "0001001000-26-000040"
 FY2020_10K = "0001001000-21-000005"  # older than the filings backfill: known from facts only
 BETA_10Q = "0002002000-26-000011"
+INSIDER_FORM4 = "0001001000-26-000050"
 CALC = "2.3"
 
 
@@ -68,6 +71,7 @@ async def seed(conn: Conn) -> None:
     await _releases(conn)
     await _metrics(conn)
     await _changes(conn)
+    await _insiders(conn)
     await conn.execute(
         "insert into xbrl_facts (cik, taxonomy, concept, unit, period_start, period_end, value, "
         "fy, fp, form, filed_at, accession_no) values "
@@ -404,5 +408,58 @@ async def _changes(conn: Conn) -> None:
                 reason,
                 detail,
                 at,
+            ],
+        )
+
+
+async def _insiders(conn: Conn) -> None:
+    traded = datetime.now(UTC).date() - timedelta(days=10)
+    key = f"raw/sec/{ACME}/{INSIDER_FORM4}/form4.xml"
+    url = (
+        f"https://www.sec.gov/Archives/edgar/data/{ACME}/{INSIDER_FORM4.replace('-', '')}/form4.xml"
+    )
+    await conn.execute(
+        "insert into raw_objects (key, url, sha256, size_bytes) values (%s, %s, %s, 100)",
+        [key, url, "a" * 64],
+    )
+    await conn.execute(
+        "insert into insider_filings (accession_no, issuer_cik, form, filed_at, period_of_report, "
+        "owner_ciks, rule_10b5_1, doc_name, raw_key, footnotes, method, extractor_version) "
+        "values (%s, %s, '4', %s, %s, '{9001}', true, 'form4.xml', %s, %s, 'form4_xml', '1')",
+        [
+            INSIDER_FORM4,
+            ACME,
+            traded + timedelta(days=2),
+            traded,
+            key,
+            json.dumps({"F1": "Sold under a Rule 10b5-1 plan adopted on 2026-03-02."}),
+        ],
+    )
+    await conn.execute(
+        "insert into insider_owners (accession_no, owner_cik, position, owner_name, is_director, "
+        "is_officer, officer_title, is_ten_pct_owner, is_other) "
+        "values (%s, 9001, 1, 'Roe Richard', true, true, 'Chief Executive Officer', false, false)",
+        [INSIDER_FORM4],
+    )
+    for line_no, code, shares, price, owned in [
+        (1, "S", "1000", "50.25", "99000"),
+        (2, "S", "500", "51", "98500"),
+        (3, "G", "100", None, "98400"),
+    ]:
+        await conn.execute(
+            "insert into insider_transactions (accession_no, line_no, issuer_cik, is_derivative, "
+            "security_title, trade_date, code, acquired_disposed, shares, price, owned_after, "
+            "direct_indirect, footnotes, method, extractor_version) values (%s, %s, %s, false, "
+            "'Common Stock', %s, %s, 'D', %s, %s, %s, 'D', %s, 'form4_xml', '1')",
+            [
+                INSIDER_FORM4,
+                line_no,
+                ACME,
+                traded,
+                code,
+                Decimal(shares),
+                Decimal(price) if price else None,
+                Decimal(owned),
+                json.dumps({"security_title": ["F1"]} if code == "S" else {}),
             ],
         )

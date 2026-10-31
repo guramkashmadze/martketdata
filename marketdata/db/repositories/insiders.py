@@ -192,6 +192,17 @@ _FILINGS = f"""
     select {_FILING_COLUMNS} from insider_filings where accession_no = any(%(accessions)s)
     order by filed_at, accession_no
 """
+# E8-S5: the served lines (not superseded) about these issuers traded in a window, newest
+# first; table II only when asked for, and of these codes (null: every code).
+_SERVED = f"""
+    select {_LINE_COLUMNS} from insider_transactions
+    where issuer_cik = any(%(ciks)s) and superseded_by is null
+      and trade_date between %(since)s and %(until)s
+      and (%(codes)s::text[] is null or code = any(%(codes)s))
+      and (%(derivative)s or not is_derivative)
+    order by trade_date desc, accession_no, line_no
+"""
+
 # E8-S4: the filings about these issuers filed in a date range (the reconciliation).
 _FILED_BETWEEN = f"""
     select {_FILING_COLUMNS} from insider_filings
@@ -292,6 +303,28 @@ async def filings(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list
     """These filings, oldest first."""
     async with conn.cursor(row_factory=class_row(StoredFiling)) as cur:
         await cur.execute(_FILINGS, {"accessions": list(accessions)})
+        return await cur.fetchall()
+
+
+async def served_lines(
+    conn: AsyncConnection[Any],
+    ciks: Sequence[int],
+    since: date,
+    until: date,
+    *,
+    codes: Sequence[str] | None,
+    derivative: bool,
+) -> list[StoredLine]:
+    """The lines served now about these issuers, traded from `since` to `until`."""
+    params = {
+        "ciks": list(ciks),
+        "since": since,
+        "until": until,
+        "codes": list(codes) if codes is not None else None,
+        "derivative": derivative,
+    }
+    async with conn.cursor(row_factory=class_row(StoredLine)) as cur:
+        await cur.execute(_SERVED, params)
         return await cur.fetchall()
 
 

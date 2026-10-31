@@ -19,6 +19,12 @@ from marketdata.service.financials import (
     Financials,
     get_financials,
 )
+from marketdata.service.insiders import (
+    DEFAULT_DAYS,
+    MAX_DAYS,
+    InsiderActivity,
+    insider_activity,
+)
 from marketdata.service.pages import DEFAULT_LIMIT
 from marketdata.service.snapshot import CompanySnapshot, company_snapshot
 
@@ -132,4 +138,63 @@ async def filings(
     filings too."""
     return respond(
         await recent_filings(conn, ticker, form=form, since=since, limit=limit, cursor=cursor)
+    )
+
+
+@router.get(
+    "/insiders",
+    summary="Insider trades",
+    response_model=Envelope[InsiderActivity],
+    response_class=EnvelopeResponse,
+    responses={
+        **examples.ok(examples.INSIDERS, "Insider trades, newest first, each with its Form 4."),
+        404: examples.NOT_FOUND,
+        422: examples.NOT_APPLICABLE,
+    },
+)
+async def insiders(
+    conn: Conn,
+    ticker: TickerPath,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_DAYS,
+            description="Trades of the last this many days, by trade date (1 to 730).",
+        ),
+    ] = DEFAULT_DAYS,
+    codes: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Comma-separated Form 4 transaction codes; by default `P,S`, purchases and "
+                "sales in the open market or privately; `all` for every code (A award, M "
+                "exercise, F tax withholding, G gift ...)."
+            ),
+            examples=["P,S"],
+        ),
+    ] = None,
+    include_derivative: Annotated[
+        bool,
+        Query(description="Also table II: options, restricted stock units and other derivatives."),
+    ] = False,
+    limit: Limit = DEFAULT_LIMIT,
+    cursor: Cursor = None,
+) -> EnvelopeResponse:
+    """The company's insider trades from its insiders' Forms 4 (its predecessors' too), newest
+    first: per insider, day, code and security, the shares summed, the price weighted by shares
+    and the value, with the filing's 10b5-1 box (a trade in it was made under a pre-arranged
+    plan), the footnotes and the filings and lines each sums. A 4/A replaces the lines it
+    corrects; a filing made twice counts once. Totals per code and a summary per insider cover
+    the whole window. Domestic filers and, since March 2026, foreign private issuers."""
+    return respond(
+        await insider_activity(
+            conn,
+            ticker,
+            days=days,
+            codes=names(codes),
+            include_derivative=include_derivative,
+            limit=limit,
+            cursor=cursor,
+        )
     )

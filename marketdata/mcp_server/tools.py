@@ -21,7 +21,15 @@ from pydantic import Field
 
 from marketdata.mcp_server import answers
 from marketdata.normalize.metric_catalog import UNITS
-from marketdata.service import companies, compare, earnings, filings, financials, snapshot
+from marketdata.service import (
+    companies,
+    compare,
+    earnings,
+    filings,
+    financials,
+    insiders,
+    snapshot,
+)
 from marketdata.service.errors import InvalidParameter
 from marketdata.service.json_text import dumps
 from marketdata.service.served import DISCLAIMER, Served
@@ -49,6 +57,9 @@ FILINGS_LIMIT = 20
 MAX_DAYS = 365
 MAX_TICKER = 20
 MAX_FORM = 20
+INSIDER_TRADES = 12  # trades insider_activity answers, newest first (E8)
+INSIDER_LINES = 8  # insiders it summarizes, by latest trade
+MAX_CODES = 20
 UNIT_WORDS = {"USD": "in USD", "shares": "in shares", "USD/shares": "in USD per share"}
 
 
@@ -117,6 +128,7 @@ class Tools:
             (self.recent_filings, "Recent filings"),
             (self.compare_companies, "Compare companies"),
             (self.latest_earnings, "Latest earnings release"),
+            (self.insider_activity, "Insider trades"),
         ):
             server.add_tool(
                 tool,
@@ -307,3 +319,47 @@ class Tools:
         async with self._connect()() as conn:
             served = await earnings.latest_earnings(conn, ticker)
         return answer(served)
+
+    async def insider_activity(
+        self,
+        ticker: Ticker,
+        days: Annotated[
+            int,
+            Field(description="Trades of the last this many days (1 to 365).", ge=1, le=MAX_DAYS),
+        ] = 90,
+        codes: Annotated[
+            list[str] | None,
+            Field(
+                description="Form 4 transaction codes, by default P and S: purchases and sales "
+                "in the open market or privately. Others: A grant or award, M exercise or "
+                "conversion of a derivative, F shares withheld for tax, G gift, D disposition "
+                "to the issuer, J other; ['all'] for every code.",
+                max_length=MAX_CODES,
+            ),
+        ] = None,
+    ) -> str:
+        """Who among a company's directors, officers and 10% owners bought or sold its shares,
+        from their Form 4 filings with the SEC: totals per transaction code over the window,
+        each insider's trades summed (at most 8, newest activity first, never ordered by size),
+        and the newest trades, at most 12, each per insider, day, code and security with shares, the
+        average price weighted by shares, the value and the filing it comes from. Shares are
+        units of the security; prices are USD per share and values USD. `rule_10b5_1` is the
+        filing's box: a trade in it was made under a pre-arranged trading plan. A 4/A replaces
+        the lines it corrects, and a filing made twice counts once. Use it for "have insiders
+        been buying or selling <company>" questions; `more_trades` says that more trades match
+        than are listed: ask for fewer days or one code. Domestic companies, and foreign
+        private issuers from March 2026.
+
+        The data is information from public filings, not investment advice.
+        """
+        async with self._connect()() as conn:
+            served = await insiders.insider_activity(
+                conn,
+                ticker,
+                days=days,
+                codes=codes,
+                limit=INSIDER_TRADES,
+                today=today(),
+                max_days=MAX_DAYS,
+            )
+        return answer(answers.insiders(served, max_insiders=INSIDER_LINES))

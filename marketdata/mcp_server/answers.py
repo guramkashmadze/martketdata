@@ -23,6 +23,7 @@ from marketdata.service.compare import Comparison
 from marketdata.service.earnings import EarningsRelease
 from marketdata.service.filings import CompanyFilings, FilingEventView, FilingView
 from marketdata.service.financials import Financials, MetricView
+from marketdata.service.insiders import CodeTotal, Insider, InsiderActivity
 from marketdata.service.served import Number, Served, Source
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
 
@@ -327,3 +328,126 @@ def comparison(served: Served[Comparison]) -> Answer[ComparisonAnswer]:
         sources=served.sources,
         as_of=served.as_of,
     )
+
+
+# --- E8: insider_activity ------------------------------------------------------------------
+
+
+class TradeValue(BaseModel):
+    """An insider trade with its short proof: the filing it was read from (the latest one when
+    several are summed); the full proof lists every filing and line."""
+
+    model_config = ConfigDict(frozen=True)
+
+    trade_date: date
+    insiders: str  # the reporting owners, joint filers together; their roles are in `insiders`
+    code: str  # P purchase, S sale, A award, M exercise, F tax withholding, G gift ...
+    security: str | None
+    shares: Number | None
+    average_price: Number | None  # USD per share, weighted by shares
+    value: Number | None  # USD
+    rule_10b5_1: bool | None  # the filing's box: a trade in it was made under a 10b5-1 plan
+    accession_no: str
+    flags: tuple[str, ...]
+
+
+class InsiderLine(BaseModel):
+    """One insider group's trades with one code over the window."""
+
+    model_config = ConfigDict(frozen=True)
+
+    insiders: str
+    roles: str
+    code: str
+    trades: int
+    total_shares: Number | None
+    total_value: Number | None  # USD
+    first_date: date
+    last_date: date
+    rule_10b5_1: bool | None
+
+
+class InsidersAnswer(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    cik: int
+    company: str | None
+    since: date
+    until: date
+    codes: tuple[str, ...] | None  # null: every code
+    totals: tuple[CodeTotal, ...]  # the whole window, by code
+    insiders: tuple[InsiderLine, ...]  # by latest trade, newest first
+    trades: tuple[TradeValue, ...]  # newest first
+    more_insiders: bool  # more insiders traded than are listed
+    more_trades: bool  # more trades than are listed: ask for fewer days or one code
+
+
+def insiders(served: Served[InsiderActivity], *, max_insiders: int) -> Answer[InsidersAnswer]:
+    data = served.data
+    trades = tuple(
+        TradeValue(
+            trade_date=trade.trade_date,
+            insiders=_names(trade.insiders),
+            code=trade.code,
+            security=trade.security,
+            shares=trade.shares,
+            average_price=trade.average_price,
+            value=trade.value,
+            rule_10b5_1=trade.rule_10b5_1,
+            accession_no=trade.proof.filings[-1].accession_no,
+            flags=trade.quality_flags,
+        )
+        for trade in data.trades
+    )
+    return Answer(
+        data=InsidersAnswer(
+            ticker=data.ticker,
+            cik=data.cik,
+            company=data.company,
+            since=data.since,
+            until=data.until,
+            codes=data.codes,
+            totals=data.totals,
+            insiders=tuple(
+                InsiderLine(
+                    insiders=_names(summary.insiders),
+                    roles=_roles(summary.insiders),
+                    code=summary.code,
+                    trades=summary.trades,
+                    total_shares=summary.total_shares,
+                    total_value=summary.total_value,
+                    first_date=summary.first_date,
+                    last_date=summary.last_date,
+                    rule_10b5_1=summary.rule_10b5_1,
+                )
+                for summary in data.insiders[:max_insiders]
+            ),
+            trades=trades,
+            more_insiders=len(data.insiders) > max_insiders,
+            more_trades=data.next_cursor is not None,
+        ),
+        sources=served.sources,
+        as_of=served.as_of,
+    )
+
+
+def _names(owners: tuple[Insider, ...]) -> str:
+    return "; ".join(owner.name for owner in owners)
+
+
+def _roles(owners: tuple[Insider, ...]) -> str:
+    """The roles of the first owner of a group: joint filers share its relationship."""
+    if not owners:
+        return ""
+    owner = owners[0]
+    words = {"ten_percent_owner": "10% owner"}
+    roles = []
+    for role in owner.roles:
+        if role == "officer" and owner.officer_title:
+            roles.append(f"officer ({owner.officer_title})")
+        elif role == "other" and owner.other_text:
+            roles.append(f"other ({owner.other_text})")
+        else:
+            roles.append(words.get(role, role))
+    return ", ".join(roles)

@@ -27,6 +27,7 @@ ROUTES: list[tuple[str, str, dict[str, str]]] = [
     ("/v1/earnings/{accession_no}", f"/v1/earnings/{Q2_RELEASE}", {}),
     ("/v1/compare", "/v1/compare", {"tickers": "acme,BETA", "metrics": "revenue,net_income"}),
     ("/v1/changes", "/v1/changes", {}),
+    ("/v1/companies/{ticker}/insiders", "/v1/companies/ACME/insiders", {"codes": "all"}),
 ]
 
 

@@ -34,6 +34,15 @@ from marketdata.service.earnings import (
 )
 from marketdata.service.filings import CompanyFilings, FilingEventView, FilingView
 from marketdata.service.financials import Financials, MetricProof, MetricView
+from marketdata.service.insiders import (
+    CodeTotal,
+    Insider,
+    InsiderActivity,
+    InsiderProof,
+    InsiderSummary,
+    InsiderTrade,
+    TradeProof,
+)
 from marketdata.service.json_text import dumps
 from marketdata.service.pages import encode_cursor
 from marketdata.service.quality import Mismatch
@@ -323,6 +332,99 @@ FILINGS: Served[CompanyFilings] = Served(
         ticker="AAPL", cik=AAPL, company="Apple Inc.", filings=APPLE_FILINGS, next_cursor=None
     ),
     sources=RELEASE_SOURCES,
+    as_of=AS_OF,
+    quality_flags=(),
+)
+# E8: Apple's principal accounting officer sold under a 10b5-1 plan on 2026-10-16 (Form 4
+# 0001140361-26-040127, lines 3 to 7): five sales summed, the price weighted by shares.
+INSIDER_FORM4 = "0001140361-26-040127"
+BORDERS = Insider(
+    cik=2100523,
+    name="Borders Ben",
+    roles=("officer",),
+    officer_title="Principal Accounting Officer",
+    other_text=None,
+)
+_RANGE = (
+    "This transaction was executed in multiple trades at prices ranging from ${low} to ${high}; "
+    "the price reported above reflects the weighted average sale price. The reporting person "
+    "hereby undertakes to provide full information regarding the number of shares and prices at "
+    "which the transactions were effected upon request to the SEC staff, Apple, or a security "
+    "holder of Apple."
+)
+INSIDERS: Served[InsiderActivity] = Served(
+    data=InsiderActivity(
+        ticker="AAPL",
+        cik=AAPL,
+        company="Apple Inc.",
+        since=date(2026, 8, 2),
+        until=date(2026, 10, 31),
+        codes=("P", "S"),
+        include_derivative=False,
+        totals=(
+            CodeTotal(
+                code="S",
+                code_label="Sale (open market or private)",
+                trades=1,
+                total_shares=Decimal("1280"),
+                total_value=Decimal("442107.54"),
+            ),
+        ),
+        insiders=(
+            InsiderSummary(
+                insiders=(BORDERS,),
+                code="S",
+                trades=1,
+                total_shares=Decimal("1280"),
+                total_value=Decimal("442107.54"),
+                first_date=date(2026, 10, 16),
+                last_date=date(2026, 10, 16),
+                rule_10b5_1=True,
+            ),
+        ),
+        trades=(
+            InsiderTrade(
+                trade_date=date(2026, 10, 16),
+                insiders=(BORDERS,),
+                code="S",
+                code_label="Sale (open market or private)",
+                security="Common Stock",
+                derivative=False,
+                acquired_disposed="D",
+                shares=Decimal("1280"),
+                average_price=Decimal("345.3965"),
+                value=Decimal("442107.54"),
+                holdings_after=Decimal("38288"),
+                direct_indirect="D",
+                rule_10b5_1=True,
+                footnotes=(
+                    "This transaction was made pursuant to a Rule 10b5-1 trading plan adopted by "
+                    "the reporting person on February 6, 2026.",
+                    _RANGE.format(low="342.69", high="343.49"),
+                    _RANGE.format(low="344.09", high="344.26"),
+                    _RANGE.format(low="345.12", high="346.00"),
+                ),
+                quality_flags=(),
+                proof=TradeProof(
+                    filings=(
+                        InsiderProof(
+                            accession_no=INSIDER_FORM4,
+                            form="4",
+                            filed_at=date(2026, 10, 19),
+                            filing_url=urls.filing_folder(AAPL, INSIDER_FORM4),
+                            document_url=urls.filing_document(AAPL, INSIDER_FORM4, "form4.xml"),
+                            lines=(3, 4, 5, 6, 7),
+                            method="form4_xml",
+                            extractor_version="1",
+                        ),
+                    ),
+                    checks=("issuer_matches_listing", "direction_matches_code", "price_reported"),
+                ),
+            ),
+        ),
+        next_cursor=None,
+    ),
+    sources=(_source(AAPL, INSIDER_FORM4, "4", date(2026, 10, 19)),),
     as_of=AS_OF,
     quality_flags=(),
 )

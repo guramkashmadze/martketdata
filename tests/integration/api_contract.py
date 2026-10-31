@@ -8,6 +8,16 @@ from marketdata.api.envelope import DISCLAIMER
 SEC_FOLDER = "https://www.sec.gov/Archives/edgar/data/"
 EARNINGS_PROOF = ("accession_no", "document_url", "source_quote", "scale_text", "method")
 METRIC_PROOF = ("accession_no", "filing_url", "method", "calc_version")
+INSIDER_PROOF = (  # E8: each Form 4 an insider trade sums
+    "accession_no",
+    "form",
+    "filed_at",
+    "filing_url",
+    "document_url",
+    "lines",
+    "method",
+    "extractor_version",
+)
 
 
 def check_envelope(body: dict[str, Any]) -> None:
@@ -41,6 +51,11 @@ def check_proof(item: dict[str, Any]) -> None:
         assert set(cross_check) == {"status", "filing_accession_no", "filing_value"}
         if cross_check["status"] in ("matched", "mismatch"):
             assert cross_check["filing_accession_no"] and cross_check["filing_value"] is not None
+    elif "filings" in proof:  # an insider trade (E8)
+        assert proof["filings"] and proof["checks"], proof
+        for filing in proof["filings"]:
+            assert all(filing[key] for key in INSIDER_PROOF), filing
+            assert filing["filing_url"].startswith(SEC_FOLDER), filing
     else:  # a metric value
         assert all(proof[key] for key in METRIC_PROOF), proof
         assert proof["source_accessions"], proof

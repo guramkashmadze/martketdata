@@ -450,3 +450,111 @@ def _differences_text(old: TradeLine, new: TradeLine) -> str:
 
 def _text(value: object) -> str:
     return "none" if value is None else str(value)
+
+
+# --- The served view (§9.7, E8-S5) -----------------------------------------------------
+#
+# Trades are shown per insider group (the owners of a filing: joint filers such as a fund and
+# its managers are one group, so a sale isn't counted once per owner), trade date, code and
+# security (Alphabet's Class A and Class C shares aren't added together), and table: shares
+# summed, the price weighted by shares over the lines that give one, and the value as the sum
+# of shares times price. The average is rounded to four decimals; the value is exact.
+
+PRICE_PLACES = Decimal("0.0001")
+
+
+@dataclass(frozen=True)
+class FiledTrade:
+    """A served line with what its filing says about it."""
+
+    accession_no: str
+    owner_ciks: tuple[int, ...]
+    rule_10b5_1: bool | None  # the filing's box
+    line: TradeLine
+
+
+@dataclass(frozen=True)
+class TradeGroup:
+    owner_ciks: tuple[int, ...]
+    trade_date: date
+    code: str
+    is_derivative: bool
+    security_title: str | None
+    trades: tuple[FiledTrade, ...]  # by filing, then line
+    shares: Decimal | None
+    average_price: Decimal | None
+    value: Decimal | None
+    acquired_disposed: str | None  # when every line agrees
+    holdings_after: Decimal | None  # the last line's, when every line has one ownership
+    direct_indirect: str | None
+    rule_10b5_1: bool | None  # the filings' box, when they agree
+    checks: tuple[str, ...]
+    flags: tuple[str, ...]
+
+
+# P acquires and S disposes; a line saying otherwise is shown with a flag.
+DIRECTIONS = {"P": "A", "S": "D"}
+
+
+def group_trades(trades: Sequence[FiledTrade]) -> list[TradeGroup]:
+    """The served trades grouped and summed (§9.7), newest first."""
+    groups: dict[tuple[tuple[int, ...], date, str, bool, str], list[FiledTrade]] = {}
+    for trade in sorted(trades, key=lambda t: (t.accession_no, t.line.line_no)):
+        line = trade.line
+        key = (trade.owner_ciks, line.trade_date, line.code, line.is_derivative, _title(line))
+        groups.setdefault(key, []).append(trade)
+    return sorted(
+        (_trade_group(members) for members in groups.values()),
+        key=lambda group: (-group.trade_date.toordinal(), group.owner_ciks, group.code),
+    )
+
+
+def _trade_group(members: Sequence[FiledTrade]) -> TradeGroup:
+    lines = [member.line for member in members]
+    first = lines[0]
+    shares: Decimal | None = None
+    value = priced_shares = Decimal(0)
+    priced = 0
+    for line in lines:
+        if line.shares is None:
+            continue
+        shares = (shares or Decimal(0)) + line.shares
+        if line.price is not None:
+            value += line.shares * line.price
+            priced_shares += line.shares
+            priced += 1
+    average = (value / priced_shares).quantize(PRICE_PLACES) if priced and priced_shares else None
+    directions = {line.acquired_disposed for line in lines}
+    ownerships = {_ownership(line) for line in lines}
+    boxes = {member.rule_10b5_1 for member in members}
+    checks = ["issuer_matches_listing"]
+    flags = []
+    expected = DIRECTIONS.get(first.code)
+    if expected is not None:
+        if directions == {expected}:
+            checks.append("direction_matches_code")
+        else:
+            flags.append("direction_differs_from_code")
+    if not priced:
+        flags.append("price_not_reported")
+    elif priced < len(lines):
+        flags.append("price_partly_reported")
+    else:
+        checks.append("price_reported")
+    return TradeGroup(
+        owner_ciks=members[0].owner_ciks,
+        trade_date=first.trade_date,
+        code=first.code,
+        is_derivative=first.is_derivative,
+        security_title=first.security_title,
+        trades=tuple(members),
+        shares=shares,
+        average_price=average,
+        value=value if priced else None,
+        acquired_disposed=directions.pop() if len(directions) == 1 else None,
+        holdings_after=lines[-1].owned_after if len(ownerships) == 1 else None,
+        direct_indirect=first.direct_indirect if len(ownerships) == 1 else None,
+        rule_10b5_1=boxes.pop() if len(boxes) == 1 else None,
+        checks=tuple(checks),
+        flags=tuple(flags),
+    )
