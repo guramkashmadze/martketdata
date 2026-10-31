@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ns1:informationTable xmlns:ns1="http://www.sec.gov/edgar/document/thirteenf/informationtable">
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>DISNEY WALT CO</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM</ns1:titleOfClass>
+		<ns1:cusip>254687106</ns1:cusip>
+		<ns1:value>718042094</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>7464831</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>7464831</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>EXPEDIA GROUP INC</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM NEW</ns1:titleOfClass>
+		<ns1:cusip>30212P303</ns1:cusip>
+		<ns1:value>385977840</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>2607606</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>2607606</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>INSIGHT ENTERPRISES INC</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM</ns1:titleOfClass>
+		<ns1:cusip>45765U103</ns1:cusip>
+		<ns1:value>874857963</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>4061739</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>4061739</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>LIBERTY MEDIA CORP DEL</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM LBTY LIV S A</ns1:titleOfClass>
+		<ns1:cusip>531229748</ns1:cusip>
+		<ns1:value>33260818</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>671800</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>671800</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>LIBERTY MEDIA CORP DEL</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM LBTY LIV S C</ns1:titleOfClass>
+		<ns1:cusip>531229722</ns1:cusip>
+		<ns1:value>68653875</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>1337500</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>1337500</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>LIVE NATION ENTERTAINMENT IN</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM</ns1:titleOfClass>
+		<ns1:cusip>538034109</ns1:cusip>
+		<ns1:value>111094029</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>1014650</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>1014650</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>META PLATFORMS INC</ns1:nameOfIssuer>
+		<ns1:titleOfClass>CL A</ns1:titleOfClass>
+		<ns1:cusip>30303M102</ns1:cusip>
+		<ns1:value>121071060</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>211500</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>211500</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>ROBLOX CORP</ns1:nameOfIssuer>
+		<ns1:titleOfClass>CL A</ns1:titleOfClass>
+		<ns1:cusip>771049103</ns1:cusip>
+		<ns1:value>448615863</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>10135921</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>10135921</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>SALESFORCE INC</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM</ns1:titleOfClass>
+		<ns1:cusip>79466L302</ns1:cusip>
+		<ns1:value>1071385516</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>3914309</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>3914309</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+	<ns1:infoTable>
+		<ns1:nameOfIssuer>VISA</ns1:nameOfIssuer>
+		<ns1:titleOfClass>COM CL A</ns1:titleOfClass>
+		<ns1:cusip>92826C839</ns1:cusip>
+		<ns1:value>102721320</ns1:value>
+		<ns1:shrsOrPrnAmt>
+			<ns1:sshPrnamt>373600</ns1:sshPrnamt>
+			<ns1:sshPrnamtType>SH</ns1:sshPrnamtType>
+		</ns1:shrsOrPrnAmt>
+		<ns1:investmentDiscretion>SOLE</ns1:investmentDiscretion>
+		<ns1:otherManager>1</ns1:otherManager>
+		<ns1:votingAuthority>
+			<ns1:Sole>373600</ns1:Sole>
+			<ns1:Shared>0</ns1:Shared>
+			<ns1:None>0</ns1:None>
+		</ns1:votingAuthority>
+	</ns1:infoTable>
+</ns1:informationTable>

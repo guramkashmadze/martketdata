@@ -1,0 +1,23 @@
+# 13F value units that differ from the SEC's rule (PLAN.md §9.8, E9-S2), read by every 13F task.
+#
+# A 13F filed on or after 2023-01-03 reports each value to the nearest dollar, whatever quarter
+# it is for; one filed before reports thousands of dollars (SEC Form 13F FAQ 62). Each [[unit]]
+# pins one filer's unit for the filings it made from filed_from to filed_to (inclusive; no
+# filed_to: every later filing too), says what shows it (reason) and where it can be checked
+# (source_url, an SEC filing page of the filer). The cross-manager check (unit_suspect, D-023)
+# found both cases below. Every override is logged in docs/EDGE_CASES.md; changing one corrects
+# the stored values, logged as value changes.
+
+[[unit]]
+manager_cik = 1061768
+filed_from = 2023-01-03
+unit = "thousands"
+reason = "Baupost Group kept reporting thousands of dollars after the switch: each 13F it filed since 2023-02-13 totals 3.4 to 6.1 million for 21 to 34 positions (Q2 2026: 5,415,853 for 23), and from Q3 2024 to Q2 2026 its price per share (value over shares) is 0.001 times the median of the other curated managers holding the same securities, every quarter (9 to 13 securities)"
+source_url = "https://www.sec.gov/Archives/edgar/data/1061768/000106176826000010/0001061768-26-000010-index.htm"
+
+[[unit]]
+manager_cik = 1536411
+filed_from = 2023-05-15
+unit = "thousands"
+reason = "Duquesne Family Office reported dollars for Q4 2022 (filed 2023-02-14: 58 positions totalling 2,020,266,796) and thousands from its Q1 2023 report on (filed 2023-05-15): totals of 2.3 to 5.2 million for 41 to 95 positions, and from Q3 2024 to Q2 2026 a price per share 0.001 times the median of the other curated managers holding the same securities, every quarter (26 to 41 securities)"
+source_url = "https://www.sec.gov/Archives/edgar/data/1536411/000153641126000006/0001536411-26-000006-index.htm"

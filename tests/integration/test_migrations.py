@@ -23,6 +23,7 @@ E5A_INDEXES = {
 WEBHOOK_TABLES = {"webhook_destinations", "webhook_events", "webhook_deliveries"}
 INSIDER_TABLES = {"insider_filings", "insider_owners", "insider_transactions"}
 MANAGER_TABLES = {"managers"}
+F13_TABLES = {"f13_filings", "holdings_raw"}
 
 
 def _tables(url: str) -> set[str]:
@@ -49,8 +50,8 @@ def _indexes(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_head_is_0016(alembic_config: Config) -> None:
-    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0016"
+def test_head_is_0017(alembic_config: Config) -> None:
+    assert ScriptDirectory.from_config(alembic_config).get_current_head() == "0017"
 
 
 def _value_change_entities(url: str) -> str:
@@ -85,6 +86,10 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     assert "golden_values" in _tables(migrated_database)
     assert _tables(migrated_database) >= INSIDER_TABLES
     assert "insider_transaction" in _value_change_entities(migrated_database)
+    assert _tables(migrated_database) >= MANAGER_TABLES | F13_TABLES
+
+    command.downgrade(alembic_config, "-1")
+    assert _tables(migrated_database) & F13_TABLES == set()
     assert _tables(migrated_database) >= MANAGER_TABLES
 
     command.downgrade(alembic_config, "-1")
@@ -154,7 +159,7 @@ def test_upgrade_and_downgrade(alembic_config: Config, migrated_database: str) -
     command.upgrade(alembic_config, "head")
     assert _tables(migrated_database) >= every | METRICS_TABLES | FRAMES_TABLES | WEBHOOK_TABLES
     assert "golden_values" in _tables(migrated_database)
-    assert _tables(migrated_database) >= INSIDER_TABLES | MANAGER_TABLES
+    assert _tables(migrated_database) >= INSIDER_TABLES | MANAGER_TABLES | F13_TABLES
 
 
 async def test_task_status_is_checked(conn: psycopg.AsyncConnection[Any]) -> None:

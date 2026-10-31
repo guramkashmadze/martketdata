@@ -13,6 +13,7 @@ import structlog
 from marketdata.db.repositories.tasks import Task
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.earnings import EarningsBackfill, EarningsIngest, read_overrides
+from marketdata.ingest.f13 import F13Ingest, F13Refused, read_unit_overrides
 from marketdata.ingest.facts import FactsLoader
 from marketdata.ingest.form4 import Form4Ingest, Form4Refused, InsidersBackfill
 from marketdata.ingest.public_float import PublicFloatLoader
@@ -22,7 +23,8 @@ from marketdata.ingest.security_master import (
     read_predecessors,
 )
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
-from marketdata.normalize.filings import EARNINGS_EXTRACT, FACTS_REFRESH, FORM4_PARSE
+from marketdata.normalize.filings import EARNINGS_EXTRACT, F13_PARSE, FACTS_REFRESH, FORM4_PARSE
+from marketdata.normalize.holdings import UnitOverrideError
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError
 from marketdata.normalize.webhooks import WEBHOOK_DELIVER, WEBHOOK_PUBLISH
@@ -133,6 +135,19 @@ async def parse_insider_filing(context: TaskContext, task: Task) -> None:
     try:
         await Form4Ingest(context.fetcher, context.connect).run(cik, accession_no)
     except (Form4Refused, SecFileError) as exc:
+        raise TaskRefused(str(exc)) from exc
+
+
+async def parse_13f_filing(context: TaskContext, task: Task) -> None:
+    """One 13F-HR or 13F-HR/A of a curated manager (E9), routed from the manager's listing or
+    queued by the funds backfill: its cover and information table stored, parsed and its lines
+    stored. A filing that isn't a curated manager's 13F, or a broken unit overrides file, is
+    refused: retrying can't help."""
+    cik, accession_no = _cik(task), _accession(task)
+    try:
+        overrides = read_unit_overrides(context.settings.f13_overrides_file)
+        await F13Ingest(context.fetcher, context.connect, overrides).run(cik, accession_no)
+    except (F13Refused, SecFileError, UnitOverrideError) as exc:
         raise TaskRefused(str(exc)) from exc
 
 
@@ -250,6 +265,7 @@ def build_registry(
     registry.register(FACTS_REFRESH, refresh_facts)
     registry.register(FORM4_PARSE, parse_insider_filing)
     registry.register(INSIDERS_BACKFILL, backfill_insiders)
+    registry.register(F13_PARSE, parse_13f_filing)
     registry.register(PUBLIC_FLOAT_LOAD, load_public_float)
     registry.register(WEBHOOK_PUBLISH, publish_event)
     registry.register(

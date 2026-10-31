@@ -10,6 +10,8 @@ import pytest
 
 from marketdata.extract.earnings_rules import OverrideError
 from marketdata.ingest.earnings import read_overrides
+from marketdata.ingest.f13 import read_unit_overrides
+from marketdata.normalize.holdings import UnitOverrideError
 from marketdata.normalize.security_master import (
     build_snapshot,
     parse_exchange_list,
@@ -90,6 +92,33 @@ def test_the_managers_file_lists_20_to_30_managers_each_with_what_edgar_showed()
     assert by_cik[1067983] == "Berkshire Hathaway"  # also the universe company BRK-B
     assert by_cik[2026053] == "Pershing Square"  # not 1336528, which files only a 13F-NT now
     assert 1649339 not in by_cik  # Scion: no 13F since its Q3 2025 report
+
+
+def test_the_13f_unit_overrides_cite_a_filing_of_each_filer() -> None:
+    overrides = read_unit_overrides(ROOT / "data" / "f13_overrides.toml")
+
+    # E9-S2: Baupost and Duquesne Family Office kept reporting thousands after 2023-01-03.
+    assert [(o.manager_cik, o.filed_from.isoformat(), o.unit) for o in overrides] == [
+        (1061768, "2023-01-03", "thousands"),
+        (1536411, "2023-05-15", "thousands"),
+    ]
+    managers = {
+        entry.manager_cik for entry in parse_managers((ROOT / "data" / "managers.csv").read_text())
+    }
+    assert {override.manager_cik for override in overrides} <= managers
+
+
+def test_a_unit_override_citing_another_filers_page_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "f13_overrides.toml"
+    path.write_text(
+        '[[unit]]\nmanager_cik = 1061768\nfiled_from = 2023-01-03\nunit = "thousands"\n'
+        'reason = "r"\nsource_url = "https://www.sec.gov/Archives/edgar/data/1067983/'
+        '000119312526352200/0001193125-26-352200-index.htm"\n'
+    )
+
+    with pytest.raises(UnitOverrideError, match="not a filing page of the filer"):
+        read_unit_overrides(path)
+    assert read_unit_overrides(tmp_path / "missing.toml") == ()
 
 
 def test_the_extraction_overrides_file_parses_and_cites_sec_filings() -> None:

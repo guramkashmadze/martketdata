@@ -94,8 +94,10 @@ class Settings(BaseSettings):
     # E5b. The golden sets `marketdata quality accuracy` loads (tests/golden/ in the repository).
     golden_dir: Path = Path("tests/golden")
 
-    # E9. The curated 13F managers (PLAN.md §9.8), loaded by `marketdata managers load`.
+    # E9. The curated 13F managers (PLAN.md §9.8), loaded by `marketdata managers load`, and the
+    # filers whose 13F values are in another unit than the filing date says (E9-S2).
     managers_file: Path = Path("data/managers.csv")
+    f13_overrides_file: Path = Path("data/f13_overrides.toml")
 
     @property
     def base_url(self) -> str | None:

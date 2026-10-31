@@ -104,6 +104,14 @@ _ISSUER_LISTINGS = f"""
     order by accession_no, cik
 """
 
+# E9: a filer's listings of these forms, whatever their file number (a 13F carries the
+# manager's 028- number).
+_FILER_LISTINGS = f"""
+    select {_COLUMNS} from filings
+    where cik = %(cik)s and form = any(%(forms)s) and filed_at >= %(since)s
+    order by filed_at, accession_no
+"""
+
 # E5a: every listing of these filings (a joint filing or a 13D is listed under two companies).
 _BY_ACCESSION = f"""
     select {_COLUMNS} from filings where accession_no = any(%(accessions)s)
@@ -246,6 +254,17 @@ async def issuer_listings(
         await cur.execute(_ISSUER_LISTINGS, params)
         listed = await cur.fetchall()
     return sorted(listed, key=lambda filing: (filing.filed_at, filing.accession_no))
+
+
+async def filer_listings(
+    conn: AsyncConnection[Any], cik: int, forms: Sequence[str], since: date
+) -> list[Filing]:
+    """One filer's listings of these forms filed on or after `since`, oldest first (E9: a
+    manager's 13F reports)."""
+    params = {"cik": cik, "forms": list(forms), "since": since}
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_FILER_LISTINGS, params)
+        return await cur.fetchall()
 
 
 async def listings(conn: AsyncConnection[Any], accessions: Sequence[str]) -> list[Filing]:
