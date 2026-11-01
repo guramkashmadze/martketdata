@@ -242,7 +242,7 @@ def create_mcp(settings: Settings, connect: Callable[[], Connect]) -> McpEndpoin
             instructions=INSTRUCTIONS,
             version="1",
         )
-    Tools(connect).register(server)
+    Tools(connect, settings.base_url).register(server)
     # Builds the server's session manager; the route below serves it with the key gate in
     # front, at exactly /mcp (a mount would redirect POST /mcp to /mcp/).
     server.streamable_http_app(

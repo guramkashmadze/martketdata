@@ -6,6 +6,11 @@ service/json_text.py, so numbers keep every digit (D-096). The answers are compa
 metrics and 40 values and compare_companies 25, and without metrics both use five headline
 ones. Descriptions say when to use the tool and what units it returns. Tools only read (D-014:
 the server serves data to AI clients, it never calls a model).
+
+With PUBLIC_BASE_URL set, an answer whose values have proof pages (E15) carries `proof_url`:
+the release's page, or the address of each value's page with {placeholders} to fill in from
+the value, so a long answer names it once and stays under 8 KB. 13F positions name a security by
+its ticker, without the CUSIP their pages need, so their answers link the 13F filing instead.
 """
 
 import inspect
@@ -13,6 +18,7 @@ from collections.abc import Callable, Sequence
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Literal
+from urllib.parse import quote
 
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
@@ -102,9 +108,13 @@ def today() -> date:
     return datetime.now(UTC).date()
 
 
-def answer(result: answers.Answer[Any] | Served[Any]) -> str:
-    """An answer, or the API's envelope, with the disclaimer, as JSON text."""
-    return dumps({**result.model_dump(mode="python"), "disclaimer": DISCLAIMER})
+def answer(result: answers.Answer[Any] | Served[Any], proof_url: str | None = None) -> str:
+    """An answer, or the API's envelope, with its proof pages' address when there is one and
+    the disclaimer, as JSON text."""
+    written = result.model_dump(mode="python")
+    if proof_url is not None:
+        written["proof_url"] = proof_url
+    return dumps({**written, "disclaimer": DISCLAIMER})
 
 
 def check_count(count: int, maximum: int, asked: str) -> None:
@@ -123,8 +133,13 @@ class Tools:
     """The tools, each reading through a connection of the API's own (`connect`, called when a
     tool runs, gives the app's current connection factory)."""
 
-    def __init__(self, connect: Callable[[], Connect]) -> None:
+    def __init__(self, connect: Callable[[], Connect], base_url: str | None = None) -> None:
         self._connect = connect
+        self._base_url = base_url  # PUBLIC_BASE_URL: the proof pages' site
+
+    def _proof(self, path: str) -> str | None:
+        """A proof page's address; none when the server doesn't know its public address."""
+        return f"{self._base_url}{path}" if self._base_url else None
 
     def register(self, server: MCPServer[Any]) -> None:
         for tool, title in (
@@ -187,11 +202,18 @@ class Tools:
         comes with a flag or a reason; funds and foreign issuers are answered with why their
         data doesn't apply.
 
+        With the server's public address set, `proof_url` is each value's proof page (the
+        filing, the checks, the history): fill in its {placeholders} from the value.
+
         The data is information from public filings, not investment advice.
         """
         async with self._connect()() as conn:
             served = await snapshot.company_snapshot(conn, ticker, today=today())
-        return answer(answers.snapshot(served))
+        listed = quote(served.data.company.ticker, safe="")
+        return answer(
+            answers.snapshot(served),
+            self._proof(f"/proof/metrics/{listed}/{{metric}}/TTM/{{period_end}}"),
+        )
 
     async def get_financials(
         self,
@@ -218,6 +240,9 @@ class Tools:
         growth are percents. A null value comes with a flag that says why. One call answers at
         most 16 metrics and 40 values (metrics x periods).
 
+        With the server's public address set, `proof_url` is each value's proof page (the
+        filing, the checks, the history): fill in its {placeholders} from the value.
+
         The data is information from public filings, not investment advice.
         """
         names = wanted(metrics)
@@ -228,7 +253,11 @@ class Tools:
             served = await financials.get_financials(
                 conn, ticker, metrics=names, period=period, limit=limit, today=today()
             )
-        return answer(answers.financials(served))
+        listed = quote(served.data.ticker, safe="")
+        return answer(
+            answers.financials(served),
+            self._proof(f"/proof/metrics/{listed}/{{metric}}/{period}/{{period_end}}"),
+        )
 
     async def recent_filings(
         self,
@@ -297,6 +326,9 @@ class Tools:
         of whose filings reports a metric has null there. One call answers at most 25 values
         (companies x metrics).
 
+        With the server's public address set, `proof_url` is each value's proof page (the
+        filing, the checks, the history): fill in its {placeholders} from the value.
+
         The data is information from public filings, not investment advice.
         """
         names = wanted(metrics)
@@ -307,7 +339,10 @@ class Tools:
             served = await compare.compare(
                 conn, tickers, metrics=names, period=period, today=today()
             )
-        return answer(answers.comparison(served))
+        return answer(
+            answers.comparison(served),
+            self._proof(f"/proof/metrics/{{ticker}}/{{metric}}/{period}/{{period_end}}"),
+        )
 
     async def latest_earnings(self, ticker: Ticker) -> str:
         """A company's latest quarterly results release (the 8-K press release), as verified
@@ -320,13 +355,14 @@ class Tools:
         cross-check against the later 10-Q or 10-K (pending until that filing arrives). A
         value that failed a check or wasn't found is null with the reasons; `status` says
         whether the release is complete, partial or failed. Amounts are in USD, EPS in USD
-        per share.
+        per share. With the server's public address set, `proof_url` is the release's proof
+        page.
 
         The data is information from public filings, not investment advice.
         """
         async with self._connect()() as conn:
             served = await earnings.latest_earnings(conn, ticker)
-        return answer(served)
+        return answer(served, self._proof(f"/proof/earnings/{served.data.release.accession_no}"))
 
     async def insider_activity(
         self,
@@ -356,7 +392,8 @@ class Tools:
         the lines it corrects, and a filing made twice counts once. Use it for "have insiders
         been buying or selling <company>" questions; `more_trades` says that more trades match
         than are listed: ask for fewer days or one code. Domestic companies, and foreign
-        private issuers from March 2026.
+        private issuers from March 2026. With the server's public address set, `proof_url` is
+        each trade's proof page, the Form 4 as read: fill in its {accession_no}.
 
         The data is information from public filings, not investment advice.
         """
@@ -370,7 +407,10 @@ class Tools:
                 today=today(),
                 max_days=MAX_DAYS,
             )
-        return answer(answers.insiders(served, max_insiders=INSIDER_LINES))
+        return answer(
+            answers.insiders(served, max_insiders=INSIDER_LINES),
+            self._proof("/proof/insiders/{accession_no}"),
+        )
 
     async def investor_portfolio(
         self,
