@@ -80,7 +80,7 @@ Sessions update this table. Status values: `Not started`, `In progress`, `Done`,
 | E5b | Webhooks, change feed, proof pages and accuracy report | 10 | E5a | Done | 2026-10-30. S1: webhooks through an outbox: the code that changes the data writes the event in the same transaction, `webhook_publish` builds the §9.11 envelope around the API's own object and `webhook_deliver` sends it signed to a checked public address, three attempts about 1 and 10 minutes apart, 50 failed deliveries in a row switching the destination off; `earnings.verified` only for releases routed live (`earnings_releases.live`), `financials.updated` when a facts refresh adds rows or changes values, `data.changed` per value change, `filing.event` per new filing with a high-importance label (D-100 to D-102); `marketdata webhooks create|list|disable|enable|test`, the secret printed once and stored encrypted (Fernet); `scripts/webhook_receiver.py`, the reference receiver the tests check deliveries with; migration `0013`. S2: `GET /v1/changes`, newest first, each change with the value served now and its proof (D-103). S3: proof pages for releases and metric values, Jinja2, HTTP Basic auth with an `api` key (D-104). S4: `marketdata quality accuracy` and `GET /v1/status` (no key) from golden values loaded into the database (migration `0014`), the time to verified over live releases only, D-028's tolerance kept (D-105). S5: `docs/DEMO.md`, run on the dev database: Apple's Q3 2026 release matched its 10-Q on all four slots; a webhook of each type delivered to the reference receiver, the first after one retry; accuracy: golden release slots 135 of 138, golden metric values 658 of 684, cross-check 99.7%, extraction 82.5%, no live release yet. The demo found the decrypted signing secret in a logged traceback: tracebacks carry no local values now (D-106). Lint gate and 1,334 tests green on local PostgreSQL 18. 4 edge cases logged. CI on main is green ([run 41175252635](https://github.com/guramkashmadze/martketdata/actions/runs/41175252635), commit `e13283e`) |
 | E6 | MCP server | 11 | E5a | Done | 2026-10-31. Milestone M1 with E7c. S1: the official `mcp` SDK 2.3 (`MCPServer`) at exactly `/mcp` in the API's app, Streamable HTTP, stateless with JSON answers; a key gate checks `X-API-Key` (api scope) as on `/v1`, and a refused request gets the error envelope (401, 403, 429) and a row with the path `/mcp`; each tool call writes `api_requests` (method `MCP`, the tool's name, the status of its outcome); only this machine's host and PUBLIC_BASE_URL's are accepted (D-107). S2: `lookup_company` (ticker, share class, CIK or name, D-109), `company_snapshot`, `get_financials`, `recent_filings` (reports and stakes unless a form is asked for, D-110), `compare_companies` and `latest_earnings`, each answering from the API's service function; compact answers (D-108): the envelope without its flag list, a short proof on each value, every filing read in `sources`; at most 16 metrics and 40 values a call (25 in a comparison), 20 filings. S3: `docs/MCP.md` (Claude Code, Claude Desktop through `mcp-remote` or a custom connector, Cursor, VS Code, the MCP Inspector; five example questions, one in Georgian), linked from `docs/DEMO.md`. No migration. On the dev database the official Python SDK's client connected to the running API over HTTP (the 2025 handshake and 2026-07-28), listed the six tools and called each, every call logged with its key, tool and status; the demo question's call (Apple's revenue and free cash flow, 8 quarters) answered 3.4 KB with its 10-Qs and 10-K. Largest answers across eight companies: 7.7 KB (BRK-B's snapshot, a five-company comparison). Lint gate and 1,375 tests green on local PostgreSQL 18. 9 edge cases logged. The Inspector and an AI client weren't run here (§16). CI on main is green ([run 41200224914](https://github.com/guramkashmadze/martketdata/actions/runs/41200224914), commit `6294f03`) |
 | E8 | Insider trades | 12 (D-111) | E5a, E6 | Done | 2026-10-31. Built before E7c, E10 and E15 (D-111); its UI section moved to E15-S2. S1: `normalize/form4.py` reads a Form 4 or 4/A's XML (the primary document without EDGAR's `xsl…/` folder): owners and roles, both tables numbered in document order, footnote ids per field, the filing's 10b5-1 box (`aff10b5One`, `1`/`0` or `true`/`false`); 7 real fixtures. S2: migration `0015` (`insider_filings`, `insider_owners`, `insider_transactions`; `value_changes` takes `insider_transaction`, D-116); `form4_parse` registered, so the watcher routes new Forms 4 on issuer listings (D-063); data kind `insiders` for domestic filers and foreign private issuers, whose insiders file since March 2026 (D-117). S3: a 4/A supersedes only what it restates or corrects, a filing made twice counts once, decided for the whole insider group whatever the order (D-114); served trades that change are value changes, `data.changed` and `/v1/changes` items (D-115); the rules handle all 56 of the universe's 4/As of two years. S4: `backfill insiders --quarters 8` from each filing's XML (D-113); `insiders reconcile --quarter` against the SEC's data set. S5: `GET /v1/companies/{ticker}/insiders` per insider group, day, code and security with proof, totals and summaries, `codes=P,S` by default (D-112, D-118); MCP `insider_activity`, under 8 KB (D-119); `docs/MCP.md`, `docs/DEMO.md` part 7. Dev database: 10,403 Forms 4 of 66 issuers (with XOM's predecessor) filed 2024-10-31 to 2026-10-23, parsed in 21.5 minutes with no failure or retry, every XML at its name; 37,312 lines, 117 superseded by 4/As and 52 by two duplicate filings, 65 changes announced; 525 filings of seven foreign issuers. Reconciliation, 2026 Q3, ten companies: 430 filings, 310 equal to the data set and 120 equal but for its rounding to two decimals, none different or missing. Demo: NVIDIA's 365 days through REST (51 ms) and the official MCP client over HTTP (6.1 KB; heaviest answer 7.4 KB, Micron). Lint gate and 1,499 tests green on local PostgreSQL 18. 15 edge cases logged. CI on main is green ([run 41209803839](https://github.com/guramkashmadze/martketdata/actions/runs/41209803839), commit `198d80c`) |
-| E9 | 13F fund portfolios | 13 (D-120) | E5a, E6 | In progress | Milestone M3. Built before E7c, E10 and E15 (D-120); its UI part moved to E15-S2 and E15-S6 |
+| E9 | 13F fund portfolios | 13 (D-120) | E5a, E6 | Done | 2026-11-01. Milestone M3 with E8. Built before E7c, E10 and E15 (D-120); its UI part moved to E15-S2 and E15-S6. S1: `data/managers.csv`, 28 managers checked on EDGAR, each with what it showed; migration `0016` (`managers`); `managers load|list`; the scheduler watches them, and a manager outside the universe has only its 13F reports routed (D-122). S2: the cover and information table found by type on the index page; values in dollars for filings from 2023-01-03 and thousands before, verified (SEC FAQ 62); `data/f13_overrides.toml` for Baupost and Duquesne, found by the cross-manager check; `unit_suspect` (D-123); migration `0017` (`f13_filings`, `holdings_raw`); fixtures: Berkshire's Q2 2026 (dollars), Q3 2022 (thousands) and a NEW HOLDINGS amendment, Himalaya's report and its RESTATEMENT, ValueAct's repeating NEW HOLDINGS, Baupost's Q2 2026. S3: OpenFIGI's terms recorded first (D-121); its own client and rate limit; migration `0018` (`cusip_map`); CINS numbers asked as CINS (D-126). S4: migration `0019` (`fund_positions`; `value_changes` takes `fund_position`); amendments in filing order, lines merged, weights; change types and splits decided when read (D-124). S5: `backfill funds --quarters 8` and `backfill cusips` (D-125). S6: `GET /v1/funds`, `/v1/funds/{manager_cik}/holdings`, `/v1/companies/{ticker}/funds`; MCP `investor_portfolio` and a ninth tool, `fund_holders`; fund positions in `/v1/changes` (D-125); `docs/MCP.md`, `docs/DEMO.md` part 8. Dev database: 257 reports of the 28 managers filed 2022-11-14 to 2026-10-30 (50,087 lines) in 759 SEC requests and under 4 minutes; the backfill of the 230 in the window read them from the raw store in 13 seconds (28 SEC requests): 44,790 positions in 222 manager-quarters; 6,155 CUSIPs in 786 OpenFIGI requests without a key, 4,886 matched (4,800 linked to our securities), 1,269 unmatched (bonds, delisted shares; 4 with a wrong check digit). Demo: Berkshire Hathaway's quarter to 2026-06-30 through REST (25 ms) and the official MCP client over HTTP (5.9 KB, 15 ms; heaviest answer 7.2 KB, Renaissance). Lint gate and 1,634 tests green on local PostgreSQL 18. 18 edge cases logged. Not pushed: CI hasn't run (§16) |
 | E10 | Prices, end-of-day and licensed | 14 | E5a, OD-4 | Not started | D-031 |
 | E15 | Web UI | 15–16 | E5b, E6; E10 for price fields | Not started | Milestone M2. E15-S2 adds the insider section (D-111) and the "held by" section (D-120) of the company page; E15-S6 the fund pages (D-120) |
 | E11 | Operations and production readiness | 17–18 | E15, E9 | Not started | Milestone M4 |
@@ -714,54 +714,100 @@ create table insider_transactions (
 create index insider_by_issuer on insider_transactions (issuer_cik, trade_date desc);
 -- value_changes.entity also takes 'insider_transaction' (D-115)
 
--- E9
-create table managers (
+-- E9 (as built: migrations 0016 to 0019, D-122 to D-125)
+create table managers (                     -- from data/managers.csv (`managers load`)
   manager_cik   bigint primary key,
-  name          text not null,                -- as filed
-  display_name  text not null,                -- e.g. 'Berkshire Hathaway'
-  curated       boolean not null default true,
-  notes         text
+  name          text not null,                -- EDGAR's, as filed
+  display_name  text not null,                -- e.g. 'Berkshire Hathaway'; unique among curated
+  curated       boolean not null default true,  -- false: dropped from the file, kept
+  notes         text,                         -- what EDGAR showed for the CIK
+  updated_at    timestamptz not null default now()
 );
 
-create table cusip_map (
-  cusip        text primary key,
-  security_id  bigint references securities(security_id),
-  figi         text,
-  ticker       text,
-  matched_at   timestamptz not null default now(),
-  status       text not null check (status in ('matched','unmatched','ambiguous'))
+create table f13_filings (                  -- each 13F-HR or 13F-HR/A parsed (D-123)
+  accession_no       text primary key,
+  manager_cik        bigint not null references managers(manager_cik),
+  form               text not null,           -- 13F-HR or 13F-HR/A
+  filed_at           date not null,
+  report_period      date not null,
+  report_type        text,                    -- 13F HOLDINGS REPORT, 13F COMBINATION REPORT
+  amendment_no       int,
+  amendment_type     text,                    -- RESTATEMENT or NEW HOLDINGS
+  date_reported      date,
+  conf_denied_expired boolean,
+  other_managers     int,
+  entry_total        int,                     -- the summary page's line count and total,
+  value_total        numeric,                 -- as filed, next to what the table holds:
+  lines              int not null,
+  value_sum          numeric not null,
+  value_unit         text not null,           -- dollars or thousands (D-122)
+  unit_rule          text not null,           -- the filing date's rule or an override's reason
+  cover_doc          text not null, cover_raw_key text not null references raw_objects(key),
+  table_doc          text, table_raw_key text references raw_objects(key),
+  schema_version     text,
+  method             text not null,
+  extractor_version  text not null,
+  parsed_at          timestamptz not null default now()
 );
 
-create table holdings_raw (
-  accession_no           text not null,
+create table holdings_raw (                 -- a line of the information table, as filed
+  accession_no           text not null references f13_filings(accession_no),
   line_no                int not null,
   manager_cik            bigint not null references managers(manager_cik),
   report_period          date not null,
   name_of_issuer         text,
   title_of_class         text,
-  cusip                  text not null,
-  shares                 numeric,
-  share_type             text,                -- SH or PRN
+  cusip                  text not null,       -- or the CINS number of an issuer outside the US
+  figi                   text,                -- the filer's, when it gives one
+  shares                 numeric not null,    -- or principal for PRN
+  share_type             text not null,       -- SH or PRN
+  value_as_filed         numeric not null,
   value_usd              numeric not null,    -- normalized to dollars
   put_call               text,                -- null, PUT or CALL
   investment_discretion  text,
+  other_managers         text,                -- as filed, e.g. '2,4,11'
+  method                 text not null,
+  extractor_version      text not null,
   primary key (accession_no, line_no)
 );
 
-create table fund_positions (                -- after amendments and merging
-  manager_cik        bigint not null,
+create table cusip_map (                    -- OpenFIGI's answer per CUSIP (D-121)
+  cusip          text primary key,
+  status         text not null check (status in ('matched','unmatched','ambiguous')),
+  security_id    bigint references securities(security_id) on delete set null,
+  figi           text,
+  ticker         text,                        -- OpenFIGI's
+  name           text,
+  exch_code      text,
+  security_type  text,
+  market_sector  text,
+  candidates     int not null default 0,
+  note           text,                        -- why it isn't matched
+  raw_key        text references raw_objects(key),
+  matched_at     timestamptz not null default now(),
+  checked_at     timestamptz not null default now()
+);
+
+create table fund_positions (                -- after amendments and merging (D-124)
+  manager_cik        bigint not null references managers(manager_cik),
   report_period      date not null,
   cusip              text not null,
-  security_id        bigint,
+  put_call           text,                    -- PUT, CALL, or null for shares held outright
+  share_type         text not null,
+  name_of_issuer     text,
+  title_of_class     text,
+  figi               text,
   shares             numeric not null,
   value_usd          numeric not null,
-  weight_pct         numeric not null,
-  change_type        text not null check (change_type in
-                     ('new','added','trimmed','unchanged','exited')),
-  shares_change      numeric,
+  weight_pct         numeric,                 -- of the long equity positions; null for options and PRN
+  lines              int not null,
   source_accessions  text[] not null,
-  primary key (manager_cik, report_period, cusip)
+  quality_flags      text[] not null default '{}',
+  updated_at         timestamptz not null default now(),
+  unique nulls not distinct (manager_cik, report_period, cusip, put_call)
 );
+-- Change types are decided when read, from the quarter before (D-124); the security link is
+-- read from cusip_map. value_changes.entity also takes 'fund_position'.
 
 -- E10 (D-031)
 create table price_vendors (
@@ -1030,17 +1076,18 @@ Items 1.04, 2.04, 3.03, 5.01, 5.04, 5.05, 5.06 and 5.08 were added in E3 (D-064)
 
 ### 9.8 13F fund portfolios
 
-- `data/managers.csv` (columns `display_name,manager_cik,notes`) lists 20–30 well-known managers. **CIKs are looked up on EDGAR, never guessed.**
-- Parse the information table: nameOfIssuer, titleOfClass, cusip, value, sshPrnamt, sshPrnamtType, putCall, investmentDiscretion.
-- **Value units:** recent filings report whole dollars; older filings reported thousands. Normalize to dollars using the filing-date cutoff from the SEC's 13F guidance (believed to be early January 2023; **verify in E9**).
-- **Unit sanity check without prices (D-023):** implied price (value / shares) must be within ±50% of the median implied price for the same CUSIP across all curated managers in that period, else flag `unit_suspect`.
-- **Amendments:** a 13F-HR/A marked RESTATEMENT replaces that period's holdings; one marked NEW HOLDINGS adds lines.
+- `data/managers.csv` (columns `display_name,manager_cik,notes`) lists 20–30 well-known managers. **CIKs are looked up on EDGAR, never guessed**; `marketdata managers load` refuses a CIK whose submissions show no 13F-HR and stores EDGAR's name (D-122). A manager that isn't a universe company has only its 13F reports routed.
+- Parse the cover (`primary_doc.xml`) and the information table (the XML the index page types INFORMATION TABLE): nameOfIssuer, titleOfClass, cusip, value, sshPrnamt, sshPrnamtType, putCall, investmentDiscretion, otherManager. Elements are matched by local name. The summary page's line count and value total are stored next to what the table holds.
+- **Value units (verified, D-122):** every 13F filed on or after **2023-01-03** reports whole dollars, whatever quarter it covers; one filed before reports thousands (SEC Form 13F FAQ 62, Release 34-95148). A filer that kept reporting thousands is pinned in `data/f13_overrides.toml` with its evidence (Baupost since 2023-01-03, Duquesne Family Office since 2023-05-15); changing an override is a correction of the stored values.
+- **Unit sanity check without prices (D-023):** implied price (value / shares) must be within ±50% of the median implied price for the same CUSIP, put or call and share type across the curated managers in that period, else flag `unit_suspect`; checked when read, and only with at least three holders. It flags, never changes, a value.
+- **Amendments,** in filing order: a 13F-HR sets the quarter's lines; a 13F-HR/A marked RESTATEMENT (or a later 13F-HR, or an amendment with no type) replaces them; one marked NEW HOLDINGS adds lines, skipping a line that repeats one in force exactly (ValueAct's re-lists its report). A stored position whose shares or value change is a value change (D-027).
 - Merge rows by (cusip, put_call) for each manager and period (filers split one position across rows).
-- PUT and CALL rows are shown separately and excluded from portfolio weights.
-- `change_type`: `new` (absent last period), `added` (shares up more than 1%), `trimmed` (down more than 1%), `unchanged`, `exited` (present last period, absent now; stored with zero shares).
+- PUT and CALL rows are shown separately and excluded from portfolio weights; so are principal amounts (PRN).
+- `change_type`, decided when read from the manager's report for the quarter before (D-124): `new` (absent last period), `added` (shares up more than 1%), `trimmed` (down more than 1%), `unchanged`, `exited` (present last period, absent now; served with zero shares). Without a report for the quarter before there is none, flagged `no_prior_report`. Shares before a split are compared in the new shares (`split_adjusted`): the split is the issuer's own XBRL ratio for a split effective in the quarter, or two managers' shares moving by the same whole ratio, and the median price must move by its inverse.
 - `weight_pct` = position value / total value of long equity positions in that period.
-- CUSIP → security via OpenFIGI (ID_CUSIP, US listing), cached in `cusip_map`. Unmatched rows keep `name_of_issuer` with `security_id` null.
+- CUSIP → security via OpenFIGI (ID_CUSIP, or ID_CINS for an issuer outside the US, on the US composite listing), cached in `cusip_map` (D-121). Unmatched rows keep `name_of_issuer` with no security. CUSIPs are served only as filed.
 - Always show both `report_period` (quarter end) and the filing date: 13F data can be up to 45 days old when filed.
+- Positions are facts, never advice (D-029): one portfolio is listed by value, a company's holders by manager name; nothing ranks managers.
 
 ### 9.9 Earnings release extraction (rule-based, E7a)
 
@@ -1179,9 +1226,9 @@ Built on demand, when a client or our own UI needs Georgian (D-026). D-013 (temp
 | `GET /proof/earnings/{accession_no}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a release |
 | `GET /proof/metrics/{ticker}/{metric}/{period_type}/{period_end}` | E5b | Basic auth (M1); UI rule (E15) | HTML proof page for a metric value |
 | `GET /v1/companies/{ticker}/insiders?days=90&codes=P,S&include_derivative=false&limit=&cursor=` | E8 | api | Insider trades per insider group, day, code and security, each with its Forms 4 as proof; totals per code and a summary per insider over the window; `days` 1 to 730 (D-112, D-118) |
-| `GET /v1/funds?curated=true` | E9 | api | Curated managers |
-| `GET /v1/funds/{manager_cik}/holdings?quarter=` | E9 | api | Positions with weights and changes |
-| `GET /v1/companies/{ticker}/funds` | E9 | api | Curated managers holding this company, latest period |
+| `GET /v1/funds?curated=true` | E9 | api | Curated managers by name, each with its latest report: quarter end, filing date, positions and value |
+| `GET /v1/funds/{manager_cik}/holdings?quarter=&change=&limit=&cursor=` | E9 | api | A quarter's positions (the latest by default; `quarter` as 2026Q2), largest value first, then those exited, with weights, change types and proof; `change` keeps some change types; the reports with their units and summary-page checks (D-125) |
+| `GET /v1/companies/{ticker}/funds` | E9 | api | Curated managers holding this company in their latest report, by name, with those that exited it there (D-125) |
 
 E7b (on demand) adds localized fields to the earnings objects, `render=` for client templates, review endpoints, client settings and `/review` pages. Web UI pages (E15) are listed in §9.14; they are HTML pages, not part of the API contract.
 
@@ -1224,7 +1271,8 @@ Example `earnings/latest` response body (`data` part):
 | `compare_companies` | E6 | `tickers` (2–5), `metrics`, `period` | Comparison table + sources |
 | `latest_earnings` | E6 | `ticker` | Verified release facts with proof; no free text |
 | `insider_activity` | E8 | `ticker`, `days` (max 365), `codes` (P and S by default) | Totals per code, up to 8 insiders and 12 trades + sources (D-119) |
-| `investor_portfolio` | E9 | `manager` (name or CIK), `quarter` (optional) | Top 20 positions with changes + sources |
+| `investor_portfolio` | E9 | `manager` (name or CIK), `quarter` (optional) | Top 20 positions with changes, at most 6 of each change type + sources (D-125) |
+| `fund_holders` | E9 | `ticker` | Up to 20 curated managers holding the company, by name, each with its report's link (D-125) |
 
 ---
 
@@ -1256,7 +1304,8 @@ Example `earnings/latest` response body (`data` part):
 | `PRICE_PROVIDER`, `PRICE_API_KEY` | — (OD-4) | E10 |
 | `UI_MODE` | `private` or `public` | E15 |
 | `MANAGERS_FILE` | `data/managers.csv` | E9 |
-| `OPENFIGI_API_KEY` | — | E9 |
+| `F13_OVERRIDES_FILE` | `data/f13_overrides.toml` | E9: filers whose 13F values are in another unit than the filing date says (D-122) |
+| `OPENFIGI_API_KEY` | — | E9. Optional: without it OpenFIGI maps 10 CUSIPs a request, 25 requests a minute (D-121) |
 | `COMPANY_NAMES_KA_FILE`, `GLOSSARY_KA_FILE` | `data/company_names_ka.csv`, `data/glossary_ka.csv` | E7b (on demand) |
 | `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `LLM_MODEL` | — (OD-2) | E12, E13 only |
 
@@ -1579,19 +1628,19 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 **Depends on:** E5a and E6 (E3 for the watcher). Built before E7c, E10 and E15 (D-120); its UI part moved to E15-S2 and E15-S6.
 
 - **E9-S1 Curated managers.** As a user, I want to follow well-known investors by name.
-  - AC: `data/managers.csv` with 20–30 managers; each CIK looked up on EDGAR and noted; migration creates `managers`; loader command; the watcher includes manager CIKs.
+  - AC: `data/managers.csv` with 20–30 managers; each CIK looked up on EDGAR and noted; migration creates `managers`; loader command; the watcher includes manager CIKs. (28 managers; a manager outside the universe has only its 13F routed, D-122.)
 - **E9-S2 13F parser.** As a developer, I want information tables parsed and normalized so values are comparable across years.
-  - AC: migration creates `holdings_raw`; parser handles the §9.8 fields, unit normalization (cutoff verified and recorded in §15) and RESTATEMENT / NEW HOLDINGS amendments.
+  - AC: migration creates `holdings_raw`; parser handles the §9.8 fields, unit normalization (cutoff verified and recorded in §15) and RESTATEMENT / NEW HOLDINGS amendments. (And `f13_filings` and the unit overrides, D-123.)
   - AC: the cross-manager `unit_suspect` check (§9.8, D-023) is implemented and tested.
   - AC: fixtures for one older filing (thousands), one recent filing (dollars) and one RESTATEMENT amendment.
 - **E9-S3 CUSIP mapping.** As a developer, I want CUSIPs mapped to our securities so positions link to companies.
-  - AC: migration creates `cusip_map`; OpenFIGI client with its own rate limit and caching; unmatched and ambiguous cases stored with status.
+  - AC: migration creates `cusip_map`; OpenFIGI client with its own rate limit and caching; unmatched and ambiguous cases stored with status. (Terms recorded first, D-121; CINS numbers, D-126.)
 - **E9-S4 Positions and changes.** As a user, I want to see a fund's biggest positions and what it bought or sold last quarter.
-  - AC: migration creates `fund_positions`; §9.8 merge, weights and change types implemented with tests.
+  - AC: migration creates `fund_positions`; §9.8 merge, weights and change types implemented with tests. (Change types and splits decided when read, D-124.)
 - **E9-S5 Backfill.** As the operator, I want eight quarters of history for curated managers.
-  - AC: `pdm run marketdata backfill funds --quarters 8` from per-filing XML (or the SEC 13F datasets if simpler).
+  - AC: `pdm run marketdata backfill funds --quarters 8` from per-filing XML (or the SEC 13F datasets if simpler). (From each filing's XML, D-125.)
 - **E9-S6 Serve.** As an API integrator and AI chat user, I want portfolios and holders available through the API and MCP.
-  - AC: `GET /v1/funds`, `GET /v1/funds/{manager_cik}/holdings`, `GET /v1/companies/{ticker}/funds` and MCP `investor_portfolio`; each shows report period and filing date.
+  - AC: `GET /v1/funds`, `GET /v1/funds/{manager_cik}/holdings`, `GET /v1/companies/{ticker}/funds` and MCP `investor_portfolio`; each shows report period and filing date. (And MCP `fund_holders`, D-125.)
   - The fund pages and the "held by" section of the company page are E15-S6's and E15-S2's (D-120).
 
 **Demo:** "What did <manager> buy and sell last quarter?" answered by an AI client with links to the 13F filing.
@@ -1731,7 +1780,7 @@ Each epic lists its goal, dependencies, stories with acceptance criteria (AC), w
 | --- | --- | --- |
 | M1 — Trusted data engine | E0–E3, E7a, E7c, E4a, E4b, E5a, E5b, E6 | Verified earnings facts with a live track record from the Q3 2026 season; verified financials cross-checked against filings; the REST API, webhooks, change feed, proof pages, a published accuracy report, and MCP. The live run (E7c) should start by early-to-mid November 2026 so part of the season is captured. |
 | M2 — Our own UI | E10, E15 | Licensed end-of-day prices and a read-only web UI where every number links to its proof. |
-| M3 — Breadth | E8, E9 | Insider trades and famous investors' portfolios in the API, MCP and UI. |
+| M3 — Breadth | E8, E9 | Insider trades and famous investors' portfolios in the API and MCP; their UI sections come with E15 (D-111, D-120). |
 | M4 — Production-ready | E11 | Hardened deployment, monitoring, usage metering, integration, security and privacy docs. |
 | On demand | E7b, E12, E13, E14 | Built when a client or our UI needs them, or when the E7a hit-rate report calls for E12. |
 
@@ -1885,6 +1934,11 @@ Append-only. Sessions add entries here; never edit old ones (supersede them with
 | D-119 | 2026-10-31 | MCP `insider_activity` (E8-S5, §10.3): the API's service in a compact answer: totals per code, at most 8 insider summaries with their roles and 12 trades (each with its Form 4's accession number, without the roles), the trades' filings in `sources`, `more_insiders` and `more_trades`; `days` to 365; the seven tools share the request log and rate | A busy window (12 insiders, 30 days of sales, long titles) measured 10.2 KB with 15 trades, 10 insiders and roles on each trade; 7.3 KB (7,446 bytes) with these caps, under §10.3's 8 KB |
 | D-120 | 2026-10-31 | Build order: E9 (13F fund portfolios) is built now, after E8 and before E7c, E10 and E15, a change to D-032's and D-111's order (Guram's choice); E7c still waits on OD-1 and E10 on OD-4. E9-S6's UI part moves to E15: the "held by" section of the company page to E15-S2 and the fund pages to a new E15-S6, both built on E9's service functions with links to the 13F filings; E9 serves portfolios through REST and MCP | Only that part of E9 depends on E15, and neither page exists before E15, as D-111 found for E8's insider section |
 | D-121 | 2026-11-01 | CUSIPs from 13F filings are mapped through OpenFIGI (E9-S3, §9.8), under its terms as read on 2026-10-31 (openfigi.com/docs/terms-of-service, dated 2018-11-27): FIGIs are dedicated to the public domain and may be used, displayed and redistributed, commercially or not, without attribution; OpenFIGI's liability is capped at $50. The mapping API allows 25 requests a minute of up to 10 CUSIPs without a key and 250 of up to 100 with a free key (`OPENFIGI_API_KEY`, optional); its own client (`marketdata/openfigi/`) has its own rate limit and calls nothing else, and every request and response is kept in the raw store before it is read. The terms say nothing about CUSIPs, which CUSIP Global Services licenses: OpenFIGI is sent only the CUSIPs of 13F filings; a CUSIP is served only as a 13F filing states it, next to its FIGI and our ticker; no CUSIP lookup, search or CUSIP-to-ticker list is offered. A CUSIP is asked for once (`ID_CUSIP`, US composite listing); one not matched is asked again after 30 days; one with a wrong check digit is never sent | FIGIs are free to redistribute, so positions can link to companies without a licensed identifier; serving CUSIPs only as filed keeps us inside what a 13F filing itself publishes |
+| D-122 | 2026-11-01 | Curated managers (E9-S1): `data/managers.csv` lists 28 managers checked on EDGAR on 2026-10-31 (company search and submissions; each note says what EDGAR showed): Berkshire Hathaway, Bridgewater, Pershing Square, Baupost, Appaloosa, Duquesne Family Office, Third Point, Carl Icahn, Soros, Renaissance, Tiger Global, Coatue, Viking, Lone Pine, Elliott, Trian, ValueAct, Starboard, Gates Foundation Trust, Markel, Oaktree, ARK, Himalaya, Fundsmith, Altimeter, Akre, Dalal Street (Mohnish Pabrai), Fairholme. Pershing Square is Pershing Square Inc. (2026053), with 13F-HRs from Q2 2025: its adviser's CIK (1336528) filed a 13F-NT naming it for Q2 2026, and the two aren't linked. Left out: Scion (no report after Q3 2025), Greenlight (none under its CIK since 2024-02-14), Ruane Cunniff (none since 2018); Tweedy Browne and Gotham are reserves. `marketdata managers load` takes the SEC slot and writes a manager, with EDGAR's name, only once its submissions show a 13F-HR; one the file drops stays, not curated, with its holdings. The scheduler watches the curated managers with the universe; a manager that isn't a universe company has only its 13F-HR and 13F-HR/A routed and none of its filings announced | The list needs CIKs EDGAR confirms. Markel is an issuer outside the universe: watched as a company, its 10-Qs, 8-Ks and Forms 4 would have been processed |
+| D-123 | 2026-11-01 | 13F reports (E9-S2, §9.8): the cover and the information table are found by type on the filing's index page and read by local name. `f13_filings` (not in §7) keeps each report's amendment number and type, the summary page's line count and value total next to the table's, and the unit its values were read in with the rule that decided it; `holdings_raw` keeps each value as filed and in dollars, the filer's FIGI and other managers, and the method and parser version per line. Units, verified: a 13F filed on or after 2023-01-03 reports dollars, one filed before thousands (SEC Form 13F FAQ 62, the data set's readme, Release 34-95148). `data/f13_overrides.toml` (`F13_OVERRIDES_FILE`) pins a filer's unit for a range of filing dates, with its evidence and an SEC filing page of the filer: Baupost from 2023-01-03 and Duquesne Family Office from 2023-05-15, whose prices per share were 0.001 times the other managers' median every quarter; changing an override reads the reports again as corrections. `unit_suspect` is decided when read, among the curated managers holding the same CUSIP, put or call and share type that quarter, with at least three holders; it flags, never changes | Reading the SEC's rule as written would serve two portfolios a thousand times too small; the summary page's totals let every report be checked against itself (15 of 257 differ by rounding) |
+| D-124 | 2026-11-01 | Positions (E9-S4, §9.8): `fund_positions` per manager, quarter end, CUSIP and put or call (unique with nulls equal), with share type, shares, value, weight among the long equity positions (none for options and principal), lines, source reports and flags; the security is read from `cusip_map` when served. In filing order a 13F-HR sets a quarter's lines; a RESTATEMENT, a later 13F-HR or a 13F-HR/A without a type replaces them; NEW HOLDINGS adds lines, skipping a line that repeats one in force exactly (ValueAct's amendment of Q3 2024 re-lists its report). Storing a report builds its quarter again from all its reports in the same transaction, under a lock per manager and quarter, so the result doesn't depend on which report came first; a stored position whose shares or value change is a value change (entity `fund_position`, D-027), a position added is not. Change types are decided when read, from the manager's report for the quarter before, and not stored (§7 had the columns); positions exited are listed from that report with zero shares; without that report there are none, flagged `no_prior_report`. A split is applied (`split_adjusted`) when the issuer's XBRL facts report one effective in the quarter (`StockholdersEquityNoteStockSplitConversionRatio1`) or two holders' shares moved by the same whole ratio, and the median price per share moved by its inverse within a factor of two | Change types and splits depend on other managers' reports, which arrive over 45 days: decided when read, they stay right without building other quarters again. Every curated holder traded through Netflix's 10-for-1 split, so the holders' rule alone missed it |
+| D-125 | 2026-11-01 | Backfill and serving (E9-S5, S6): `marketdata backfill funds --quarters 8 [--manager]` queues one `funds_backfill` per curated manager: its filings loaded (a first watch, older pages), then an `f13_parse` per 13F report filed from the day after the quarter end before the oldest of the eight (2024-10-01 on 2026-11-01), behind live work, and one `cusip_map` after them; from each filing's XML, not the data sets. REST: `/v1/funds` by name with each manager's latest report; `/v1/funds/{manager_cik}/holdings` with `quarter` (2026Q2 or 2026-06-30), `change`, `limit` and `cursor`: held positions by value, then those exited, the reports with their units and summary-page checks, each position's proof (its reports, lines, method); `/v1/companies/{ticker}/funds` for any listed security: the holders in their latest report by manager name, with those that exited it there. MCP: `investor_portfolio` answers the 20 largest positions and at most 6 of each change type; a ninth tool, `fund_holders`, at most 20 investors by name, each with its report's link (sources empty, as `recent_filings`): this supersedes D-006's count of 8. Every answer gives the quarter end and the filing date and says what a 13F covers; nothing ranks investors (D-029). Fund positions are served in `/v1/changes` and the status report's change counts. No webhook event for a new 13F | The demo question needs a quarter's changes in one call; "which investors hold X" is the other half of the epic's goal |
+| D-126 | 2026-11-01 | CINS numbers (E9-S3): a CUSIP field that starts with a letter holds a CINS number, an issuer incorporated outside the US (Chubb, Eaton, ASML, Spotify, Linde), and is asked for as `ID_CINS`; asked as `ID_CUSIP`, OpenFIGI found none of them. `marketdata backfill cusips --recheck` asks about the unmatched CUSIPs again at once rather than after 30 days | 616 of Q2 2026's unmatched positions, worth 41.6 billion USD, were CINS numbers; after the recheck 158, worth 4.9 billion, remain |
 
 ---
 
@@ -2040,6 +2094,17 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-10-31 | E8 | Not done in E8: a label for a company's own stake and insider filings (Disney's 13D on FuboTV, Berkshire's Forms 4 on other companies) needs the subject's name from the filing; Forms 4 now give it for the issuer side only | Later |
 | 2026-10-31 | E8 | Dev database: client `e8-demo` and its key 5, made for the demo, revoked at the end; `api_requests` holds its 1 REST and 14 MCP rows | — |
 | 2026-10-31 | E8 | Done: E8 pushed to `origin` with Guram's OK, with E6's CI record `b6e0f3c`; CI on main is green ([run 41209803839](https://github.com/guramkashmadze/martketdata/actions/runs/41209803839), commit `198d80c`, 2 min 40 s) | — |
+| 2026-11-01 | E9 | E9's commits are local: CI hasn't run on them, and pushing them waits for Guram's OK | Guram |
+| 2026-11-01 | E9-S3 | An OpenFIGI key (free, at openfigi.com; I can't create accounts): with it the mapping asks 100 CUSIPs a request at 250 a minute instead of 10 at 25; the 786 requests here took about 35 minutes. Set `OPENFIGI_API_KEY`, then `marketdata backfill cusips` | Guram |
+| 2026-11-01 | E9 | Live routing is on for 13F: once the scheduler runs, each curated manager's new 13F-HR and 13F-HR/A is parsed as live work and queues the CUSIP mapping. Q3 2026 reports are due by 2026-11-16 (only Markel's is in, filed 2026-10-30) | — |
+| 2026-11-01 | E9 (D-120) | The "held by" section of the company page (E15-S2) and the fund pages (E15-S6), from `service.funds`, with links to the 13F filings | E15 |
+| 2026-11-01 | E9-S3 | 1,269 CUSIPs stay unmatched: bonds and notes (PRN), shares delisted or renamed, and some after corporate actions (Warner Bros. Discovery 934423104, Qorvo 74736K101); their positions keep the issuer's name with no security. A CUSIP changed by a corporate action could be linked through the issuer's 8-K, and principal amounts asked for without `exchCode` | Later |
+| 2026-11-01 | E9-S4 | Splits come from the issuer's XBRL for universe companies and from two holders moving by a whole ratio otherwise: a split of a security outside the universe that every curated holder traded through (as with Netflix) is compared unadjusted | Later |
+| 2026-11-01 | E9-S1 | Pershing Square's history before Q2 2025 is under Pershing Square Capital Management (1336528), not linked to Pershing Square Inc. (2026053): a predecessor link for managers, like D-068's for companies, would give it | Later |
+| 2026-11-01 | E9-S6 | Served with `unit_suspect`, as filed: Third Point's Aurora Innovation for Q3 2025 ($2.11 a share against a median of $5.39) and ARK's CrowdStrike for Q2 2026 ($190.79 against $763.14); check them against the filings | Later |
+| 2026-11-01 | E9 | No webhook event for a new 13F report: §9.11 has none. Add one (`fund.reported`) if a client asks | Later |
+| 2026-11-01 | E9-S6 | Not run here: an AI client (Claude Code, or Claude Desktop through `mcp-remote`) asking the E9 demo question; the official MCP Python SDK's client over HTTP stood in, as in E6 and E8 (`docs/MCP.md`, example 7) | Guram |
+| 2026-11-01 | E9 | Dev database: client `e9-demo` and its key 6, made for the demo, revoked at the end; `api_requests` holds its 2 REST and 4 MCP rows | — |
 
 ---
 
