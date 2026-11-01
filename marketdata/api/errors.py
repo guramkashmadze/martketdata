@@ -5,8 +5,8 @@ forbidden (403), not_found (404), method_not_allowed (405), not_applicable (422)
 (429, with Retry-After) and internal (500). FastAPI answers a parameter that fails validation
 with 422; here it is 400 invalid_parameter, so 422 always means not_applicable (D-096).
 
-Proof pages (E5b-S3) answer the same errors as an HTML page; a 401 asks the browser for HTTP
-Basic credentials (the API key as the password).
+The web UI's pages and proof pages (E15) answer the same errors as an HTML page in the UI's
+layout; a 401 asks the browser for HTTP Basic credentials (the API key as the password).
 """
 
 from typing import Any
@@ -17,14 +17,14 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
-from marketdata.api.auth import PROOF_REALM
-from marketdata.api.proof_pages.render import error_page
 from marketdata.service.errors import (
     ANSWERS,
     INTERNAL_MESSAGE,
     DomainError,
     RateLimited,
 )
+from marketdata.web.access import UI_REALM, is_page
+from marketdata.web.render import error_page
 
 
 class ErrorDetail(BaseModel):
@@ -65,11 +65,11 @@ def _answer(
     message: str,
     headers: dict[str, str] | None = None,
 ) -> Response:
-    """The error envelope, or for a proof page the same error as a page."""
-    if not request.url.path.startswith("/proof/"):
+    """The error envelope, or for a page of the web UI the same error as a page."""
+    if not is_page(request.url.path):
         return error_response(status, code, message, headers)
     if status == 401:
-        headers = {**(headers or {}), "WWW-Authenticate": f'Basic realm="{PROOF_REALM}"'}
+        headers = {**(headers or {}), "WWW-Authenticate": f'Basic realm="{UI_REALM}"'}
     return error_page(status, message, headers)
 
 
@@ -95,6 +95,8 @@ async def http_error(request: Request, exc: Exception) -> Response:
         return await internal_error(request, exc)
     path = request.url.path
     if exc.status_code == 404:
+        if is_page(path):
+            return _answer(request, 404, "not_found", f"There is no page at {path}.")
         return _answer(request, 404, "not_found", f"There is no endpoint {path}; /docs lists them.")
     if exc.status_code == 405:
         allow = (exc.headers or {}).get("Allow", "GET")

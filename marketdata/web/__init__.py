@@ -1,1 +1,1 @@
-"""Read-only web UI, server-rendered (E15, D-034)."""
+"""The web UI (E15, PLAN.md §9.14): pages, proof pages and their static files."""

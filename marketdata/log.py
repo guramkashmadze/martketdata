@@ -6,8 +6,13 @@ line has the same shape. Logs go to stderr; stdout stays free for command output
 A logged traceback names its frames and lines but never their local variables: a frame can hold
 a secret in the clear (a webhook's signing secret while it signs a delivery, E5b), and secrets
 are never logged (PLAN.md §6).
+
+uvicorn's access log names each request's client address; it is cut short before it is written
+(E15, §9.14: server logs only, with IP addresses truncated): an IPv4 address loses its last byte,
+an IPv6 address keeps its first 48 bits, and the port is dropped.
 """
 
+import ipaddress
 import logging
 import sys
 
@@ -18,6 +23,32 @@ from marketdata.config import Env, LogLevel
 
 # Loggers that uvicorn configures with its own handlers before it imports the app.
 _UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
+_IPV4_KEPT, _IPV6_KEPT = 24, 48  # bits of an address the access log keeps
+
+
+def short_address(client: str) -> str:
+    """A client address as the access log keeps it: `203.0.113.57:51234` gives `203.0.113.0`,
+    an IPv6 address its first 48 bits (`2001:db8:85a3::`); anything that isn't an address,
+    `-`. uvicorn writes the address and port as `host:port`, an IPv6 host without brackets."""
+    host, _, port = client.rpartition(":")
+    for text in (host, client) if port.isdigit() else (client,):
+        try:
+            address = ipaddress.ip_address(text.strip("[]"))
+        except ValueError:
+            continue
+        kept = _IPV4_KEPT if address.version == 4 else _IPV6_KEPT
+        return str(ipaddress.ip_network(f"{address}/{kept}", strict=False).network_address)
+    return "-"
+
+
+class _ShortClientAddress(logging.Filter):
+    """Cuts the client address of uvicorn's access log lines (`'%s - "%s %s HTTP/%s" %d'`, the
+    address first) short before any handler sees it."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and record.args and isinstance(record.args[0], str):
+            record.args = (short_address(record.args[0]), *record.args[1:])
+        return True
 
 
 def configure_logging(env: Env, level: LogLevel) -> None:
@@ -69,3 +100,6 @@ def configure_logging(env: Env, level: LogLevel) -> None:
         uvicorn_logger = logging.getLogger(name)
         uvicorn_logger.handlers.clear()
         uvicorn_logger.propagate = True
+    access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(each, _ShortClientAddress) for each in access.filters):
+        access.addFilter(_ShortClientAddress())

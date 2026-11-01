@@ -1,5 +1,6 @@
-"""The request log (E5a-S1): one `api_requests` row per /v1 request and proof page (E5b),
-refused ones included.
+"""The request log (E5a-S1): one `api_requests` row per /v1 request and, while the web UI is
+private, per page and proof page (E5b, E15), refused ones included. A public UI has no key to
+meter, so its pages write no row (web/access.py).
 
 The row holds the key (none when no valid key was sent), when the request started, its method,
 its path without the query string, the status it was answered with and how long it took. It is
@@ -17,12 +18,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marketdata.api.deps import Connect
 from marketdata.service.clients import record_request
+from marketdata.web.access import is_logged_page
 
 log = structlog.get_logger(__name__)
 
 
-def is_logged(path: str) -> bool:
-    return path == "/v1" or path.startswith(("/v1/", "/proof/"))
+def is_logged(path: str, ui_mode: str) -> bool:
+    if path == "/v1" or path.startswith("/v1/"):
+        return True
+    return ui_mode == "private" and is_logged_page(path)
 
 
 class RequestLog:
@@ -30,7 +34,7 @@ class RequestLog:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not is_logged(scope["path"]):
+        if scope["type"] != "http" or not is_logged(scope["path"], scope["app"].state.ui_mode):
             await self.app(scope, receive, send)
             return
         state: dict[str, Any] = scope.setdefault("state", {})  # request.state (api/auth.py)

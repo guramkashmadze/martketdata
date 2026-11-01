@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # E9-S3. Optional: OpenFIGI maps CUSIPs without a key at a tenth of the rate (D-121).
     openfigi_api_key: SecretStr | None = None
 
+    # E15. Who may open the web UI and its proof pages (PLAN.md §9.14, OD-13): private needs an
+    # api-scope key as the password of HTTP Basic auth; public is open to anyone, with at most
+    # UI_RATE_PER_MIN requests a minute from one IP address.
+    ui_mode: Literal["private", "public"] = "private"
+    ui_rate_per_min: int = Field(default=60, ge=1, le=6000)
+
     @property
     def base_url(self) -> str | None:
         """PUBLIC_BASE_URL without its trailing slash."""

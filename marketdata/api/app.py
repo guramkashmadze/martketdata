@@ -1,5 +1,6 @@
 """The FastAPI app: /health, the /v1 data API (E5a) with its reference at /docs, the proof pages
-at /proof (E5b) and the MCP server at /mcp (E6); the web UI is mounted by a later epic.
+at /proof (E5b), the MCP server at /mcp (E6) and the web UI at / with its static files at
+/static (E15).
 
 Run with `pdm run uvicorn marketdata.api.app:app`.
 """
@@ -20,6 +21,9 @@ from marketdata.db.pool import create_pool
 from marketdata.log import configure_logging
 from marketdata.mcp_server.server import PATH as MCP_PATH
 from marketdata.mcp_server.server import create_mcp
+from marketdata.web import routes as web
+from marketdata.web.access import IpLimiter
+from marketdata.web.assets import Assets
 
 DESCRIPTION = """
 Verified data from SEC filings: earnings releases, financial metrics and filings of US public
@@ -58,6 +62,9 @@ def create_app(settings: Settings | None = None, *, connect: Connect | None = No
     )
     if connect is not None:
         app.state.connect = connect
+    # The web UI's access rule (web/access.py): the mode, and in public mode the limit per address.
+    app.state.ui_mode = settings.ui_mode
+    app.state.ui_limiter = IpLimiter(settings.ui_rate_per_min)
     # The tools read through the app's connections, which the lifespan sets up.
     mcp = create_mcp(settings, lambda: app.state.connect)
     app.state.mcp = mcp  # the tests run its session manager themselves
@@ -65,6 +72,9 @@ def create_app(settings: Settings | None = None, *, connect: Connect | None = No
     app.include_router(v1.router)
     app.include_router(status.router)
     app.include_router(proof_pages.router)
+    app.include_router(web.router)
+    app.include_router(web.assets)
+    app.mount("/static", Assets(), name="static")
     app.router.routes.append(Route(MCP_PATH, endpoint=mcp.app, include_in_schema=False))
     errors.install(app)
     app.add_middleware(RequestLog)

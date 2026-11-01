@@ -100,11 +100,11 @@ def _app() -> FastAPI:
         "broken": RuntimeError("secret internals"),
     }
 
-    @app.get("/raise/{name}")
+    @app.get("/v1/raise/{name}")
     async def fail(name: str) -> None:  # noqa: ASYNC124 - an endpoint
         raise raised[name]
 
-    @app.get("/limit")
+    @app.get("/v1/limit")
     async def limit(limit: int = 20) -> int:  # noqa: ASYNC124 - an endpoint
         return limit
 
@@ -126,7 +126,7 @@ def _app() -> FastAPI:
 async def test_errors_use_the_error_envelope(name: str, status: int, code: str) -> None:
     transport = httpx2.ASGITransport(app=_app(), raise_app_exceptions=False)
     async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(f"/raise/{name}")
+        response = await client.get(f"/v1/raise/{name}")
 
     assert response.status_code == status
     body = response.json()
@@ -140,9 +140,9 @@ async def test_a_parameter_that_fails_validation_is_400_not_422() -> None:
     # 422 always means not_applicable (D-096).
     transport = httpx2.ASGITransport(app=_app())
     async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
-        bad = await client.get("/limit", params={"limit": "many"})
-        unknown = await client.get("/nowhere")
-        post = await client.post("/limit")
+        bad = await client.get("/v1/limit", params={"limit": "many"})
+        unknown = await client.get("/v1/nowhere")
+        post = await client.post("/v1/limit")
 
     assert bad.status_code == 400
     assert bad.json()["error"]["code"] == "invalid_parameter"

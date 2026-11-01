@@ -1,0 +1,42 @@
+{% set current = nav | default("") %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true}'>
+<title>{% block title %}{% endblock %} · marketdata</title>
+<link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+<link rel="stylesheet" href="{{ asset('app.css') }}">
+{% block scripts %}{% endblock %}
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="top">
+  <div class="bar">
+    <a class="brand" href="/">marketdata</a>
+    <form class="search" action="/search" method="get" role="search">
+      <label for="q" class="visually-hidden">Ticker or company name</label>
+      <input id="q" name="q" type="search" placeholder="Ticker or company" value="{{ query | default('') }}" autocomplete="off" required maxlength="100">
+      <button type="submit">Search</button>
+    </form>
+    <nav aria-label="Main">
+      <a href="/compare"{% if current == "compare" %} aria-current="page"{% endif %}>Compare</a>
+      <a href="/funds"{% if current == "funds" %} aria-current="page"{% endif %}>Funds</a>
+      <a href="/status"{% if current == "status" %} aria-current="page"{% endif %}>Status</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+{% block content %}{% endblock %}
+</main>
+<footer>
+  <div class="wrap">
+    <p>{{ disclaimer }} Every number links to its proof: the SEC filing it came from and the checks
+    it passed. A value that is missing or failed a check is shown as missing, with why, never
+    estimated.</p>
+  </div>
+</footer>
+</body>
+</html>

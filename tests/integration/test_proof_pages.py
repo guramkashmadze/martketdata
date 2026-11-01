@@ -41,9 +41,9 @@ async def test_a_page_needs_a_key(api: httpx2.AsyncClient, conn: Conn) -> None:
 
     for response in (missing, wrong, garbled):
         assert response.status_code == 401
-        assert response.headers["www-authenticate"] == 'Basic realm="marketdata proof pages"'
+        assert response.headers["www-authenticate"] == 'Basic realm="marketdata"'
         assert response.headers["content-type"].startswith("text/html")
-    assert "sign in with any user name and the key as the password" in missing.text
+    assert "sign in with any user name and your API key as the password" in missing.text
     assert scope.status_code == 403 and "text/html" in scope.headers["content-type"]
 
 
@@ -129,7 +129,7 @@ async def test_a_metric_page_shows_the_value_its_filings_and_history(
         ("/proof/metrics/ACME/revenue/H1/2026-06-30", 400, "H1"),
         ("/proof/metrics/ACME/revenue/Q/June", 400, "period_end must be a day"),
         ("/proof/metrics/FNDX/revenue/Q/2026-06-30", 422, "fund"),
-        ("/proof/nothing/here", 404, "There is no endpoint /proof/nothing/here"),
+        ("/proof/nothing/here", 404, "There is no page at /proof/nothing/here"),
     ],
 )
 async def test_errors_are_pages(

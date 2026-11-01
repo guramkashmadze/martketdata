@@ -6,7 +6,7 @@ import pytest
 import structlog
 
 from marketdata.config import Env
-from marketdata.log import configure_logging
+from marketdata.log import configure_logging, short_address
 
 
 @pytest.fixture(autouse=True)
@@ -72,3 +72,32 @@ def test_tracebacks_carry_no_local_variables(env: Env, capsys: pytest.CaptureFix
     out = capsys.readouterr().err
     assert "delivery failed" in out and "_fail_with" in out  # the frame is named
     assert secret not in out  # the values of its locals aren't
+
+
+# E15 (PLAN.md §9.14): server logs only, with IP addresses truncated.
+@pytest.mark.parametrize(
+    ("client", "kept"),
+    [
+        ("203.0.113.57:51234", "203.0.113.0"),
+        ("2001:db8:85a3:8d3:1319:8a2e:370:7348:443", "2001:db8:85a3::"),
+        ("::1:50000", "::"),
+        ("203.0.113.57", "203.0.113.0"),
+        ("", "-"),
+        ("testclient:50000", "-"),
+    ],
+)
+def test_client_addresses_are_cut_short(client: str, kept: str) -> None:
+    assert short_address(client) == kept
+
+
+def test_the_access_log_keeps_no_full_client_address(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging("prod", "INFO")
+    configure_logging("prod", "INFO")
+    assert len(logging.getLogger("uvicorn.access").filters) == 1  # set up twice, one filter
+
+    logging.getLogger("uvicorn.access").info(
+        '%s - "%s %s HTTP/%s" %d', "203.0.113.57:51234", "GET", "/companies/AAPL", "1.1", 200
+    )
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert json.loads(line)["event"] == '203.0.113.0 - "GET /companies/AAPL HTTP/1.1" 200'
