@@ -1,4 +1,5 @@
-"""/proof: the proof page of a release or a metric value (E5b-S3, PLAN.md §9.10).
+"""/proof: the proof page of a value (PLAN.md §9.10): a release (E5b-S3) or a metric value, in the
+web UI's layout; every number in the UI links to one (E15-S4).
 
 The pages follow the web UI's access rule (web/access.py, §9.14): in private mode HTTP Basic
 auth with an `api`-scope key as the password, each request logged and counted against the key's
@@ -12,9 +13,9 @@ from fastapi import APIRouter, Depends, Path
 from fastapi.responses import HTMLResponse
 
 from marketdata.api.deps import Conn
-from marketdata.api.proof_pages.render import page
 from marketdata.service.proof import earnings_proof, metric_proof
 from marketdata.web.access import require_ui_access
+from marketdata.web.render import page
 
 router = APIRouter(
     prefix="/proof", include_in_schema=False, dependencies=[Depends(require_ui_access)]
@@ -28,7 +29,7 @@ async def earnings_page(
     proof = await earnings_proof(conn, accession_no)
     release = proof.release
     return page(
-        "earnings.html",
+        "proof/earnings.html",
         proof=proof,
         r=release,
         who=release.company or f"CIK {release.cik}",
@@ -41,7 +42,7 @@ async def metric_page(
 ) -> HTMLResponse:
     proof = await metric_proof(conn, ticker, metric, period_type, period_end)
     return page(
-        "metric.html",
+        "proof/metric.html",
         proof=proof,
         row=proof.row,
         who=proof.company or f"CIK {proof.cik}",

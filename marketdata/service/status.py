@@ -1,10 +1,13 @@
 """Process and data status: /health (E0) and /v1/status (E5b; E7c and E11 add to it).
 
 /v1/status needs no key. It publishes how fresh the data is (the newest release, metric row,
-filing and watch) and the accuracy report (§9.10, service/accuracy.py), from clean tables.
+filing and watch) and the accuracy report (§9.10, service/accuracy.py), from clean tables. The
+web UI's status page (E15-S4) shows the same report; both reuse one for a minute (StatusCache).
 """
 
 import asyncio
+import time
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
@@ -65,3 +68,25 @@ async def status_report(conn: AsyncConnection[Any]) -> Served[StatusReport]:
         ),
         quality_flags=(),
     )
+
+
+CACHE_SECONDS = 60.0
+
+
+class StatusCache:
+    """The latest status report, reused for a minute: /v1/status needs no key and the status page
+    may be public, so the report's work stays bounded (D-105)."""
+
+    def __init__(
+        self, seconds: float = CACHE_SECONDS, clock: Callable[[], float] = time.monotonic
+    ) -> None:
+        self.seconds = seconds
+        self._clock = clock
+        self._kept: tuple[float, Served[StatusReport]] | None = None
+
+    async def report(self, conn: AsyncConnection[Any]) -> Served[StatusReport]:
+        if self._kept is not None and self._clock() - self._kept[0] < self.seconds:
+            return self._kept[1]
+        served = await status_report(conn)
+        self._kept = (self._clock(), served)
+        return served

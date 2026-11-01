@@ -1,6 +1,7 @@
-"""E5b-S3: proof pages (PLAN.md §9.10). A release or a metric value with its proof, the SEC
-links, the checks, the cross-check and the change history, behind HTTP Basic auth with an
-`api`-scope key; errors are pages too, and each request is logged like a /v1 request."""
+"""E5b-S3, E15-S4: proof pages (PLAN.md §9.10). A release or a metric value with its proof, the
+SEC links, the checks, the cross-check and the change history, in the web UI's layout and behind
+its access rule (HTTP Basic auth with an `api`-scope key in private mode); errors are pages too,
+and each request is logged like a /v1 request."""
 
 import base64
 from typing import Any
@@ -69,7 +70,9 @@ async def test_a_release_page_shows_each_value_with_its_proof(
     assert "rules version 2 to 3" in page and '<td class="num">990</td>' in page
     assert f"8-K/A {Q3_RELEASE}" in page
     assert DISCLAIMER in page
-    assert "<script" not in page
+    assert "<script" not in page  # a proof page runs no script
+    assert 'href="/companies/ACME"' in page and 'id="revenue"' in page
+    assert 'action="/search"' in page  # the UI's layout, with its search box
     assert response.headers["cache-control"] == "private, no-store"
     assert "default-src 'none'" in response.headers["content-security-policy"]
     logged = await (
@@ -108,7 +111,7 @@ async def test_a_metric_page_shows_the_value_its_filings_and_history(
     inherited = await api.get("/proof/metrics/ACME/revenue/Q/2026-03-31", headers=auth)
 
     assert own.status_code == 200, own.text
-    assert "Acme Corp (ACME): revenue" in own.text and "1,000 USD" in own.text
+    assert "Acme Corp (ACME): Revenue" in own.text and "1,000 USD" in own.text
     assert "<code>Revenues</code>" in own.text and "reported for this period" in own.text
     assert f'href="{SEC}1001/000100100026000025/{Q2_10Q}-index.htm"' in own.text
     assert "No value on this page has changed" in own.text

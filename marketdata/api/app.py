@@ -13,7 +13,6 @@ from starlette.routing import Route
 
 from marketdata.api import errors
 from marketdata.api.deps import Connect
-from marketdata.api.proof_pages import routes as proof_pages
 from marketdata.api.request_log import RequestLog
 from marketdata.api.routes import health, status, v1
 from marketdata.config import Settings, load_settings
@@ -21,6 +20,8 @@ from marketdata.db.pool import create_pool
 from marketdata.log import configure_logging
 from marketdata.mcp_server.server import PATH as MCP_PATH
 from marketdata.mcp_server.server import create_mcp
+from marketdata.service.status import StatusCache
+from marketdata.web import proof
 from marketdata.web import routes as web
 from marketdata.web.access import IpLimiter
 from marketdata.web.assets import Assets
@@ -65,13 +66,14 @@ def create_app(settings: Settings | None = None, *, connect: Connect | None = No
     # The web UI's access rule (web/access.py): the mode, and in public mode the limit per address.
     app.state.ui_mode = settings.ui_mode
     app.state.ui_limiter = IpLimiter(settings.ui_rate_per_min)
+    app.state.status = StatusCache()  # /v1/status and the status page reuse a report a minute
     # The tools read through the app's connections, which the lifespan sets up.
     mcp = create_mcp(settings, lambda: app.state.connect)
     app.state.mcp = mcp  # the tests run its session manager themselves
     app.include_router(health.router)
     app.include_router(v1.router)
     app.include_router(status.router)
-    app.include_router(proof_pages.router)
+    app.include_router(proof.router)
     app.include_router(web.router)
     app.include_router(web.assets)
     app.mount("/static", Assets(), name="static")

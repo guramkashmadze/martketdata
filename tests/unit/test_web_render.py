@@ -5,7 +5,16 @@ from decimal import Decimal
 
 import pytest
 
-from marketdata.web.render import amount, change, direction, exact, scale_name, scaled
+from marketdata.normalize.metric_catalog import UNITS
+from marketdata.web.render import (
+    METRIC_NAMES,
+    amount,
+    change,
+    direction,
+    exact,
+    scale_name,
+    scaled,
+)
 
 
 @pytest.mark.parametrize(
@@ -66,3 +75,7 @@ def test_changes_carry_their_sign_and_a_direction_never_a_verdict() -> None:
         "",
         "",
     ]
+
+
+def test_every_catalog_metric_has_a_name() -> None:
+    assert set(METRIC_NAMES) == set(UNITS)

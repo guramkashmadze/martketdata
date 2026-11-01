@@ -20,6 +20,7 @@ from fastapi.responses import HTMLResponse
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
 from marketdata.sec import urls
+from marketdata.service.accuracy import Rate
 from marketdata.service.proof import CHECKS, CROSS_CHECKS, METHODS, REASONS, SLOT_NAMES
 from marketdata.service.served import DISCLAIMER
 from marketdata.web.assets import CHART_JS, HTMX, asset_url
@@ -42,6 +43,41 @@ SCALES: dict[str, tuple[Decimal, str]] = {
     "percent": (Decimal(1), "%"),
 }
 PERIOD_NAMES = {"Q": "Quarter", "FY": "Fiscal year", "TTM": "Twelve months"}
+# The metric catalog's metrics (PLAN.md §9.3) as pages name them.
+METRIC_NAMES = {
+    "revenue": "Revenue",
+    "cost_of_revenue": "Cost of revenue",
+    "gross_profit": "Gross profit",
+    "rnd_expense": "Research and development",
+    "sga_expense": "Selling, general and administrative",
+    "operating_income": "Operating income",
+    "interest_expense": "Interest expense",
+    "pretax_income": "Income before taxes",
+    "income_tax": "Income tax",
+    "net_income": "Net income",
+    "eps_basic": "EPS, basic",
+    "eps_diluted": "EPS, diluted",
+    "shares_diluted_avg": "Diluted shares, average",
+    "depreciation_amortization": "Depreciation and amortization",
+    "operating_cash_flow": "Operating cash flow",
+    "capex": "Capital expenditure",
+    "dividends_paid": "Dividends paid",
+    "buybacks": "Share buybacks",
+    "cash": "Cash",
+    "current_assets": "Current assets",
+    "total_assets": "Total assets",
+    "current_liabilities": "Current liabilities",
+    "total_liabilities": "Total liabilities",
+    "long_term_debt": "Long-term debt",
+    "total_equity": "Total equity",
+    "shares_outstanding": "Shares outstanding",
+    "free_cash_flow": "Free cash flow",
+    "gross_margin": "Gross margin",
+    "operating_margin": "Operating margin",
+    "net_margin": "Net margin",
+    "revenue_growth_yoy": "Revenue growth, year over year",
+    "eps_diluted_growth_yoy": "Diluted EPS growth, year over year",
+}
 TITLES = {
     400: "This address isn't right",
     401: "Sign in with your API key",
@@ -102,6 +138,18 @@ def direction(value: Decimal | int | None) -> str:
     return "up" if Decimal(value) > 0 else "down"
 
 
+def pct(value: Decimal | None) -> str:
+    """A rate in percent, 99.7%; nothing counted, a dash."""
+    return "—" if value is None else f"{exact(value)}%"
+
+
+def rate_text(counted: Rate) -> str:
+    """`66.7% (2 of 3)`, or a dash while nothing is counted."""
+    if counted.rate is None:
+        return "— (nothing checked yet)"
+    return f"{exact(counted.rate)}% ({counted.matched:,} of {counted.checked:,})"
+
+
 def utc(moment: datetime | None) -> str:
     if moment is None:
         return "—"
@@ -139,6 +187,9 @@ _environment.globals.update(
     chart_js=asset_url(CHART_JS),
     filing_url=urls.filing_index_page,
     scale_name=scale_name,
+    pct=pct,
+    rate_text=rate_text,
+    metric_names=METRIC_NAMES,
     slot_names=SLOT_NAMES,
     checks=CHECKS,
     cross_checks=CROSS_CHECKS,

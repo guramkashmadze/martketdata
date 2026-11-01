@@ -2,7 +2,8 @@
 {% import "parts.html" as parts %}
 {% block title %}{{ proof.ticker }} {{ row.metric }} {{ row.period_type }} {{ row.period_end }}{% endblock %}
 {% block content %}
-<h1>{{ who }} ({{ proof.ticker }}): {{ row.metric }}</h1>
+<p class="sub"><a href="/companies/{{ proof.ticker }}">{{ who }}</a> · proof</p>
+<h1>{{ who }} ({{ proof.ticker }}): {{ metric_names.get(row.metric, row.metric) }}</h1>
 <p class="sub">
   {{ period_names.get(row.period_type, row.period_type) }} ended {{ row.period_end }}
   · fiscal {{ row.fiscal_year }} {{ row.fiscal_period }}

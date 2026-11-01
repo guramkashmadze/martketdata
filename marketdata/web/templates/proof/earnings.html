@@ -2,6 +2,7 @@
 {% import "parts.html" as parts %}
 {% block title %}{{ r.ticker or r.cik }} earnings release {{ r.release.accession_no }}{% endblock %}
 {% block content %}
+{% if r.ticker %}<p class="sub"><a href="/companies/{{ r.ticker }}">{{ who }}</a> · proof</p>{% endif %}
 <h1>{{ who }}{% if r.ticker %} ({{ r.ticker }}){% endif %}: earnings release</h1>
 <p class="sub">{{ (("Fiscal " ~ r.period.fiscal_year ~ " " ~ r.period.fiscal_period) if r.period.fiscal_year else "Period not stated") }}{{ (" · quarter ended " ~ r.period.period_end) if r.period.period_end else "" }} · status <span class="{{ r.release.status }}">{{ r.release.status }}</span></p>
 
@@ -29,7 +30,7 @@
 
 <h2>Values</h2>
 {% for fact in r.facts %}
-<h3>{{ slot_names.get(fact.slot, fact.slot) }}</h3>
+<h3 id="{{ fact.slot }}">{{ slot_names.get(fact.slot, fact.slot) }}</h3>
 <dl>
   <dt>Value</dt>
   <dd class="num value">{{ fact.value | amount(fact.unit) }}</dd>

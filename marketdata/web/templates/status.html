@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% set nav = "status" %}
+{% block title %}Freshness and accuracy{% endblock %}
+{% block content %}
+{% set a = report.accuracy %}
+{% set f = report.freshness %}
+<h1>Freshness and accuracy</h1>
+<p class="sub">Measured from the data as it is stored now, at {{ a.generated_at | utc }}.
+The same report is served without a key by <code>GET /v1/status</code>.</p>
+
+<h2>Freshness</h2>
+<dl>
+  <dt>Newest earnings release</dt><dd class="num">accepted by the SEC {{ f.release_accepted_at | utc }}</dd>
+  <dt>Latest first verification</dt><dd class="num">{{ f.release_verified_at | utc }}</dd>
+  <dt>Financial metrics</dt><dd class="num">last changed {{ f.metrics_updated_at | utc }}</dd>
+  <dt>Filings</dt><dd class="num">newest found {{ f.filing_discovered_at | utc }}</dd>
+  <dt>Watch of the SEC's filing lists</dt><dd class="num">last run {{ f.watched_at | utc }}</dd>
+</dl>
+
+<h2>Track record</h2>
+{% if a.latency.releases %}
+<p>{{ a.latency.releases }} earnings releases processed as they were filed: from SEC acceptance
+to the first verified value took a median of <span class="num">{{ a.latency.median_minutes | exact }}</span>
+minutes, and at most <span class="num">{{ a.latency.p90_minutes | exact }}</span> minutes for nine in ten.</p>
+{% else %}
+<p>No earnings release has been processed as it was filed yet: the track record starts when the
+live service runs. Releases loaded from history were verified months after they were filed,
+which says nothing about speed, so they aren't counted.</p>
+{% endif %}
+
+<h2>Hand-checked values served exactly</h2>
+<p class="sub">{{ a.golden.values }} values checked by hand against the SEC documents (the golden
+sets){% if a.golden.loaded_at %}, loaded {{ a.golden.loaded_at | utc }}{% endif %}. A known
+difference counts as a miss; a value that doesn't apply isn't counted.</p>
+<div class="grid">
+  <div class="card">
+    <h3>Earnings releases</h3>
+    <p class="value num">{{ rate_text(a.golden.earnings) }}</p>
+    <div class="scroll"><table>
+      <caption>By value: the quarter and the year before both served exactly</caption>
+      <thead><tr><th scope="col">Value</th><th scope="col" class="num">Served exactly</th><th scope="col" class="num">Rate</th></tr></thead>
+      <tbody>
+      {% for slot, counted in a.golden.slots.items() %}
+        <tr><th scope="row">{{ slot_names.get(slot, slot) }}</th><td class="num">{{ counted.matched }} of {{ counted.checked }}</td><td class="num">{{ pct(counted.rate) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <h3>Financial metrics</h3>
+    <p class="value num">{{ rate_text(a.golden.metrics_total) }}</p>
+    <div class="scroll"><table>
+      <caption>By metric</caption>
+      <thead><tr><th scope="col">Metric</th><th scope="col" class="num">Served exactly</th><th scope="col" class="num">Rate</th></tr></thead>
+      <tbody>
+      {% for metric, counted in a.golden.metrics.items() %}
+        <tr><th scope="row">{{ metric }}</th><td class="num">{{ counted.matched }} of {{ counted.checked }}</td><td class="num">{{ pct(counted.rate) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+<p class="note">Known differences: {{ a.golden.known_differences }}. Values that don't apply:
+{{ a.golden.not_applicable }}. Values whose release or company isn't stored here: {{ a.golden.not_stored }}.</p>
+
+<h2>Earnings releases against the later 10-Q or 10-K</h2>
+<p>Release values equal to the audited filing's (within 0.5%, EPS within $0.01):
+<span class="value num">{{ pct(a.cross_check.rate) }}</span> of those compared.</p>
+<div class="scroll"><table>
+  <thead><tr>{% for status in a.cross_check.statuses %}<th scope="col" class="num">{{ status }}</th>{% endfor %}</tr></thead>
+  <tbody><tr>{% for status, count in a.cross_check.statuses.items() %}<td class="num {{ status }}">{{ count }}</td>{% endfor %}</tr></tbody>
+</table></div>
+{% if a.cross_check.mismatches %}
+<h3>Every mismatch</h3>
+<div class="scroll"><table>
+  <thead><tr><th scope="col">Company</th><th scope="col">Value</th><th scope="col">Quarter ended</th><th scope="col" class="num">Release</th><th scope="col" class="num">Filing</th><th scope="col" class="num">Difference</th></tr></thead>
+  <tbody>
+  {% for m in a.cross_check.mismatches %}
+    <tr>
+      <td>{{ m.ticker or ("CIK " ~ m.cik) }}</td>
+      <td><a href="/proof/earnings/{{ m.accession_no }}#{{ m.slot }}">{{ slot_names.get(m.slot, m.slot) }}</a></td>
+      <td class="num">{{ m.period_end | day }}</td>
+      <td class="num">{{ m.release_value | amount(m.unit) }}</td>
+      <td class="num">{{ m.filing_value | amount(m.unit) }}</td>
+      <td class="num">{{ m.difference_pct | change }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+
+<h2>Extraction from press releases</h2>
+<p>Values that passed every check, of those that apply: <span class="value num">{{ rate_text(a.extraction.total) }}</span>,
+over {{ a.extraction.releases }} releases (rules version {{ a.extraction.rules_versions | join(", ") }}).</p>
+<div class="scroll"><table>
+  <thead><tr><th scope="col">Value</th><th scope="col" class="num">Passed</th><th scope="col" class="num">Rate</th></tr></thead>
+  <tbody>
+  {% for slot, counted in a.extraction.slots.items() %}
+    <tr><th scope="row">{{ slot_names.get(slot, slot) }}</th><td class="num">{{ counted.matched }} of {{ counted.checked }}</td><td class="num">{{ pct(counted.rate) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="note">Releases by status: {% for status, count in a.extraction.statuses.items() %}{{ status }} {{ count }}{{ ", " if not loop.last }}{% endfor %}.</p>
+
+<h2>Values changed in the last 90 days</h2>
+<p class="sub">A stored value never changes silently: each change is logged with the old value,
+the new value and why, and announced (<code>/v1/changes</code>, <code>data.changed</code>).</p>
+<div class="scroll"><table>
+  <thead><tr><th scope="col">Data</th><th scope="col" class="num">Correction</th><th scope="col" class="num">Restatement</th><th scope="col" class="num">Amendment</th></tr></thead>
+  <tbody>
+  {% for name, counts in (("Earnings release values", a.changes.earnings_facts), ("Financial metrics", a.changes.financial_metrics), ("Insider trades", a.changes.insider_trades), ("Fund positions", a.changes.fund_positions)) %}
+    <tr><th scope="row">{{ name }}</th>{% for reason in ("correction", "restatement", "amendment") %}<td class="num">{{ counts.get(reason, "—") }}</td>{% endfor %}</tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

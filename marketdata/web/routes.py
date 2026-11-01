@@ -6,9 +6,11 @@ be added without it. Pages are HTML, not part of the API contract: the API refer
 out.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
+from marketdata.api.deps import Conn
+from marketdata.service.status import StatusCache
 from marketdata.web.access import FAVICON, require_ui_access
 from marketdata.web.assets import CACHE_FOR_A_YEAR, STATIC_DIR
 from marketdata.web.render import page
@@ -22,6 +24,14 @@ assets = APIRouter(include_in_schema=False)
 @router.get("/", response_class=HTMLResponse)
 async def home() -> HTMLResponse:  # noqa: ASYNC124
     return page("home.html")
+
+
+@router.get("/status", response_class=HTMLResponse)
+async def status(request: Request, conn: Conn) -> HTMLResponse:
+    """Freshness, the track record and the accuracy report (E15-S4, PLAN.md §9.10): the report
+    /v1/status serves, from the same minute's cache."""
+    cache: StatusCache = request.app.state.status
+    return page("status.html", report=(await cache.report(conn)).data)
 
 
 @assets.get(FAVICON)
