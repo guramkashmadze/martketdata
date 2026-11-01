@@ -169,3 +169,23 @@ newest first; each opens the filing on sec.gov.</p>
 <p class="sub">No curated manager reports a position in it in its latest 13F report.</p>
 {% endif %}
 {%- endmacro %}
+
+{% macro reports(filings) -%}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Report</th><th scope="col" class="num">Filed</th><th scope="col">Values in</th><th scope="col" class="num">Lines</th><th scope="col" class="num">Total as filed</th><th scope="col">On sec.gov</th></tr></thead>
+  <tbody>
+  {% for filing in filings %}
+    <tr>
+      <td>{{ filing.form }}{% if filing.amendment_type %} <span class="note">{{ filing.amendment_type | lower }}</span>{% endif %}<br><span class="note">{{ filing.accession_no }}</span></td>
+      <td class="num">{{ filing.filed_at | day }}</td>
+      <td>{{ filing.value_unit }}<br><span class="note">{{ filing.unit_rule }}</span></td>
+      <td class="num">{{ filing.lines | exact }}{% if filing.entry_total is not none %}<br><span class="note">summary page {{ filing.entry_total | exact }}</span>{% endif %}</td>
+      <td class="num">{{ filing.value_sum | exact }}{% if filing.value_total is not none %}<br><span class="note">summary page {{ filing.value_total | exact }}</span>{% endif %}</td>
+      <td><a href="{{ filing.filing_url }}">filing</a>{% if filing.table_url %} · <a href="{{ filing.table_url }}">information table</a>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{%- endmacro %}

@@ -12,6 +12,9 @@ functions, so a page and the API never disagree.
   every line, served or superseded by a later 4/A or an earlier copy (E8-S3), each line's
   checks and flags, the footnotes and the change history; an insider trade on a page links to
   the filings it sums.
+- A fund position (`/proof/funds/{manager_cik}/{quarter}/{cusip}`, E15): the position as
+  `fund_holdings` serves it, the 13F reports and information-table lines it adds up, their unit
+  and summary-page totals, its flags and its change history.
 """
 
 from datetime import date, datetime
@@ -20,7 +23,7 @@ from typing import Any
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.db.repositories import financial_metrics, insiders, value_changes
+from marketdata.db.repositories import financial_metrics, holdings, insiders, value_changes
 from marketdata.db.repositories.insiders import StoredFiling, StoredLine
 from marketdata.db.repositories.value_changes import StoredChange
 from marketdata.normalize.insiders import CODE_LABELS, FiledTrade, group_trades
@@ -36,6 +39,7 @@ from marketdata.service.financials import (
     metric_refs,
     metric_view,
 )
+from marketdata.service.funds import FundFiling, FundPosition, fund_filing, fund_holdings
 from marketdata.service.insiders import Insider, insider_of
 from marketdata.service.served import Number, Source, sources_of
 
@@ -89,6 +93,15 @@ INSIDER_FLAGS = {
     "price_not_reported": "no line gives a price; a footnote may give the average",
     "price_partly_reported": "some lines give no price",
     "trade_date_after_filing": "the trade is dated after the filing: the filer's typo, as filed",
+}
+# E15: what a fund position's flags mean (§9.8, normalize/holdings.py).
+POSITION_FLAGS = {
+    "unit_suspect": (
+        "the value per share is more than 50% from the median of the other curated managers "
+        "holding it that quarter: the value may be in another unit than the filing says"
+    ),
+    "split_adjusted": "the shares a quarter earlier are compared after the security's split",
+    "no_prior_report": "no report for the quarter before, so no change is shown",
 }
 SUPERSEDED = {
     "amendment": "a later 4/A restates or corrects it",
@@ -360,4 +373,101 @@ def _line_proof(filing: StoredFiling, line: StoredLine) -> InsiderLineProof:
         superseded_reason=line.superseded_reason,
         checks=alone.checks,
         quality_flags=alone.flags,
+    )
+
+
+# --- E15: a fund position's proof page.
+
+
+class PositionLine(BaseModel):
+    """A line of a 13F information table, as filed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    accession_no: str
+    line_no: int
+    name_of_issuer: str | None
+    title_of_class: str | None
+    shares: Number  # or principal for PRN
+    share_type: str
+    value_as_filed: Number  # in the report's unit
+    value_usd: Number
+    investment_discretion: str | None
+    other_managers: str | None
+
+
+class PositionProofPage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    manager_cik: int
+    manager: str
+    quarter: str
+    report_period: date
+    filed_at: date  # of the latest report for the quarter
+    previous_period: date | None
+    position: FundPosition
+    filings: tuple[FundFiling, ...]  # the reports its lines were read from
+    lines: tuple[PositionLine, ...]
+    history: tuple[HistoryEntry, ...]
+    flags: dict[str, str]
+
+
+async def fund_position_proof(
+    conn: AsyncConnection[Any],
+    manager_cik: int,
+    quarter: str,
+    cusip: str,
+    put_call: str | None = None,
+) -> PositionProofPage:
+    """A curated manager's position at a quarter end as `fund_holdings` serves it, with the
+    lines it adds up; a position the manager no longer reports shows the quarter before's."""
+    option = put_call.strip().upper() if put_call else None
+    if option not in (None, "PUT", "CALL"):
+        raise InvalidParameter(f"put_call must be PUT or CALL, not {put_call!r}")
+    held = (await fund_holdings(conn, manager_cik, quarter=quarter, limit=None)).data
+    wanted = (cusip.strip().upper(), option)
+    position = next((p for p in held.positions if (p.cusip, p.put_call) == wanted), None)
+    if position is None:
+        shown = f"{wanted[0]} {option}" if option else wanted[0]
+        raise NotFound(
+            f"{held.manager}'s 13F report for {held.quarter} has no position in {shown}."
+        )
+    accessions = list(position.proof.accession_nos)
+    lines = [
+        line
+        for line in await holdings.lines(conn, accessions)
+        if (line.cusip, line.put_call) == wanted
+    ]
+    reports = sorted(
+        await holdings.filings(conn, accessions), key=lambda f: (f.filed_at, f.accession_no)
+    )
+    changed = await value_changes.for_position(
+        conn, held.manager_cik, held.report_period, position.cusip, position.put_call
+    )
+    return PositionProofPage(
+        manager_cik=held.manager_cik,
+        manager=held.manager,
+        quarter=held.quarter,
+        report_period=held.report_period,
+        filed_at=held.filed_at,
+        previous_period=held.previous_period,
+        position=position,
+        filings=tuple(fund_filing(report) for report in reports),
+        lines=tuple(
+            PositionLine(
+                accession_no=line.accession_no,
+                line_no=line.line_no,
+                name_of_issuer=line.name_of_issuer,
+                title_of_class=line.title_of_class,
+                shares=line.shares,
+                share_type=line.share_type,
+                value_as_filed=line.value_as_filed,
+                value_usd=line.value_usd,
+                investment_discretion=line.investment_discretion,
+                other_managers=line.other_managers,
+            )
+            for line in sorted(lines, key=lambda line: (line.accession_no, line.line_no))
+        ),
+        history=tuple(_entry(change) for change in changed),
+        flags={code: POSITION_FLAGS.get(code, code) for code in position.quality_flags},
     )

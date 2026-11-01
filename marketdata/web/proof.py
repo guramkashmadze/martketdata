@@ -1,5 +1,6 @@
 """/proof: the proof page of a value (PLAN.md §9.10): a release or a metric value (E5b-S3), a
-Form 4 (E15-S2), in the web UI's layout; every number in the UI links to one (E15-S4).
+Form 4 (E15-S2) or a fund position (E15-S6), in the web UI's layout; every number in the UI
+links to one (E15-S4).
 
 The pages follow the web UI's access rule (web/access.py, §9.14): in private mode HTTP Basic
 auth with an `api`-scope key as the password, each request logged and counted against the key's
@@ -9,11 +10,16 @@ reference leaves them out.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import HTMLResponse
 
 from marketdata.api.deps import Conn
-from marketdata.service.proof import earnings_proof, insider_filing_proof, metric_proof
+from marketdata.service.proof import (
+    earnings_proof,
+    fund_position_proof,
+    insider_filing_proof,
+    metric_proof,
+)
 from marketdata.web.access import require_ui_access
 from marketdata.web.render import page
 
@@ -54,3 +60,15 @@ async def insider_page(
     conn: Conn, accession_no: Annotated[str, Path(description="The Form 4's accession number.")]
 ) -> HTMLResponse:
     return page("proof/insider.html", proof=await insider_filing_proof(conn, accession_no))
+
+
+@router.get("/funds/{manager_cik}/{quarter}/{cusip}", response_class=HTMLResponse)
+async def position_page(
+    conn: Conn,
+    manager_cik: int,
+    quarter: str,
+    cusip: str,
+    put_call: Annotated[str | None, Query(description="PUT or CALL for an option.")] = None,
+) -> HTMLResponse:
+    proof = await fund_position_proof(conn, manager_cik, quarter, cusip, put_call)
+    return page("proof/position.html", proof=proof)

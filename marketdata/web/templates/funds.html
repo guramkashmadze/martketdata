@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% set nav = "funds" %}
+{% block title %}Fund portfolios{% endblock %}
+{% block content %}
+<h1>Fund portfolios</h1>
+<p class="sub">Well-known investors' positions from their 13F reports. {{ funds.note }} Managers
+are listed by name; each row is the manager's latest report.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Manager</th><th scope="col">Name on EDGAR</th><th scope="col" class="num">Quarter end</th><th scope="col" class="num">Filed</th><th scope="col" class="num">Positions</th><th scope="col" class="num">Value (USD)</th></tr></thead>
+  <tbody>
+  {% for fund in funds.funds %}
+    <tr>
+      <td><a href="/funds/{{ fund.manager_cik }}">{{ fund.manager }}</a></td>
+      <td class="note">{{ fund.name }}<br>CIK {{ fund.manager_cik }}</td>
+      <td class="num">{{ fund.report_period | day }}</td>
+      <td class="num">{{ fund.filed_at | day }}</td>
+      <td class="num">{% if fund.positions is not none %}<a class="t" href="/funds/{{ fund.manager_cik }}">{{ fund.positions | exact }}</a>{% else %}—{% endif %}</td>
+      <td class="num">{% if fund.value_usd is not none %}<a class="t" href="/funds/{{ fund.manager_cik }}">{{ fund.value_usd | exact }}</a>{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -3,7 +3,7 @@ same transaction as the change itself. The change feed (E5b, GET /v1/changes) re
 first; each change is announced as a `data.changed` webhook event by its id."""
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -64,6 +64,16 @@ _FOR_INSIDER_FILING = f"""
     where entity = 'insider_transaction'
       and (entity_key->>'accession_no' = %(accession_no)s
            or entity_key->>'served_from' = %(accession_no)s)
+    order by change_id
+"""
+
+# E15: a fund position's history: its shares and value at one quarter end.
+_FOR_POSITION = f"""
+    select {_COLUMNS} from value_changes
+    where entity = 'fund_position' and cik = %(manager_cik)s
+      and entity_key->>'report_period' = %(report_period)s
+      and entity_key->>'cusip' = %(cusip)s
+      and (entity_key->>'put_call') is not distinct from %(put_call)s
     order by change_id
 """
 
@@ -165,6 +175,27 @@ async def for_insider_filing(conn: AsyncConnection[Any], accession_no: str) -> l
     """A Form 4's change history (E15): its lines', and those of lines it now serves."""
     async with conn.cursor(row_factory=class_row(StoredChange)) as cur:
         await cur.execute(_FOR_INSIDER_FILING, {"accession_no": accession_no})
+        return await cur.fetchall()
+
+
+async def for_position(
+    conn: AsyncConnection[Any],
+    manager_cik: int,
+    report_period: date,
+    cusip: str,
+    put_call: str | None,
+) -> list[StoredChange]:
+    """A fund position's change history at one quarter end (E15)."""
+    async with conn.cursor(row_factory=class_row(StoredChange)) as cur:
+        await cur.execute(
+            _FOR_POSITION,
+            {
+                "manager_cik": manager_cik,
+                "report_period": report_period.isoformat(),
+                "cusip": cusip,
+                "put_call": put_call,
+            },
+        )
         return await cur.fetchall()
 
 

@@ -1,0 +1,22 @@
+{# A page of a fund's positions as table rows, and the row that asks for the next page: the fund
+   page includes it, and htmx swaps it in place of that row. #}
+{% import "parts.html" as parts %}
+{% for p in held.positions %}
+{% set url = position_url(held.manager_cik, held.quarter, p) %}
+<tr>
+  <td>{% if p.ticker %}<a href="{{ company_url(p.ticker) }}">{{ p.issuer or p.ticker }}</a> <span class="note">{{ p.ticker }}</span>{% else %}{{ p.issuer or "—" }}{% endif %}</td>
+  <td>{{ p.title_of_class or "—" }}{% if p.put_call %} <span class="badge">{{ p.put_call }}</span>{% endif %}{% if p.share_type == "PRN" %} <span class="badge">principal</span>{% endif %}</td>
+  <td><code>{{ p.cusip }}</code></td>
+  <td class="num"><a class="v" href="{{ url }}">{{ p.shares | exact }}</a></td>
+  <td class="num"><a class="v" href="{{ url }}">{{ p.value_usd | exact }}</a></td>
+  <td class="num">{% if p.weight_pct is not none %}<a class="v" href="{{ url }}">{{ pct(p.weight_pct) }}</a>{% else %}—{% endif %}</td>
+  <td>{{ parts.position_change(p, url) }}</td>
+  <td>{% if p.quality_flags %}<span class="note">{{ p.quality_flags | join(", ") }}</span>{% endif %}</td>
+</tr>
+{% endfor %}
+{% if held.next_cursor %}
+{% set more = "/funds/" ~ held.manager_cik ~ "?quarter=" ~ held.quarter ~ ("&change=" ~ change if change else "") ~ "&cursor=" ~ (held.next_cursor | urlencode) %}
+<tr id="positions-more">
+  <td colspan="8"><a href="{{ more }}" hx-get="{{ more }}" hx-target="#positions-more" hx-swap="outerHTML">More positions</a></td>
+</tr>
+{% endif %}

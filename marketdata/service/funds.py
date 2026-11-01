@@ -278,6 +278,13 @@ async def list_funds(conn: AsyncConnection[Any], *, curated: bool = True) -> Ser
     )
 
 
+async def reported_quarters(conn: AsyncConnection[Any], manager: str | int) -> tuple[str, ...]:
+    """The quarters a curated manager has a 13F report for, newest first (2026Q2)."""
+    fund = await resolve_manager(conn, str(manager))
+    reported = await holdings.periods(conn, fund.manager_cik)
+    return tuple(quarter_label(period) for period in sorted(reported, reverse=True))
+
+
 def check_changes(wanted: Sequence[str] | None) -> tuple[str, ...] | None:
     """Change types asked for; None for every one."""
     if not wanted:
@@ -354,7 +361,7 @@ async def fund_holdings(
         report_period=period,
         filed_at=max(filing.filed_at for filing in filed),
         previous_period=previous if has_previous else None,
-        filings=tuple(_filing(filing) for filing in filed),
+        filings=tuple(fund_filing(filing) for filing in filed),
         positions_count=len(now),
         value_usd=sum((p.value_usd for p in now), Decimal(0)),
         long_value_usd=long_value,
@@ -645,7 +652,8 @@ def _quarter(text: str | None, reported: Sequence[date], manager: str) -> date:
     return period
 
 
-def _filing(filing: StoredF13Filing) -> FundFiling:
+def fund_filing(filing: StoredF13Filing) -> FundFiling:
+    """A stored 13F report as it is served: its links, unit and summary-page checks."""
     return FundFiling(
         accession_no=filing.accession_no,
         form=filing.form,

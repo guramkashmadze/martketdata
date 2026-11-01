@@ -21,7 +21,7 @@ from marketdata.log import configure_logging
 from marketdata.mcp_server.server import PATH as MCP_PATH
 from marketdata.mcp_server.server import create_mcp
 from marketdata.service.status import StatusCache
-from marketdata.web import company, proof
+from marketdata.web import company, funds, proof
 from marketdata.web import routes as web
 from marketdata.web.access import IpLimiter
 from marketdata.web.assets import Assets
@@ -75,6 +75,7 @@ def create_app(settings: Settings | None = None, *, connect: Connect | None = No
     app.include_router(status.router)
     app.include_router(proof.router)
     app.include_router(company.router)
+    app.include_router(funds.router)
     app.include_router(web.router)
     app.include_router(web.assets)
     app.mount("/static", Assets(), name="static")

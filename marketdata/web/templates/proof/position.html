@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% set p = proof.position %}
+{% block title %}{{ proof.manager }} {{ proof.quarter }}: {{ p.issuer or p.cusip }}{% endblock %}
+{% block content %}
+<p class="sub"><a href="/funds/{{ proof.manager_cik }}?quarter={{ proof.quarter }}">{{ proof.manager }}, {{ proof.quarter }}</a> · proof</p>
+<h1>{{ proof.manager }}: {{ p.issuer or p.cusip }}{% if p.put_call %} ({{ p.put_call }}){% endif %}</h1>
+<p class="sub">Position at the quarter end {{ proof.report_period | day }}, from the 13F report filed {{ proof.filed_at | day }}</p>
+
+<h2>The position</h2>
+<dl>
+  <dt>Security</dt>
+  <dd>{{ p.issuer or "—" }}, {{ p.title_of_class or "—" }} · CUSIP <code>{{ p.cusip }}</code> as filed{% if p.ticker %} · <a href="{{ company_url(p.ticker) }}">{{ p.ticker }}</a>{% endif %}{% if p.figi %} · FIGI {{ p.figi }}{% endif %}</dd>
+  <dt>{{ "Principal amount" if p.share_type == "PRN" else "Shares" }}</dt><dd class="num value">{{ p.shares | exact }}</dd>
+  <dt>Value</dt><dd class="num value">{{ p.value_usd | exact }} USD</dd>
+  <dt>Weight</dt>
+  <dd>{% if p.weight_pct is not none %}{{ pct(p.weight_pct) }} of the long equity positions{% else %}not weighted: options and principal amounts are left out of weights{% endif %}</dd>
+  <dt>From the quarter before</dt>
+  <dd>{% if p.change_type %}{{ change_names.get(p.change_type, p.change_type) }}{% if p.previous_shares is not none %}: {{ p.previous_shares | exact }} at {{ proof.previous_period | day }}{% endif %}{% if p.shares_change is not none %}, a change of {{ p.shares_change | signed }}{% endif %}{% if p.split_ratio %}, after a {{ p.split_ratio }} split{% endif %}{% else %}not shown: there is no report for the quarter before{% endif %}</dd>
+  <dt>Read by</dt><dd>{{ p.proof.method }} version {{ p.proof.extractor_version }}; {{ p.proof.lines }} line{{ "s" if p.proof.lines != 1 }} of the information table added up</dd>
+  {% if proof.flags %}
+  <dt>Flags</dt>
+  <dd><ul>{% for code, meaning in proof.flags.items() %}<li><code>{{ code }}</code>: {{ meaning }}; a flag never changes a value</li>{% endfor %}</ul></dd>
+  {% endif %}
+</dl>
+
+<h2>Lines of the information table</h2>
+<p class="sub">Filers split one position across lines, for example one per other manager; the
+position adds them up. A value is converted to dollars from the report's unit.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Report</th><th scope="col" class="num">Line</th><th scope="col">Issuer and class</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Value as filed</th><th scope="col" class="num">Value (USD)</th><th scope="col">Discretion</th><th scope="col">Other managers</th></tr></thead>
+  <tbody>
+  {% for line in proof.lines %}
+    <tr>
+      <td class="num">{{ line.accession_no }}</td>
+      <td class="num">{{ line.line_no }}</td>
+      <td>{{ line.name_of_issuer or "—" }}<br><span class="note">{{ line.title_of_class or "" }}</span></td>
+      <td class="num">{{ line.shares | exact }} {{ line.share_type }}</td>
+      <td class="num">{{ line.value_as_filed | exact }}</td>
+      <td class="num">{{ line.value_usd | exact }}</td>
+      <td>{{ line.investment_discretion or "—" }}</td>
+      <td>{{ line.other_managers or "—" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Reports</h2>
+{{ parts.reports(proof.filings) }}
+
+{{ parts.history(proof.history, None) }}
+{% endblock %}

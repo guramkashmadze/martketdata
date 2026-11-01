@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% set nav = "funds" %}
+{% block title %}{{ held.manager }}: 13F positions {{ held.quarter }}{% endblock %}
+{% block scripts %}
+{% if held.next_cursor %}<script defer src="{{ htmx }}"></script>{% endif %}
+{% endblock %}
+{% block content %}
+<p class="sub"><a href="/funds">Fund portfolios</a></p>
+<h1>{{ held.manager }}</h1>
+<p class="sub">{{ held.name }} · CIK {{ held.manager_cik }}</p>
+<p class="note">{{ held.note }}</p>
+
+<h2>Report for {{ held.quarter }}</h2>
+<ul class="links" aria-label="Quarters reported">
+  {% for quarter in quarters %}
+  <li>{% if quarter == held.quarter %}<strong>{{ quarter }}</strong>{% else %}<a href="?quarter={{ quarter }}">{{ quarter }}</a>{% endif %}</li>
+  {% endfor %}
+</ul>
+<dl>
+  <dt>Quarter end</dt><dd class="num">{{ held.report_period | day }}</dd>
+  <dt>Filed</dt><dd class="num">{{ held.filed_at | day }}</dd>
+  <dt>Compared with</dt>
+  <dd>{% if held.previous_period %}the report for the quarter ended {{ held.previous_period | day }}{% else %}nothing: there is no report for the quarter before, so no change is shown{% endif %}</dd>
+  <dt>Positions</dt>
+  <dd class="num">{{ held.positions_count | exact }}, worth {{ held.value_usd | exact }} USD; the long equity positions, which weights are of: {{ held.long_value_usd | exact }} USD</dd>
+</dl>
+<h3>Reports read</h3>
+{{ parts.reports(held.filings) }}
+
+<h2 id="positions">Positions</h2>
+<ul class="links" aria-label="Change from the quarter before">
+  <li>{% if not change %}<strong>All</strong>{% else %}<a href="?quarter={{ held.quarter }}#positions">All</a>{% endif %}</li>
+  {% for counted in held.changes %}
+  <li>{% if change == counted.change_type %}<strong>{{ change_names[counted.change_type] }} ({{ counted.positions }})</strong>{% else %}<a href="?quarter={{ held.quarter }}&amp;change={{ counted.change_type }}#positions">{{ change_names[counted.change_type] }} ({{ counted.positions }})</a>{% endif %}</li>
+  {% endfor %}
+</ul>
+<p class="note">Largest value first, then the positions it no longer reports. Shares and values as
+filed, values in USD; options (PUT, CALL) and principal amounts aren't weighted. Each number
+opens the position's proof.</p>
+{% if held.positions %}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Issuer</th><th scope="col">Class</th><th scope="col">CUSIP</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Value (USD)</th><th scope="col" class="num">Weight</th><th scope="col">From the quarter before</th><th scope="col">Flags</th></tr></thead>
+  <tbody>
+  {% include "partials/position_rows.html" %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No position of this kind in the report.</p>
+{% endif %}
+{% endblock %}
