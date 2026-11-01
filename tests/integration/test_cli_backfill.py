@@ -57,6 +57,7 @@ def universe(
                     FACTS_REFRESH,
                     INSIDERS_BACKFILL,
                     FUNDS_BACKFILL,
+                    CUSIP_MAP,
                 ]
             ],
         )

@@ -40,7 +40,8 @@ export BASE=http://127.0.0.1:8000 KEY=mdk_...
 ```
 
 The dev database needs the history loaded by earlier epics (`backfill filings`, `backfill
-earnings`, `backfill facts`); the live VM has it from the live run. `/docs` on the same server is
+earnings`, `backfill facts`, `backfill insiders`; for part 8 `managers load` and `backfill funds`);
+the live VM has it from the live run. `/docs` on the same server is
 the API reference, with an example for every route.
 
 ## 1. The API in curl (engineers)
@@ -281,6 +282,28 @@ counsel's of 2026-09-21: three lines of one Form 4 summed to 30,460 shares at a 
 corrects, a filing made twice counts once, and a served trade that changes is in
 `/v1/changes`. In an AI chat the same question calls `insider_activity`.
 
+## 8. Famous investors' portfolios (everyone)
+
+What 28 well-known investors reported holding at a quarter end in their 13F filings, and what
+changed from the quarter before (E9). Each position is the 13F's lines for one security added
+up, with its weight among the long equity positions and its change in shares; each report is
+linked with its information table, the unit its values were read in and the summary page's
+line count and total:
+
+```bash
+curl -s -H "X-API-Key: $KEY" "$BASE/v1/funds/1067983/holdings?change=new,added,trimmed,exited&limit=50" \
+  | jq '{quarter: .data.quarter, filed_at: .data.filed_at, compared_with: .data.previous_period, changes: .data.changes, positions: [.data.positions[] | {change_type, ticker, shares, shares_change, value_usd}]}'
+```
+
+On the dev database on 2026-11-01 (eight quarters of 13F reports backfilled, 230 reports of 28
+investors), Berkshire Hathaway's report for 2026-06-30, filed 2026-08-14, holds 29 positions
+worth 299,253,556,246 USD; against 2026-03-31 it added seven (Alphabet's class A by 24,541,369
+shares, Delta by 17,510,544), trimmed six (Bank of America by 30,230,150 shares), opened D.R.
+Horton and exited Constellation Brands; 25 ms. `GET /v1/funds` lists the investors with their
+latest report and `GET /v1/companies/AAPL/funds` who holds Apple. A 13F is filed up to 45 days
+after the quarter end and lists long positions only. In an AI chat, "What did Berkshire
+Hathaway buy and sell last quarter?" calls `investor_portfolio` (5.9 KB, with the 13F's link).
+
 ## The integration on one page
 
 - **Auth.** `X-API-Key: mdk_...` on every `/v1` request (`/v1/status` needs none). The operator
@@ -308,7 +331,11 @@ corrects, a filing made twice counts once, and a served trade that changes is in
 - **Insider trades.** `GET /v1/companies/{ticker}/insiders?days=&codes=&include_derivative=`
   from the insiders' Forms 4: per insider, day, code and security, each trade's Form 4 lines as
   proof; totals and a summary per insider (E8).
-- **AI chats.** MCP at `/mcp` (Streamable HTTP) with the same `X-API-Key`: seven read-only tools
+- **Fund portfolios.** `GET /v1/funds`, `GET /v1/funds/{manager_cik}/holdings?quarter=&change=`
+  and `GET /v1/companies/{ticker}/funds` from 28 curated investors' 13F reports: positions with
+  weights, change types and the reports as proof, always with the quarter end and the filing
+  date (E9).
+- **AI chats.** MCP at `/mcp` (Streamable HTTP) with the same `X-API-Key`: nine read-only tools
   over the same data, compact answers under about 8 KB (`docs/MCP.md`).
 - **What we never do.** No advice, ratings, targets or rankings; no end-user data in requests,
   responses or events; we never contact a client's users. Every response says: Information

@@ -409,7 +409,7 @@ def backfill_cusips(
 
     [task] = _queue(settings, work)
     state = "queued" if task.status == "queued" else f"already {task.status}"
-    which = "never asked about, and those not matched," if recheck else "never asked about"
+    which = "never asked about and those not matched" if recheck else "never asked about"
     typer.echo(f"CUSIP mapping of the CUSIPs {which}: {state}; the worker runs it.")
     typer.echo("Follow it with `marketdata tasks list --kind cusip_map`.")
 

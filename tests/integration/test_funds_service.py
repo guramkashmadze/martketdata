@@ -92,6 +92,7 @@ async def world(conn: Conn, tmp_path: Path) -> None:
         [Line(APPLE, 2_000, 420)],
     )
     await link(conn, APPLE, "AAPL", 320193)
+    await link(conn, TOAST, "TOST", 1650164)
 
 
 async def test_the_curated_managers_with_their_latest_report(conn: Conn, world: None) -> None:
@@ -142,7 +143,7 @@ async def test_positions_largest_first_with_their_changes_then_those_exited(
         Decimal(50000),
         Decimal(-50000),
     )
-    assert toast.proof.accession_nos == (A_Q1,)
+    assert (toast.ticker, toast.proof.accession_nos) == ("TOST", (A_Q1,))  # named, though gone
     assert (apple.proof.accession_nos, apple.proof.lines, apple.proof.method) == (
         (A_Q2,),
         1,

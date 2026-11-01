@@ -156,6 +156,8 @@ flags. The full proof of any value is one `/v1` call or proof page away (D-108).
 | `compare_companies` | Two to five companies side by side, never ranked | `tickers`, `metrics`, `period` (TTM by default) | 25 values |
 | `latest_earnings` | The latest results release, each value with its full proof and the cross-check against the 10-Q or 10-K | `ticker` | |
 | `insider_activity` | Whether directors, officers and 10% owners bought or sold, from their Forms 4 | `ticker`, `days` (90 by default), `codes` (P and S by default; `["all"]`) | 12 trades, 8 insiders, 365 days |
+| `investor_portfolio` | What a well-known investor held at a quarter end and what it bought and sold, from its 13F | `manager` (a name such as "Berkshire" or "Pabrai", or a CIK), `quarter` (2026Q2; the latest by default) | 20 largest positions, 6 of each change type |
+| `fund_holders` | Which well-known investors held a company in their latest 13F, by name | `ticker` | 20 investors |
 
 Without `metrics`, `get_financials` and `compare_companies` use revenue, operating income, net
 income, diluted EPS and free cash flow. Without `form`, `recent_filings` lists annual,
@@ -170,6 +172,20 @@ it comes from. Codes P and S are purchases and sales in the open market or priva
 and G are awards, exercises, shares withheld for tax and gifts. A 4/A replaces the lines it
 corrects and a filing made twice counts once. It covers domestic companies and, from March
 2026, foreign private issuers, whose insiders report prices converted to dollars.
+
+`investor_portfolio` and `fund_holders` (E9) read the 13F reports of 28 curated investors
+(`/v1/funds` lists them). A 13F lists long positions in US-listed securities, and options on
+them, at a quarter end and is filed up to 45 days later, so every answer names the quarter end
+and the filing date. `investor_portfolio` answers the position count and value (USD), the
+positions per change type, the 20 largest positions and at most 6 new, added, trimmed (shares
+up or down more than 1%) and exited ones, each with shares, value, weight among the long equity
+positions (percent) and shares changed, split-adjusted when a split happened (Netflix's 10 for 1
+in November 2025); `more` names the lists cut short. Changes compare with the investor's report
+for the quarter before; without one they are left out and flagged `no_prior_report`.
+`unit_suspect` marks a value whose price per share is more than 50% from the other investors'.
+`fund_holders` lists the investors by name, never by size, each with its positions in the
+company's share classes and its report's link; one that sold all of it that quarter is listed
+as exited. Nothing ranks investors.
 
 A tool that can't answer says why, as the API does: `invalid_parameter` (with what to change),
 `not_found`, or `not_applicable` for a fund, a foreign private issuer or a company outside the
@@ -208,7 +224,7 @@ flow of the second quarter reads):
 
 ## Example questions
 
-Six questions and the tool calls they should lead to. The client chooses the calls; a client
+Eight questions and the tool calls they should lead to. The client chooses the calls; a client
 that already knows a ticker skips `lookup_company`. The answers are numbers with their SEC
 links, never a view on what to do with them.
 
@@ -240,6 +256,16 @@ links, never a view on what to do with them.
    8,988,679 shares for 1,877,876,036.4748 USD; the eight insiders with the newest trades, each
    with the trades summed, and the newest twelve trades, each with its Form 4 and its 10b5-1 box.
    6.1 KB.
+
+7. "What did Berkshire Hathaway buy and sell last quarter?" (the E9 demo)
+   `investor_portfolio(manager="Berkshire Hathaway")`: on the dev database its report for
+   2026-06-30, filed 2026-08-14, compared with 2026-03-31: 29 positions, 299,253,556,246 USD;
+   added Alphabet (both classes), Delta, Lennar, Macy's and the New York Times, trimmed Bank of
+   America, Capital One, Kroger, Nucor, DaVita and Ally, opened D.R. Horton and exited
+   Constellation Brands; Apple stays its largest position at 22.04%. 5.9 KB with the 13F's link.
+8. "Which famous investors own Apple?"
+   `fund_holders(ticker="AAPL")`: the curated investors holding it in their latest report, by
+   name, each with its shares, value, weight, change and the 13F's link. 3.0 KB.
 
 Questions about a fund ("What is SPY's revenue?") get `not_applicable` with the reason. The
 tools answer with filed numbers only: none ranks, scores or recommends.

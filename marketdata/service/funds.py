@@ -320,7 +320,8 @@ async def fund_holdings(
     others = await holdings.positions_of(
         conn, sorted({p.cusip for p in [*now, *before]}), [previous, period]
     )
-    links = {link.cusip: link for link in await cusips.links(conn, [p.cusip for p in now])}
+    held = sorted({p.cusip for p in [*now, *before]})  # exited positions are named too
+    links = {link.cusip: link for link in await cusips.links(conn, held)}
     split_facts = await _reported_splits(conn, links, previous, period)
     earlier = (
         await holdings.period_filings(conn, fund.manager_cik, previous) if has_previous else []
