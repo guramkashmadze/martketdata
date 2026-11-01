@@ -1,0 +1,23 @@
+{# A page of insider trades as table rows, and the row that asks for the next page: the
+   insider section includes it, and htmx swaps it in place of that row. #}
+{% for trade in activity.trades %}
+{% set url = trade_url(trade) %}
+<tr>
+  <td class="num">{{ trade.trade_date | day }}</td>
+  <td>{{ insider_names(trade.insiders) }}</td>
+  <td>{% if trade.code_label %}<abbr title="{{ trade.code_label }}">{{ trade.code }}</abbr>{% else %}{{ trade.code }}{% endif %}</td>
+  <td>{{ trade.security or "—" }}{% if trade.derivative %} <span class="badge">derivative</span>{% endif %}</td>
+  <td class="num"><a class="v" href="{{ url }}">{{ trade.shares | exact }}</a></td>
+  <td class="num"><a class="v" href="{{ url }}">{{ trade.average_price | exact }}</a></td>
+  <td class="num"><a class="v" href="{{ url }}">{{ trade.value | exact }}</a></td>
+  <td class="num"><a class="v" href="{{ url }}">{{ trade.holdings_after | exact }}</a></td>
+  <td>{{ yes_no(trade.rule_10b5_1) }}</td>
+  <td>{% for filing in trade.proof.filings %}<a class="nowrap" href="{{ insider_url(filing.accession_no) }}">{{ filing.filed_at | day }}</a>{{ ", " if not loop.last }}{% endfor %}{% if trade.quality_flags %}<br><span class="note">{{ trade.quality_flags | join(", ") }}</span>{% endif %}</td>
+</tr>
+{% endfor %}
+{% if activity.next_cursor %}
+{% set more = "/companies/" ~ (activity.ticker | urlencode) ~ "/insiders?days=" ~ (activity.until - activity.since).days ~ "&codes=" ~ codes ~ "&cursor=" ~ (activity.next_cursor | urlencode) %}
+<tr id="insider-more">
+  <td colspan="10"><a href="{{ more }}" hx-get="{{ more }}" hx-target="#insider-more" hx-swap="outerHTML">More trades</a></td>
+</tr>
+{% endif %}

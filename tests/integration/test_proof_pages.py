@@ -9,7 +9,7 @@ from typing import Any
 import httpx2
 import psycopg
 import pytest
-from api_seed import OLD, OLD_Q1_10Q, Q2_10Q, Q2_RELEASE, Q3_RELEASE, seed
+from api_seed import INSIDER_FORM4, OLD, OLD_Q1_10Q, Q2_10Q, Q2_RELEASE, Q3_RELEASE, seed
 
 from marketdata.service.clients import create_client, create_key
 
@@ -149,3 +149,49 @@ async def test_pages_are_left_out_of_the_api_reference(api: httpx2.AsyncClient) 
     paths = (await api.get("/openapi.json")).json()["paths"]
 
     assert not [path for path in paths if path.startswith("/proof")]
+
+
+# --- E15-S2: a Form 4's proof page.
+
+
+async def test_a_form_4_page_shows_every_line_with_its_checks(
+    api: httpx2.AsyncClient, auth: dict[str, str], conn: Conn
+) -> None:
+    await conn.execute(
+        "update insider_transactions set superseded_by = %s, superseded_line = 1, "
+        "superseded_reason = 'amendment' where accession_no = %s and line_no = 3",
+        ["0001001000-26-000051", INSIDER_FORM4],
+    )
+
+    response = await api.get(f"/proof/insiders/{INSIDER_FORM4}", headers=auth)
+
+    assert response.status_code == 200, response.text
+    page = response.text
+    assert "Acme Corp (ACME): Form 4" in page and DISCLAIMER in page
+    assert "Roe Richard" in page and "Director; Officer (Chief Executive Officer)" in page
+    assert f'href="{SEC}1001/000100100026000050/form4.xml"' in page  # the XML read
+    assert 'id="line-1"' in page and 'id="line-3"' in page
+    assert '<td class="num">50.25</td>' in page and '<td class="num">50,250</td>' in page
+    assert "direction_matches_code" in page and "price_reported" in page
+    assert "price_not_reported" in page  # the gift gives no price
+    assert "a later 4/A restates or corrects it" in page
+    assert 'href="/proof/insiders/0001001000-26-000051#line-1"' in page
+    assert "Sold under a Rule 10b5-1 plan adopted on 2026-03-02." in page
+    assert "checked: a trade in this filing was made under a plan" in page
+    assert "No value on this page has changed" in page and "<script" not in page
+
+
+@pytest.mark.parametrize(
+    ("path", "status", "text"),
+    [
+        ("/proof/insiders/0001001000-26-000099", 404, "No Form 4 has the accession number"),
+        ("/proof/insiders/not-an-accession", 400, "is not an accession number"),
+    ],
+)
+async def test_form_4_errors_are_pages(
+    api: httpx2.AsyncClient, auth: dict[str, str], path: str, status: int, text: str
+) -> None:
+    response = await api.get(path, headers=auth)
+
+    assert response.status_code == status
+    assert text in response.text and DISCLAIMER in response.text

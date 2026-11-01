@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% set issuer = proof.issuer.name or ("CIK " ~ proof.issuer.cik) %}
+{% block title %}Form {{ proof.form }} {{ proof.accession_no }}{% endblock %}
+{% block content %}
+{% if proof.issuer.ticker %}<p class="sub"><a href="{{ company_url(proof.issuer.ticker) }}">{{ issuer }}</a> · proof</p>{% endif %}
+<h1>{{ issuer }}{% if proof.issuer.ticker %} ({{ proof.issuer.ticker }}){% endif %}: Form {{ proof.form }}</h1>
+<p class="sub">Filed {{ proof.filed_at | day }} · {{ proof.accession_no }}</p>
+
+<h2>The filing</h2>
+<dl>
+  <dt>Filing</dt>
+  <dd><a href="{{ proof.filing_url }}">Form {{ proof.form }} {{ proof.accession_no }}</a> (the filing on sec.gov) and <a href="{{ proof.document_url }}">its XML</a>, which the lines were read from</dd>
+  <dt>Reporting owners</dt>
+  <dd>
+    {% for insider in proof.insiders %}{{ insider.name }}{% if insider_roles(insider) %} <span class="note">{{ insider_roles(insider) }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
+    {% if proof.insiders | length > 1 %}<br><span class="note">Joint filers: their trades count once.</span>{% endif %}
+  </dd>
+  <dt>Earliest trade</dt><dd class="num">{{ proof.period_of_report | day }}</dd>
+  {% if proof.original_filed_at %}
+  <dt>Amends</dt><dd>the filing of {{ proof.original_filed_at | day }}: an amendment replaces only the lines it restates or corrects</dd>
+  {% endif %}
+  <dt>Rule 10b5-1 box</dt>
+  <dd>{% if proof.rule_10b5_1 is none %}not on the form (before April 2023){% elif proof.rule_10b5_1 %}checked: a trade in this filing was made under a plan meant to meet Rule 10b5-1(c); the footnotes say which{% else %}not checked{% endif %}</dd>
+  {% if proof.not_subject_to_section16 %}<dt>Section 16</dt><dd>the filer is no longer subject to Section 16</dd>{% endif %}
+  <dt>Read by</dt><dd>{{ proof.method }} version {{ proof.extractor_version }}{% if proof.schema_version %}, schema {{ proof.schema_version }}{% endif %}, {{ proof.parsed_at | utc }}</dd>
+  {% if proof.remarks %}<dt>Remarks</dt><dd>{{ proof.remarks }}</dd>{% endif %}
+</dl>
+
+<h2>Lines</h2>
+<p class="sub">Every line as filed, table I (shares) first, then table II (derivatives). A line a later
+4/A restates or corrects, or a repeat of a filing made twice, is kept but not served.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col" class="num">Line</th><th scope="col">Date</th><th scope="col">Transaction</th><th scope="col">Security</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Price (USD)</th><th scope="col" class="num">Value (USD)</th><th scope="col" class="num">Held after</th><th scope="col">Ownership</th><th scope="col">Served</th><th scope="col">Checks</th></tr></thead>
+  <tbody>
+  {% for line in proof.lines %}
+    <tr id="line-{{ line.line_no }}">
+      <td class="num">{{ line.line_no }}</td>
+      <td class="num">{{ line.trade_date | day }}</td>
+      <td>{{ line.code }}{% if line.acquired_disposed %} ({{ "acquired" if line.acquired_disposed == "A" else "disposed" }}){% endif %}<br><span class="note">{{ line.code_label or "" }}</span></td>
+      <td>{{ line.security or "—" }}{% if line.derivative %} <span class="badge">table II</span>{% endif %}{% if line.footnotes %}<br><span class="note">notes {{ line.footnotes | join(", ") }}</span>{% endif %}</td>
+      <td class="num">{{ line.shares | exact }}</td>
+      <td class="num">{{ line.price | exact }}</td>
+      <td class="num">{{ line.value | exact }}</td>
+      <td class="num">{{ line.owned_after | exact }}</td>
+      <td>{{ {"D": "direct", "I": "indirect"}.get(line.direct_indirect, line.direct_indirect or "—") }}{% if line.nature_of_ownership %}<br><span class="note">{{ line.nature_of_ownership }}</span>{% endif %}</td>
+      <td>{% if line.served %}<span class="passed">served</span>{% else %}<span class="not_applicable">not served</span>: {{ superseded.get(line.superseded_reason, line.superseded_reason) }}{% if line.superseded_by %}, <a href="{{ insider_url(line.superseded_by, line.superseded_line) }}">{{ line.superseded_by }}{% if line.superseded_line %} line {{ line.superseded_line }}{% endif %}</a>{% endif %}{% endif %}</td>
+      <td>{% for check in line.checks %}<span class="passed">{{ check }}</span>{{ ", " if not loop.last }}{% endfor %}{% for flag in line.quality_flags %}<br><span class="pending">{{ flag }}</span>{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if proof.lines | selectattr("derivative") | list %}
+<h3>Derivative terms</h3>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col" class="num">Line</th><th scope="col" class="num">Exercise price (USD)</th><th scope="col" class="num">Exercisable</th><th scope="col" class="num">Expires</th><th scope="col">Underlying</th><th scope="col" class="num">Underlying shares</th></tr></thead>
+  <tbody>
+  {% for line in proof.lines if line.derivative %}
+    <tr><td class="num">{{ line.line_no }}</td><td class="num">{{ line.exercise_price | exact }}</td><td class="num">{{ line.exercise_date | day }}</td><td class="num">{{ line.expiration_date | day }}</td><td>{{ line.underlying_title or "—" }}</td><td class="num">{{ line.underlying_shares | exact }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if proof.footnotes %}
+<h2>Footnotes</h2>
+<dl>
+  {% for id, text in proof.footnotes.items() %}<dt>{{ id }}</dt><dd>{{ text }}</dd>{% endfor %}
+</dl>
+{% endif %}
+
+{% if proof.checks or proof.flags %}
+<h2>Checks and flags</h2>
+<dl>
+  {% for code, meaning in proof.checks.items() %}<dt><span class="passed">{{ code }}</span></dt><dd>{{ meaning }}</dd>{% endfor %}
+  {% for code, meaning in proof.flags.items() %}<dt><span class="pending">{{ code }}</span></dt><dd>{{ meaning }}; a flag never changes a value</dd>{% endfor %}
+</dl>
+{% endif %}
+
+{{ parts.history(proof.history, "shares") }}
+{% endblock %}

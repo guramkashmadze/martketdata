@@ -20,12 +20,6 @@ router = APIRouter(include_in_schema=False, dependencies=[Depends(require_ui_acc
 assets = APIRouter(include_in_schema=False)
 
 
-# A route that awaits nothing stays async: FastAPI would run a plain function in a thread.
-@router.get("/", response_class=HTMLResponse)
-async def home() -> HTMLResponse:  # noqa: ASYNC124
-    return page("home.html")
-
-
 @router.get("/status", response_class=HTMLResponse)
 async def status(request: Request, conn: Conn) -> HTMLResponse:
     """Freshness, the track record and the accuracy report (E15-S4, PLAN.md §9.10): the report
@@ -34,6 +28,7 @@ async def status(request: Request, conn: Conn) -> HTMLResponse:
     return page("status.html", report=(await cache.report(conn)).data)
 
 
+# A route that awaits nothing stays async: FastAPI would run a plain function in a thread.
 @assets.get(FAVICON)
 async def favicon() -> FileResponse:  # noqa: ASYNC124
     return FileResponse(

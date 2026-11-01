@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Insider trades: {{ activity.company or activity.ticker }} ({{ activity.ticker }}){% endblock %}
+{% block scripts %}
+{% if activity.next_cursor %}<script defer src="{{ htmx }}"></script>{% endif %}
+{% endblock %}
+{% block content %}
+<p class="sub"><a href="{{ company_url(activity.ticker) }}">{{ activity.company or activity.ticker }} ({{ activity.ticker }})</a></p>
+{% include "partials/insiders.html" %}
+{% endblock %}

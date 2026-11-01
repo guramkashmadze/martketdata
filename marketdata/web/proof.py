@@ -1,5 +1,5 @@
-"""/proof: the proof page of a value (PLAN.md §9.10): a release (E5b-S3) or a metric value, in the
-web UI's layout; every number in the UI links to one (E15-S4).
+"""/proof: the proof page of a value (PLAN.md §9.10): a release or a metric value (E5b-S3), a
+Form 4 (E15-S2), in the web UI's layout; every number in the UI links to one (E15-S4).
 
 The pages follow the web UI's access rule (web/access.py, §9.14): in private mode HTTP Basic
 auth with an `api`-scope key as the password, each request logged and counted against the key's
@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Path
 from fastapi.responses import HTMLResponse
 
 from marketdata.api.deps import Conn
-from marketdata.service.proof import earnings_proof, metric_proof
+from marketdata.service.proof import earnings_proof, insider_filing_proof, metric_proof
 from marketdata.web.access import require_ui_access
 from marketdata.web.render import page
 
@@ -47,3 +47,10 @@ async def metric_page(
         row=proof.row,
         who=proof.company or f"CIK {proof.cik}",
     )
+
+
+@router.get("/insiders/{accession_no}", response_class=HTMLResponse)
+async def insider_page(
+    conn: Conn, accession_no: Annotated[str, Path(description="The Form 4's accession number.")]
+) -> HTMLResponse:
+    return page("proof/insider.html", proof=await insider_filing_proof(conn, accession_no))

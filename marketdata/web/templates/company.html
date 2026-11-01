@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% set ticker = security.ticker %}
+{% set name = profile.name or ticker %}
+{% block title %}{{ name }} ({{ ticker }}){% endblock %}
+{% block scripts %}
+{% if chart and chart.series %}
+<script defer src="{{ chart_js }}"></script>
+<script defer src="{{ asset('app.js') }}"></script>
+{% endif %}
+{% if activity and activity.next_cursor %}
+<script defer src="{{ htmx }}"></script>
+{% endif %}
+{% endblock %}
+{% block content %}
+<h1>{{ name }} <span class="badge">{{ ticker }}</span></h1>
+<p class="sub">
+  {{ class_names.get(profile.filer_type, profile.filer_type) }}
+  {% if security.exchange %} · {{ security.exchange }}{% endif %}
+  · CIK {{ profile.cik }}
+  {% if profile.sic_code %} · SIC {{ profile.sic_code }} {{ profile.sic_description or "" }}{% endif %}
+  {% if profile.fiscal_year_end %} · fiscal year ends {{ year_end(profile.fiscal_year_end) }}{% endif %}
+  {% if profile.state_of_inc %} · incorporated in {{ profile.state_of_inc }}{% endif %}
+</p>
+{% set others = profile.securities | rejectattr("ticker", "equalto", ticker) | list %}
+{% if others %}
+<p class="note">Other tickers: {% for other in others %}<a href="{{ company_url(other.ticker) }}">{{ other.ticker }}</a>{% if other.security_type != "common" %} ({{ other.security_type }}){% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
+{% endif %}
+{% if snapshot %}<p class="note"><a href="/compare?tickers={{ ticker | urlencode }}">Compare with other companies</a></p>{% endif %}
+
+{% set kinds = profile.capabilities.kinds %}
+{% set covered = kinds | selectattr("applies") | list | length == kinds | length %}
+<details class="card coverage"{% if not covered %} open{% endif %}>
+  <summary><strong>What we cover for {{ name }}</strong></summary>
+  <ul>
+    {% for kind in kinds %}
+    <li><span class="{{ 'applies' if kind.applies else 'not_applicable' }}">{{ "Covered" if kind.applies else "Not covered" }}</span>: {{ kind_names.get(kind.kind, kind.kind) }}. {{ kind.reason }}</li>
+    {% endfor %}
+    <li><span class="applies">Covered</span>: filings with plain-language labels, and the curated managers holding it in their 13F reports, whatever the company's class.</li>
+  </ul>
+</details>
+
+{% if snapshot %}
+{{ parts.release(snapshot.latest_release) }}
+{{ parts.trailing(ticker, snapshot) }}
+
+<h2 id="history">Last {{ columns | length }} quarters</h2>
+{% if table %}
+{% if chart.series %}
+<figure class="history-chart" data-chart data-source="history-data" hidden>
+  <div class="controls">
+    <label for="chart-metric">Chart</label>
+    <select id="chart-metric">
+      {% for series in chart.series %}<option value="{{ loop.index0 }}">{{ series.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="chart"><canvas role="img" aria-label="{{ chart.series[0].name }} by quarter; the values are in the table below"></canvas></div>
+  <figcaption class="note">A bar opens its value's proof page; the values are in the table below.</figcaption>
+</figure>
+<script type="application/json" id="history-data">{{ chart | tojson }}</script>
+{% endif %}
+<p class="note" id="history-note">The company's fiscal quarters, each value exact in the unit its row
+names and linked to its proof.</p>
+<div class="scroll">
+<table class="sticky" aria-describedby="history-note">
+  <thead>
+    <tr><th scope="col" class="metric">Metric</th>{% for column in columns %}<th scope="col" class="num">{{ column.label }}<br><span class="note">{{ column.period_end | day }}</span></th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for row in table %}
+    <tr>
+      <th scope="row" class="metric">{{ metric_names.get(row.metric, row.metric) }}<br><span class="note">{{ scale_name(row.unit) }}</span></th>
+      {% for cell in row.cells %}
+      <td class="num">{% if cell %}<a class="v" href="{{ metric_url(ticker, cell) }}">{{ cell.value | scaled(row.unit) }}</a>{% if cell.quality_flags %}<span class="note" title="{{ cell.quality_flags | join(', ') }}"> *</span>{% endif %}{% else %}—{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="note">* a quality flag: the proof page says what it means. A dash: no value is stored
+for that quarter.</p>
+{% else %}
+<p class="sub">No quarter of the core metrics is stored for {{ name }} yet.</p>
+{% endif %}
+{% endif %}
+
+{{ parts.filing_list(filings) }}
+
+{% if activity %}
+{% include "partials/insiders.html" %}
+{% endif %}
+
+{{ parts.holders(holders) }}
+{% endblock %}

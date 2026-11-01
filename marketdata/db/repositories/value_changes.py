@@ -58,6 +58,15 @@ _FOR_METRIC = f"""
     order by change_id
 """
 
+# E15: a Form 4's history: changes to its lines, and to the lines it serves in place of others.
+_FOR_INSIDER_FILING = f"""
+    select {_COLUMNS} from value_changes
+    where entity = 'insider_transaction'
+      and (entity_key->>'accession_no' = %(accession_no)s
+           or entity_key->>'served_from' = %(accession_no)s)
+    order by change_id
+"""
+
 # E5b: the feed, newest first, a page at a time before the last change served.
 _PAGE = f"""
     select {_COLUMNS} from value_changes
@@ -149,6 +158,13 @@ async def for_release(conn: AsyncConnection[Any], accession_no: str) -> list[Sto
     """A release's change history: its own values' and those an 8-K/A changed."""
     async with conn.cursor(row_factory=class_row(StoredChange)) as cur:
         await cur.execute(_FOR_RELEASE, {"accession_no": accession_no})
+        return await cur.fetchall()
+
+
+async def for_insider_filing(conn: AsyncConnection[Any], accession_no: str) -> list[StoredChange]:
+    """A Form 4's change history (E15): its lines', and those of lines it now serves."""
+    async with conn.cursor(row_factory=class_row(StoredChange)) as cur:
+        await cur.execute(_FOR_INSIDER_FILING, {"accession_no": accession_no})
         return await cur.fetchall()
 
 

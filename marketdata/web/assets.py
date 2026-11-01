@@ -22,14 +22,20 @@ CHART_JS = "vendor/chart.js-4.5.1/chart.umd.min.js"
 CACHE_FOR_A_YEAR = "public, max-age=31536000, immutable"
 
 
-@cache
 def asset_url(name: str) -> str:
     """The URL of a static file: with a digest of its content, unless its folder names its
-    version."""
+    version. The digest is taken again when the file changes, so a running dev server never
+    sends a page that names an old one."""
     if name.startswith("vendor/"):
         return f"/static/{name}"
-    digest = hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
-    return f"/static/{name}?v={digest}"
+    path = STATIC_DIR / name
+    return f"/static/{name}?v={_digest(path, path.stat().st_mtime_ns)}"
+
+
+@cache
+def _digest(path: Path, modified: int) -> str:
+    # `modified` is part of the cache's key: a changed file is read again.
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
 class Assets(StaticFiles):

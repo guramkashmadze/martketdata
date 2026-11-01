@@ -11,17 +11,31 @@ Numbers are never rounded. Proof pages show every digit of a stored value with i
 value exactly in it (`scaled`: 391,035, or 12,345.678 for a value in thousands).
 """
 
-from collections.abc import Mapping
+import calendar
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
+from urllib.parse import quote
 
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
 from marketdata.sec import urls
 from marketdata.service.accuracy import Rate
-from marketdata.service.proof import CHECKS, CROSS_CHECKS, METHODS, REASONS, SLOT_NAMES
+from marketdata.service.financials import MetricView
+from marketdata.service.funds import FundPosition
+from marketdata.service.insiders import Insider, InsiderTrade
+from marketdata.service.proof import (
+    CHECKS,
+    CROSS_CHECKS,
+    INSIDER_CHECKS,
+    INSIDER_FLAGS,
+    METHODS,
+    REASONS,
+    SLOT_NAMES,
+    SUPERSEDED,
+)
 from marketdata.service.served import DISCLAIMER
 from marketdata.web.assets import CHART_JS, HTMX, asset_url
 
@@ -78,6 +92,38 @@ METRIC_NAMES = {
     "revenue_growth_yoy": "Revenue growth, year over year",
     "eps_diluted_growth_yoy": "Diluted EPS growth, year over year",
 }
+CLASS_NAMES = {
+    "domestic": "US domestic filer",
+    "foreign_private_issuer": "Foreign private issuer",
+    "fund": "Fund",
+    "other": "Other filer",
+    "unknown": "Not classified yet",
+}
+CLASS_GROUPS = {
+    "domestic": "US domestic filers",
+    "foreign_private_issuer": "Foreign private issuers",
+    "fund": "Funds",
+    "other": "Other filers",
+    "unknown": "Not classified yet",
+}
+KIND_NAMES = {
+    "earnings": "Earnings releases",
+    "fundamentals": "Financial metrics from the 10-K and 10-Q",
+    "insiders": "Insider trades (Form 4)",
+}
+ROLE_NAMES = {
+    "director": "Director",
+    "officer": "Officer",
+    "ten_percent_owner": "10% owner",
+    "other": "Other",
+}
+CHANGE_NAMES = {
+    "new": "New",
+    "added": "Added",
+    "trimmed": "Trimmed",
+    "unchanged": "Unchanged",
+    "exited": "Exited",
+}
 TITLES = {
     400: "This address isn't right",
     401: "Sign in with your API key",
@@ -131,6 +177,14 @@ def change(value: Decimal | int | None) -> str:
     return f"+{text}%" if Decimal(value) > 0 else f"{text}%"
 
 
+def signed(value: Decimal | int | None) -> str:
+    """Every digit with its sign: +1,000, -500; missing, a dash."""
+    if value is None:
+        return "—"
+    text = exact(value)
+    return f"+{text}" if Decimal(value) > 0 else text
+
+
 def direction(value: Decimal | int | None) -> str:
     """The CSS class of a change: up, down or none (conventional colours, never a verdict)."""
     if value is None or Decimal(value) == 0:
@@ -148,6 +202,69 @@ def rate_text(counted: Rate) -> str:
     if counted.rate is None:
         return "— (nothing checked yet)"
     return f"{exact(counted.rate)}% ({counted.matched:,} of {counted.checked:,})"
+
+
+def company_url(ticker: str) -> str:
+    return f"/companies/{quote(ticker, safe='')}"
+
+
+def metric_url(ticker: str, row: MetricView) -> str:
+    """The proof page of a metric value, under the company's ticker."""
+    return (
+        f"/proof/metrics/{quote(ticker, safe='')}/{row.metric}/{row.period_type}/"
+        f"{row.period_end.isoformat()}"
+    )
+
+
+def release_url(accession_no: str, slot: str | None = None) -> str:
+    """A release's proof page, at one of its values when a slot is named."""
+    return f"/proof/earnings/{accession_no}" + (f"#{slot}" if slot else "")
+
+
+def insider_url(accession_no: str, line: int | None = None) -> str:
+    """A Form 4's proof page, at one of its lines when one is named."""
+    return f"/proof/insiders/{accession_no}" + (f"#line-{line}" if line else "")
+
+
+def trade_url(trade: InsiderTrade) -> str:
+    """An insider trade's proof: the first filing it sums, at its first line."""
+    first = trade.proof.filings[0]
+    return insider_url(first.accession_no, first.lines[0] if first.lines else None)
+
+
+def position_url(manager_cik: int, quarter: str, position: FundPosition) -> str:
+    """A fund position's proof page."""
+    url = f"/proof/funds/{manager_cik}/{quarter}/{quote(position.cusip, safe='')}"
+    return f"{url}?put_call={position.put_call}" if position.put_call else url
+
+
+def insider_names(insiders: Sequence[Insider]) -> str:
+    """The insiders of one filing: joint filers are one group."""
+    return " and ".join(insider.name for insider in insiders) or "—"
+
+
+def insider_roles(insider: Insider) -> str:
+    """`Director; Officer (Chief Executive Officer)` as the filing ticks them."""
+    roles = []
+    for role in insider.roles:
+        name = ROLE_NAMES.get(role, role)
+        if role == "officer" and insider.officer_title:
+            name = f"{name} ({insider.officer_title})"
+        if role == "other" and insider.other_text:
+            name = f"{name} ({insider.other_text})"
+        roles.append(name)
+    return "; ".join(roles)
+
+
+def year_end(mmdd: str | None) -> str:
+    """A fiscal year end as the SEC gives it, '0927', as September 27."""
+    if not mmdd or len(mmdd) != 4 or not mmdd.isdigit() or not 1 <= int(mmdd[:2]) <= 12:
+        return "—"
+    return f"{calendar.month_name[int(mmdd[:2])]} {int(mmdd[2:])}"
+
+
+def yes_no(box: bool | None) -> str:
+    return "—" if box is None else ("Yes" if box else "No")
 
 
 def utc(moment: datetime | None) -> str:
@@ -178,6 +295,7 @@ _environment.filters.update(
     exact=exact,
     scaled=scaled,
     change=change,
+    signed=signed,
     direction=direction,
 )
 _environment.globals.update(
@@ -189,10 +307,27 @@ _environment.globals.update(
     scale_name=scale_name,
     pct=pct,
     rate_text=rate_text,
+    company_url=company_url,
+    metric_url=metric_url,
+    release_url=release_url,
+    insider_url=insider_url,
+    trade_url=trade_url,
+    position_url=position_url,
+    insider_names=insider_names,
+    insider_roles=insider_roles,
+    year_end=year_end,
+    yes_no=yes_no,
     metric_names=METRIC_NAMES,
     slot_names=SLOT_NAMES,
+    class_names=CLASS_NAMES,
+    class_groups=CLASS_GROUPS,
+    kind_names=KIND_NAMES,
+    change_names=CHANGE_NAMES,
     checks=CHECKS,
     cross_checks=CROSS_CHECKS,
+    insider_checks=INSIDER_CHECKS,
+    insider_flags=INSIDER_FLAGS,
+    superseded=SUPERSEDED,
     methods=METHODS,
     reasons=REASONS,
     period_names=PERIOD_NAMES,

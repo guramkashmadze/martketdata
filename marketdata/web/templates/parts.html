@@ -41,3 +41,131 @@ the new value and why, served by <code>/v1/changes</code> and sent as <code>data
 </table>
 </div>
 {%- endmacro %}
+
+{# --- E15: the company page's sections. Values link to their proof pages (class v); totals
+       link to the rows they sum (class t). #}
+
+{% macro release(r) -%}
+<h2 id="earnings">Latest earnings release</h2>
+{% if r %}
+<p class="sub">
+  {% if r.period.fiscal_year %}Fiscal {{ r.period.fiscal_year }} {{ r.period.fiscal_period }}{% else %}Period not stated{% endif %}
+  {% if r.period.period_end %} · quarter ended {{ r.period.period_end | day }}{% endif %}
+  {% if r.period.label %} · printed as “{{ r.period.label }}”{% endif %}
+  · accepted by the SEC {{ r.release.accepted_at | utc }}
+  · <span class="{{ r.release.status }}">{{ r.release.status }}</span>
+  · <a href="{{ release_url(r.release.accession_no) }}">the proof of every value</a>
+</p>
+<p class="note" id="release-note">USD millions; diluted EPS in USD per share. The change is from the same
+quarter a year earlier, as the release prints it.</p>
+<div class="scroll">
+<table aria-describedby="release-note">
+  <thead><tr><th scope="col">Value</th><th scope="col" class="num">This quarter</th><th scope="col" class="num">A year earlier</th><th scope="col" class="num">Change</th><th scope="col">Against the 10-Q or 10-K</th></tr></thead>
+  <tbody>
+  {% for fact in r.facts %}
+    {% set url = release_url(r.release.accession_no, fact.slot) %}
+    <tr>
+      <th scope="row">{{ slot_names.get(fact.slot, fact.slot) }}</th>
+      <td class="num"><a class="v" href="{{ url }}">{{ fact.value | scaled(fact.unit) }}</a></td>
+      <td class="num"><a class="v" href="{{ url }}">{{ fact.prior_value | scaled(fact.unit) }}</a></td>
+      <td class="num"><a class="v {{ fact.change_pct | direction }}" href="{{ url }}">{{ fact.change_pct | change }}</a></td>
+      <td><span class="{{ fact.proof.cross_check.status }}">{{ fact.proof.cross_check.status | replace("_", " ") }}</span></td>
+    </tr>
+    {% if fact.reasons %}
+    <tr><td></td><td colspan="4" class="note">Not served: {{ fact.reasons | join("; ") }}</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No earnings release is stored yet.</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro trailing(ticker, snapshot) -%}
+<h2 id="ttm">Last twelve months</h2>
+{% if snapshot.ttm %}
+<p class="sub">The latest four quarters{% if snapshot.latest_period %} to {{ snapshot.latest_period.period_end | day }}{% endif %}:
+flows summed, balances at the quarter end, margins and growth computed from them.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Metric</th><th scope="col" class="num">Value</th><th scope="col">Unit</th><th scope="col" class="num">Twelve months to</th></tr></thead>
+  <tbody>
+  {% for row in snapshot.ttm %}
+    <tr>
+      <th scope="row">{{ metric_names.get(row.metric, row.metric) }}</th>
+      <td class="num"><a class="v" href="{{ metric_url(ticker, row) }}">{{ row.value | scaled(row.unit) }}</a></td>
+      <td class="note">{{ scale_name(row.unit) }}</td>
+      <td class="num">{{ row.period_end | day }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No twelve-month value is stored yet.</p>
+{% endif %}
+{% if snapshot.not_reported %}
+<p class="note">Not reported in its filings: {% for metric in snapshot.not_reported %}{{ metric_names.get(metric, metric) }}{{ ", " if not loop.last }}{% endfor %}.</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro filing_list(listed) -%}
+<h2 id="filings">Recent filings</h2>
+{% if listed.filings %}
+<p class="sub">Annual, quarterly and current reports, and stakes of 5% or more in the company,
+newest first; each opens the filing on sec.gov.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Filed</th><th scope="col">Form</th><th scope="col">Period</th><th scope="col">What it reports</th></tr></thead>
+  <tbody>
+  {% for filing in listed.filings %}
+    <tr>
+      <td class="num">{{ filing.filed_at | day }}</td>
+      <td><a href="{{ filing.url }}">{{ filing.form }}</a></td>
+      <td class="num">{{ filing.period_of_report | day }}</td>
+      <td>{% for event in filing.events %}{% if event.importance == "high" %}<strong>{{ event.label }}</strong>{% else %}{{ event.label }}{% endif %}{{ "; " if not loop.last }}{% else %}—{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No annual, quarterly or current report is stored for it.</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro position_change(p, url) -%}
+{% if p.change_type %}{{ change_names.get(p.change_type, p.change_type) }}{% if p.shares_change and p.change_type in ("added", "trimmed") %}: <a class="v" href="{{ url }}">{{ p.shares_change | signed }}</a>{% endif %}{% if p.split_ratio %} <span class="note">(after a {{ p.split_ratio }} split)</span>{% endif %}{% else %}<span class="note">no report for the quarter before</span>{% endif %}
+{%- endmacro %}
+
+{% macro holders(held) -%}
+<h2 id="held-by">Held by curated managers</h2>
+<p class="sub">{{ held.note }} Managers are listed by name, each with its latest report.</p>
+{% if held.holders %}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Manager</th><th scope="col" class="num">Quarter end</th><th scope="col" class="num">Filed</th><th scope="col">Security</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Value (USD)</th><th scope="col" class="num">Weight</th><th scope="col">From the quarter before</th></tr></thead>
+  <tbody>
+  {% for holder in held.holders %}
+    {% set p = holder.position %}
+    {% set url = position_url(holder.manager_cik, holder.quarter, p) %}
+    <tr>
+      <td><a href="/funds/{{ holder.manager_cik }}">{{ holder.manager }}</a></td>
+      <td class="num">{{ holder.report_period | day }}</td>
+      <td class="num">{{ holder.filed_at | day }}</td>
+      <td>{{ p.title_of_class or "—" }}{% if p.put_call %} <span class="badge">{{ p.put_call }}</span>{% endif %}{% if p.share_type == "PRN" %} <span class="badge">principal</span>{% endif %}</td>
+      <td class="num"><a class="v" href="{{ url }}">{{ p.shares | exact }}</a></td>
+      <td class="num"><a class="v" href="{{ url }}">{{ p.value_usd | exact }}</a></td>
+      <td class="num">{% if p.weight_pct is not none %}<a class="v" href="{{ url }}">{{ pct(p.weight_pct) }}</a>{% else %}—{% endif %}</td>
+      <td>{{ position_change(p, url) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No curated manager reports a position in it in its latest 13F report.</p>
+{% endif %}
+{%- endmacro %}

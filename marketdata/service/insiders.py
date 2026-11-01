@@ -378,7 +378,7 @@ def _trade(
                         footnotes[notes[note]] = None
     return InsiderTrade(
         trade_date=group.trade_date,
-        insiders=tuple(_insider(owner) for owner in owners.get(latest, [])),
+        insiders=tuple(insider_of(owner) for owner in owners.get(latest, [])),
         code=group.code,
         code_label=CODE_LABELS.get(group.code),
         security=group.security_title,
@@ -409,7 +409,8 @@ def _version(group: TradeGroup, accession_no: str) -> str:
     return ""
 
 
-def _insider(owner: StoredOwner) -> Insider:
+def insider_of(owner: StoredOwner) -> Insider:
+    """An owner as its filing states its relationship to the issuer."""
     roles = [
         role
         for role, ticked in (

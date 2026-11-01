@@ -1,0 +1,72 @@
+{# The insider section (E15-S2, D-111): the company page's and the insiders page's. Totals and
+   summaries link to the trades they sum; a trade's numbers open the Form 4 they come from. #}
+{% set days = (activity.until - activity.since).days %}
+<section id="insiders" aria-labelledby="insiders-title">
+<h2 id="insiders-title">Insider trades</h2>
+<p class="sub">From the Forms 4 its directors, officers and 10% owners filed, trades from
+{{ activity.since | day }} to {{ activity.until | day }}:
+{{ "open-market or private purchases and sales (codes P and S)" if codes == "ps" else "every transaction code" }},
+shares only. A trade sums one insider group's lines of one day, code and security; prices are
+weighted by shares.</p>
+<ul class="links">
+  {% for window in windows %}
+  <li>{% if days == window %}<strong>Last {{ window }} days</strong>{% else %}<a href="?days={{ window }}&amp;codes={{ codes }}#insiders">Last {{ window }} days</a>{% endif %}</li>
+  {% endfor %}
+  <li>{% if codes == "ps" %}<strong>Purchases and sales</strong>{% else %}<a href="?days={{ days }}&amp;codes=ps#insiders">Purchases and sales</a>{% endif %}</li>
+  <li>{% if codes == "all" %}<strong>All transaction codes</strong>{% else %}<a href="?days={{ days }}&amp;codes=all#insiders">All transaction codes</a>{% endif %}</li>
+</ul>
+{% if activity.totals %}
+<div class="scroll">
+<table>
+  <caption>Totals over the window</caption>
+  <thead><tr><th scope="col">Transaction</th><th scope="col" class="num">Trades</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Value (USD)</th></tr></thead>
+  <tbody>
+  {% for total in activity.totals %}
+    <tr>
+      <th scope="row">{{ total.code }}: {{ total.code_label or "" }}</th>
+      <td class="num"><a class="t" href="#insider-trades">{{ total.trades }}</a></td>
+      <td class="num"><a class="t" href="#insider-trades">{{ total.total_shares | exact }}</a></td>
+      <td class="num"><a class="t" href="#insider-trades">{{ total.total_value | exact }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h3>Who traded</h3>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Insider</th><th scope="col">Code</th><th scope="col" class="num">Trades</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Value (USD)</th><th scope="col" class="num">Dates</th><th scope="col">Under a 10b5-1 plan</th></tr></thead>
+  <tbody>
+  {% for summary in activity.insiders %}
+    <tr>
+      <td>{{ insider_names(summary.insiders) }}{% for insider in summary.insiders %}{% if insider_roles(insider) %}<br><span class="note">{{ insider_roles(insider) }}</span>{% endif %}{% endfor %}</td>
+      <td>{{ summary.code }}</td>
+      <td class="num"><a class="t" href="#insider-trades">{{ summary.trades }}</a></td>
+      <td class="num"><a class="t" href="#insider-trades">{{ summary.total_shares | exact }}</a></td>
+      <td class="num"><a class="t" href="#insider-trades">{{ summary.total_value | exact }}</a></td>
+      <td class="num">{{ summary.first_date | day }}{% if summary.last_date != summary.first_date %} to {{ summary.last_date | day }}{% endif %}</td>
+      <td>{{ yes_no(summary.rule_10b5_1) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3 id="insider-trades">Trades</h3>
+{% if activity.trades %}
+<p class="note">Newest first. Prices and values in USD; the price is the average weighted by
+shares. Each number opens the Form 4 it was read from.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Date</th><th scope="col">Insider</th><th scope="col">Code</th><th scope="col">Security</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Avg. price</th><th scope="col" class="num">Value</th><th scope="col" class="num">Held after</th><th scope="col">10b5-1</th><th scope="col">Filed</th></tr></thead>
+  <tbody>
+  {% include "partials/insider_rows.html" %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="sub">No trade of these codes in this window.</p>
+{% endif %}
+</section>

@@ -11,4 +11,20 @@ later 10-Q or 10-K.</p>
   <li><a href="/funds">Fund portfolios</a></li>
   <li><a href="/status">Freshness and accuracy</a></li>
 </ul>
+
+<h2>Companies covered</h2>
+{% for kind, companies in classes.items() %}
+<h3>{{ class_groups.get(kind, kind) }} <span class="note">({{ companies | length }})</span></h3>
+{% if kind == "foreign_private_issuer" %}<p class="note">Their insider trades are covered; their
+20-F, 40-F and 6-K reports are not yet.</p>{% elif kind == "fund" %}<p class="note">Funds have no
+earnings or financial metrics; their filings and curated managers' 13F positions in them are
+shown.</p>{% endif %}
+<ul class="links">
+  {% for company in companies %}
+  <li><a href="{{ company_url(company.tickers[0]) }}">{{ company.tickers | join(", ") }}</a> <span class="note">{{ company.name or "" }}</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="sub">No company is loaded yet.</p>
+{% endfor %}
 {% endblock %}

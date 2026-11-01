@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Search{% if query %}: {{ query }}{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if query %}Companies matching “{{ query }}”{% else %}Search{% endif %}</h1>
+{% if message %}
+<p>{{ message }}</p>
+{% elif not query %}
+<p class="sub">Type a ticker, a company name or a CIK in the box above, e.g. AAPL, Apple or
+320193.</p>
+{% elif not matches %}
+<p>No company with a current ticker matches “{{ query }}”. Names are matched in the Latin
+alphabet; try a ticker or another word of the name.</p>
+{% else %}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Ticker</th><th scope="col">Company</th><th scope="col">Class</th><th scope="col">Data</th></tr></thead>
+  <tbody>
+  {% for match in matches %}
+    <tr>
+      <td><a href="{{ company_url(match.ticker) }}">{{ match.ticker }}</a>{% if match.other_tickers %}<br><span class="note">{{ match.other_tickers | join(", ") }}</span>{% endif %}</td>
+      <td>{{ match.name or "—" }}<br><span class="note">CIK {{ match.cik }}</span></td>
+      <td>{{ class_names.get(match.filer_type, match.filer_type) }}</td>
+      <td><span class="{{ 'applies' if match.covered else 'not_applicable' }}">{{ "Covered" if match.covered else "Not covered" }}</span>: {{ match.reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

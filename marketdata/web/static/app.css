@@ -73,13 +73,17 @@ th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--lin
          vertical-align: top; }
 th { color: var(--muted); font-weight: 600; font-size: .85rem; }
 thead th { white-space: nowrap; }
-.num, th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.num { font-variant-numeric: tabular-nums; }
+th.num, td.num { text-align: right; white-space: nowrap; }
 .sticky th:first-child, .sticky td:first-child { position: sticky; left: 0; background: var(--bg);
                                                   z-index: 1; }
 .sticky thead th:first-child { background: var(--bg); }
 td a.v, td.num a { text-decoration: none; }
 td a.v:hover, td.num a:hover { text-decoration: underline; }
 .value { font-size: 1.15rem; font-weight: 600; }
+th.metric { min-width: 9.5em; }
+.nowrap { white-space: nowrap; }
+abbr[title] { text-decoration: underline dotted; cursor: help; }
 
 .passed, .matched, .complete, .applies { color: var(--ok); }
 .pending, .not_comparable, .partial, .not_applicable, .not_found { color: var(--warn); }
@@ -90,6 +94,7 @@ td a.v:hover, td.num a:hover { text-decoration: underline; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
 .card h3 { margin-top: 0; }
+figure { margin: 0; }
 .chart { position: relative; height: 260px; margin: 8px 0 4px; }
 .chart canvas { max-width: 100%; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 8px 0; }

@@ -8,18 +8,25 @@ functions, so a page and the API never disagree.
 - A metric value (`/proof/metrics/{ticker}/{metric}/{period_type}/{period_end}`): the row the
   API serves for that period (the company's, else a predecessor's, D-084), how it was obtained,
   the filings it reads and its change history.
+- A Form 4 or 4/A (`/proof/insiders/{accession_no}`, E15): the filing as parsed, its owners and
+  every line, served or superseded by a later 4/A or an earlier copy (E8-S3), each line's
+  checks and flags, the footnotes and the change history; an insider trade on a page links to
+  the filings it sums.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.db.repositories import financial_metrics, value_changes
+from marketdata.db.repositories import financial_metrics, insiders, value_changes
+from marketdata.db.repositories.insiders import StoredFiling, StoredLine
 from marketdata.db.repositories.value_changes import StoredChange
+from marketdata.normalize.insiders import CODE_LABELS, FiledTrade, group_trades
 from marketdata.normalize.quality import DESCRIPTIONS
-from marketdata.service.companies import group_of, require, resolve_ticker
+from marketdata.sec import urls
+from marketdata.service.companies import CompanyRef, company_refs, group_of, require, resolve_ticker
 from marketdata.service.earnings import EarningsRelease, get_earnings
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.financials import (
@@ -29,6 +36,7 @@ from marketdata.service.financials import (
     metric_refs,
     metric_view,
 )
+from marketdata.service.insiders import Insider, insider_of
 from marketdata.service.served import Number, Source, sources_of
 
 SLOT_NAMES = {
@@ -67,6 +75,24 @@ REASONS = {
     "correction": "our rules, an override or the calc version changed",
     "restatement": "a later filing reports the period with another value",
     "amendment": "the company amended the release (8-K/A)",
+}
+# E15: what an insider trade's checks and flags mean (§9.7, normalize/insiders.py).
+INSIDER_CHECKS = {
+    "issuer_matches_listing": "the filing's issuer is the company whose listing it is on",
+    "direction_matches_code": "a purchase acquires shares and a sale disposes of them",
+    "price_reported": "every line gives a price per share",
+}
+INSIDER_FLAGS = {
+    "direction_differs_from_code": (
+        "a purchase that disposes of shares, or a sale that acquires them, as filed"
+    ),
+    "price_not_reported": "no line gives a price; a footnote may give the average",
+    "price_partly_reported": "some lines give no price",
+    "trade_date_after_filing": "the trade is dated after the filing: the filer's typo, as filed",
+}
+SUPERSEDED = {
+    "amendment": "a later 4/A restates or corrects it",
+    "duplicate": "the same filing was made twice; its first copy is served",
 }
 
 
@@ -165,6 +191,13 @@ def _entry(change: StoredChange) -> HistoryEntry:
         what = f"{SLOT_NAMES.get(slot, slot)}, {field}"
         if key.get("amends"):
             what += f" (8-K/A {key.get('accession_no')})"
+    elif change.entity == "insider_transaction":
+        what = f"line {key.get('line_no')} of {key.get('accession_no')}, {key.get('field')}"
+        if key.get("served_from") and key.get("served_from") != key.get("accession_no"):
+            what += f" (served from {key.get('served_from')})"
+    elif change.entity == "fund_position":
+        option = f" {key['put_call']}" if key.get("put_call") else ""
+        what = f"{key.get('cusip')}{option}, {key.get('field')}"
     else:
         what = f"{key.get('metric')}, {key.get('period_type')} {key.get('period_end')}"
     return HistoryEntry(
@@ -175,4 +208,156 @@ def _entry(change: StoredChange) -> HistoryEntry:
         what=what,
         old_value=change.old_value,
         new_value=change.new_value,
+    )
+
+
+# --- E15: a Form 4's proof page.
+
+
+class InsiderLineProof(BaseModel):
+    """A line of a Form 4 as parsed, and whether it is served."""
+
+    model_config = ConfigDict(frozen=True)
+
+    line_no: int  # in document order, table I first
+    derivative: bool  # table II: options, units, warrants
+    security: str | None
+    trade_date: date
+    code: str
+    code_label: str | None
+    acquired_disposed: str | None  # A or D
+    shares: Number | None
+    price: Number | None  # USD per share, as filed
+    value: Number | None  # shares times price, exact
+    owned_after: Number | None
+    direct_indirect: str | None
+    nature_of_ownership: str | None
+    timeliness: str | None
+    exercise_price: Number | None
+    exercise_date: date | None
+    expiration_date: date | None
+    underlying_title: str | None
+    underlying_shares: Number | None
+    footnotes: tuple[str, ...]  # the ids on any of its fields, in order
+    served: bool
+    superseded_by: str | None  # the 4/A, or the first copy of a filing made twice
+    superseded_line: int | None  # the line that serves its trade now
+    superseded_reason: str | None  # amendment or duplicate
+    checks: tuple[str, ...]
+    quality_flags: tuple[str, ...]
+
+
+class InsiderFilingProof(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    accession_no: str
+    form: str  # 4 or 4/A
+    filed_at: date
+    period_of_report: date
+    original_filed_at: date | None  # a 4/A's: the filing it amends
+    issuer: CompanyRef
+    insiders: tuple[Insider, ...]
+    rule_10b5_1: bool | None  # the filing's box; null before April 2023
+    not_subject_to_section16: bool | None
+    filing_url: str  # the filing's folder on sec.gov
+    document_url: str  # the XML the lines were read from
+    schema_version: str | None
+    method: str
+    extractor_version: str
+    parsed_at: datetime
+    footnotes: dict[str, str]
+    remarks: str | None
+    lines: tuple[InsiderLineProof, ...]
+    history: tuple[HistoryEntry, ...]
+    checks: dict[str, str]  # each check on the page, with what it means
+    flags: dict[str, str]
+
+
+async def insider_filing_proof(conn: AsyncConnection[Any], accession_no: str) -> InsiderFilingProof:
+    """A Form 4 or 4/A as parsed: every line, served or superseded, with its checks."""
+    try:
+        accession = urls.accession_no(accession_no)
+    except ValueError:
+        raise InvalidParameter(
+            f"{accession_no!r} is not an accession number like 0000320193-26-000018"
+        )
+    filing = await insiders.get_filing(conn, accession)
+    if filing is None:
+        raise NotFound(f"No Form 4 has the accession number {accession}.")
+    owners = await insiders.owners(conn, [accession])
+    stored = await insiders.lines(conn, [accession])
+    refs = await company_refs(conn, [filing.issuer_cik])
+    lines = tuple(_line_proof(filing, line) for line in stored)
+    checks = {code for line in lines for code in line.checks}
+    flags = {code for line in lines for code in line.quality_flags}
+    return InsiderFilingProof(
+        accession_no=filing.accession_no,
+        form=filing.form,
+        filed_at=filing.filed_at,
+        period_of_report=filing.period_of_report,
+        original_filed_at=filing.original_filed_at,
+        issuer=refs[filing.issuer_cik],
+        insiders=tuple(insider_of(owner) for owner in sorted(owners, key=lambda o: o.position)),
+        rule_10b5_1=filing.rule_10b5_1,
+        not_subject_to_section16=filing.not_subject_to_section16,
+        filing_url=urls.filing_folder(filing.issuer_cik, filing.accession_no),
+        document_url=urls.filing_document(filing.issuer_cik, filing.accession_no, filing.doc_name),
+        schema_version=filing.schema_version,
+        method=filing.method,
+        extractor_version=filing.extractor_version,
+        parsed_at=filing.parsed_at,
+        footnotes=filing.footnotes,
+        remarks=filing.remarks,
+        lines=lines,
+        history=tuple(
+            _entry(change) for change in await value_changes.for_insider_filing(conn, accession)
+        ),
+        checks={code: INSIDER_CHECKS.get(code, code) for code in sorted(checks)},
+        flags={code: INSIDER_FLAGS.get(code, code) for code in sorted(flags)},
+    )
+
+
+def _line_proof(filing: StoredFiling, line: StoredLine) -> InsiderLineProof:
+    # A line's checks are its own trade's, decided by the same rules as a served trade's.
+    (alone,) = group_trades(
+        [
+            FiledTrade(
+                filing.accession_no,
+                tuple(filing.owner_ciks),
+                filing.rule_10b5_1,
+                filing.filed_at,
+                line,
+            )
+        ]
+    )
+    footnotes = dict.fromkeys(note for ids in line.footnotes.values() for note in ids)
+    return InsiderLineProof(
+        line_no=line.line_no,
+        derivative=line.is_derivative,
+        security=line.security_title,
+        trade_date=line.trade_date,
+        code=line.code,
+        code_label=CODE_LABELS.get(line.code),
+        acquired_disposed=line.acquired_disposed,
+        shares=line.shares,
+        price=line.price,
+        value=(
+            line.shares * line.price if line.shares is not None and line.price is not None else None
+        ),
+        owned_after=line.owned_after,
+        direct_indirect=line.direct_indirect,
+        nature_of_ownership=line.nature_of_ownership,
+        timeliness=line.timeliness,
+        exercise_price=line.exercise_price,
+        exercise_date=line.exercise_date,
+        expiration_date=line.expiration_date,
+        underlying_title=line.underlying_title,
+        underlying_shares=line.underlying_shares,
+        footnotes=tuple(footnotes),
+        served=line.superseded_by is None,
+        superseded_by=line.superseded_by,
+        superseded_line=line.superseded_line,
+        superseded_reason=line.superseded_reason,
+        checks=alone.checks,
+        quality_flags=alone.flags,
     )
