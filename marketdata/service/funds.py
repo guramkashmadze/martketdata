@@ -514,7 +514,7 @@ def _positions(
                 shares_change=change.shares_change,
                 split_ratio=_ratio(change.split_ratio),
                 quality_flags=(SPLIT_ADJUSTED,) if change.split_ratio else (),
-                proof=_proof(old, versions),
+                proof=position_proof(old, versions),
             )
         )
     return served
@@ -553,7 +553,7 @@ def _position(
         shares_change=change.shares_change if change else None,
         split_ratio=_ratio(change.split_ratio) if change else None,
         quality_flags=tuple(flags),
-        proof=_proof(stored, versions),
+        proof=position_proof(stored, versions),
     )
 
 
@@ -613,7 +613,8 @@ def _splits(
     return found
 
 
-def _proof(position: StoredPosition, versions: Mapping[str, str]) -> PositionProof:
+def position_proof(position: StoredPosition, versions: Mapping[str, str]) -> PositionProof:
+    """A stored position's proof: its reports and how they were read (the change feed's too)."""
     used = tuple(position.source_accessions)
     return PositionProof(
         accession_nos=used,

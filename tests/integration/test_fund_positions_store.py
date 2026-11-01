@@ -7,7 +7,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import psycopg
+from api_contract import check_envelope
 from conftest import ROOT, connect_to, filing_routes, sec_serving
 
 from marketdata.db.repositories import filings, holdings, managers, value_changes
@@ -18,6 +20,7 @@ from marketdata.normalize.filings import FilingRow
 from marketdata.normalize.holdings import UnitOverride
 from marketdata.normalize.webhooks import WEBHOOK_PUBLISH
 from marketdata.sec.raw_store import LocalRawStore
+from marketdata.service.changes import changes_feed, get_change
 from marketdata.tasks import queue
 
 Conn = psycopg.AsyncConnection[Any]
@@ -156,3 +159,36 @@ async def test_an_override_corrects_the_stored_values(conn: Conn, tmp_path: Path
     assert alphabet.detail.startswith(
         "13F-HR 0001061768-26-000010 for 2026-06-30: values read in thousands, not dollars"
     )
+
+
+async def test_the_change_feed_serves_a_positions_change_with_the_position_now(
+    conn: Conn, tmp_path: Path, api: httpx2.AsyncClient, api_key: str
+) -> None:
+    await _seed(conn)
+    await _store(conn, tmp_path, "0002043585-26-000011")
+    await _store(conn, tmp_path, "0002043585-26-000012")
+
+    feed = await changes_feed(conn)
+    rest = await api.get("/v1/changes", headers={"X-API-Key": api_key})
+
+    assert {change.entity for change in feed.data.changes} == {"fund_position"}
+    shares = next(c for c in feed.data.changes if c.cusip == "02079K305" and c.field == "shares")
+    assert (shares.cik, shares.company, shares.ticker, shares.period_end) == (
+        HIMALAYA,
+        "Manager 1709323",
+        None,
+        Q4_2025,
+    )
+    assert (shares.old_value, shares.new_value, shares.value, shares.unit) == (
+        Decimal("2451300"),
+        Decimal("2543300"),
+        Decimal("2543300"),
+        "shares",
+    )
+    assert shares.proof is not None
+    assert shares.proof.accession_nos == ("0002043585-26-000012",)
+    assert [s.accession_no for s in feed.sources] == ["0002043585-26-000012"]
+    one = await get_change(conn, shares.change_id)
+    assert one.data == shares
+    assert rest.status_code == 200, rest.text
+    check_envelope(rest.json(parse_float=Decimal))

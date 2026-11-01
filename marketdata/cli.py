@@ -1525,7 +1525,9 @@ def _accuracy_lines(report: AccuracyReport, loaded: GoldenLoad | None) -> list[s
         + "; metric values "
         + ", ".join(f"{reason} {count}" for reason, count in changes.financial_metrics.items())
         + "; insider trades "
-        + ", ".join(f"{reason} {count}" for reason, count in changes.insider_trades.items()),
+        + ", ".join(f"{reason} {count}" for reason, count in changes.insider_trades.items())
+        + "; fund positions "
+        + ", ".join(f"{reason} {count}" for reason, count in changes.fund_positions.items()),
         "",
         "Information from public filings. Not investment advice.",
     ]

@@ -55,6 +55,8 @@ def check_proof(item: dict[str, Any]) -> None:
         assert set(cross_check) == {"status", "filing_accession_no", "filing_value"}
         if cross_check["status"] in ("matched", "mismatch"):
             assert cross_check["filing_accession_no"] and cross_check["filing_value"] is not None
+    elif "accession_nos" in proof:  # a fund position (E9)
+        assert all(proof[key] for key in FUND_PROOF), proof
     elif "filings" in proof:  # an insider trade (E8)
         assert proof["filings"] and proof["checks"], proof
         for filing in proof["filings"]:

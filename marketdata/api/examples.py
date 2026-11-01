@@ -639,6 +639,7 @@ STATUS: Served[StatusReport] = Served(
                 earnings_facts={"correction": 30, "restatement": 0, "amendment": 0},
                 financial_metrics={"correction": 0, "restatement": 0, "amendment": 0},
                 insider_trades={"correction": 0, "amendment": 0},
+                fund_positions={"correction": 0, "amendment": 0},
             ),
         ),
     ),

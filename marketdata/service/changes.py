@@ -12,6 +12,11 @@ E8: an insider trade changes when a 4/A corrects or drops a Form 4's line, when 
 twice is served once, or when a new parser version reads the line otherwise. Its change names
 the filing and line, the shares before and after (the rest is in the detail), the filing that
 serves the trade now and the trade as served now with its proof.
+
+E9: a fund position changes when a 13F-HR/A restates or adds to a manager's quarter, or when a
+report is read again in another unit or parser version. Its change names the manager (`cik`
+and `company`), the quarter end, the CUSIP as filed and put or call, the shares or value
+(`field`) before and after, and the position as served now with its proof.
 """
 
 from collections.abc import Mapping, Sequence
@@ -22,12 +27,15 @@ from typing import Any, Literal
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.db.repositories import financial_metrics, value_changes
+from marketdata.db.repositories import financial_metrics, holdings, managers, value_changes
+from marketdata.db.repositories.holdings import StoredF13Filing, StoredPosition
 from marketdata.db.repositories.value_changes import StoredChange
+from marketdata.sec import urls
 from marketdata.service.companies import CompanyRef, company_refs, group_of, resolve_ticker
 from marketdata.service.earnings import EarningsFact, EarningsRelease, FactProof, get_earnings
 from marketdata.service.errors import InvalidParameter, NotFound
 from marketdata.service.financials import MetricProof, MetricView, metric_refs, metric_view
+from marketdata.service.funds import PositionProof, position_proof
 from marketdata.service.insiders import InsiderProof, ServedLine, served_now
 from marketdata.service.pages import (
     BAD_CURSOR,
@@ -52,6 +60,7 @@ type Reason = Literal["correction", "restatement", "amendment"]
 REASONS: tuple[Reason, ...] = ("correction", "restatement", "amendment")
 GONE = "the value is no longer stored"
 NOT_SERVED = "the trade is no longer served: the detail says why"
+POSITION_GONE = "the manager's quarter no longer has this position: the detail says why"
 
 
 class ValueChange(BaseModel):
@@ -63,7 +72,7 @@ class ValueChange(BaseModel):
     changed_at: datetime
     reason: Reason
     detail: str | None  # e.g. the rules versions, or the filing that restates
-    entity: Literal["earnings_fact", "financial_metric", "insider_transaction"]
+    entity: Literal["earnings_fact", "financial_metric", "insider_transaction", "fund_position"]
     ticker: str | None
     cik: int  # the company's, also for a value its predecessor filed
     company: str | None
@@ -73,7 +82,10 @@ class ValueChange(BaseModel):
     slot: str | None  # an earnings fact: revenue, operating_income, net_income, eps_diluted
     line_no: int | None = None  # an insider trade: its line in the Form 4 (`accession_no`)
     served_from: str | None = None  # an insider trade: the filing that serves it now
-    field: str  # value, or prior_value: the same quarter a year earlier; shares for a trade
+    cusip: str | None = None  # a fund position: the security, as the 13F states it (E9)
+    put_call: str | None = None  # a fund position: PUT or CALL, null for shares held outright
+    field: str  # value, or prior_value: the same quarter a year earlier; shares for a trade;
+    # shares or value_usd for a fund position
     metric: str | None  # a metric value
     period_type: str | None  # a metric value: Q, FY or TTM
     period_end: date | None
@@ -83,7 +95,7 @@ class ValueChange(BaseModel):
     value: Number | None  # what is served now, with the proof below
     reasons: tuple[str, ...]  # why the value served now is null
     quality_flags: tuple[str, ...]
-    proof: FactProof | MetricProof | InsiderProof | None
+    proof: FactProof | MetricProof | InsiderProof | PositionProof | None
 
 
 class ChangeFeed(BaseModel):
@@ -199,8 +211,14 @@ async def _build(
     trades = await served_now(
         conn, [_line_key(change) for change in stored if change.entity == "insider_transaction"]
     )
+    positions, filed = await _positions_now(conn, stored)
+    names = {
+        manager.manager_cik: manager.display_name
+        for manager in await managers.list_managers(conn, curated=False)
+    }
     changes = tuple(
-        _change(change, companies[change.cik], releases, rows, trades) for change in stored
+        _change(change, companies[change.cik], releases, rows, trades, positions, filed, names)
+        for change in stored
     )
     views = list(rows.values())
     flags = [
@@ -228,6 +246,15 @@ async def _build(
                 for trade in trades.values()
                 if trade is not None
             ],
+            [
+                Source(
+                    accession_no=filing.accession_no,
+                    form=filing.form,
+                    filed_at=filing.filed_at,
+                    url=urls.filing_folder(filing.manager_cik, filing.accession_no),
+                )
+                for filing in filed.values()
+            ],
         ),
         as_of=newest(
             [
@@ -249,6 +276,35 @@ def _metric_key(change: StoredChange) -> tuple[int, str, str, date]:
     )
 
 
+type PositionRef = tuple[int, date, str, str | None]  # manager, quarter end, CUSIP, put or call
+
+
+def _position_key(change: StoredChange) -> PositionRef:
+    key = change.entity_key
+    put_call = key.get("put_call")
+    return (
+        change.cik,
+        date.fromisoformat(str(key["report_period"])),
+        str(key["cusip"]),
+        str(put_call) if put_call else None,
+    )
+
+
+async def _positions_now(
+    conn: AsyncConnection[Any], stored: Sequence[StoredChange]
+) -> tuple[dict[PositionRef, StoredPosition], dict[str, StoredF13Filing]]:
+    """The fund positions these changes are about, as stored now, and their reports."""
+    quarters = {_position_key(c)[:2] for c in stored if c.entity == "fund_position"}
+    found: dict[PositionRef, StoredPosition] = {}
+    for cik, period in sorted(quarters):
+        for position in await holdings.positions(conn, cik, period):
+            found[(cik, period, position.cusip, position.put_call)] = position
+    wanted = {_position_key(c) for c in stored if c.entity == "fund_position"}
+    used = sorted({a for key, p in found.items() if key in wanted for a in p.source_accessions})
+    filed = {filing.accession_no: filing for filing in await holdings.filings(conn, used)}
+    return {key: p for key, p in found.items() if key in wanted}, filed
+
+
 def _line_key(change: StoredChange) -> tuple[str, int]:
     return (str(change.entity_key["accession_no"]), int(change.entity_key["line_no"]))
 
@@ -259,6 +315,9 @@ def _change(
     releases: Mapping[str, Served[EarningsRelease]],
     rows: Mapping[tuple[int, str, str, date], MetricView],
     trades: Mapping[tuple[str, int], ServedLine | None],
+    positions: Mapping[PositionRef, StoredPosition],
+    filed: Mapping[str, StoredF13Filing],
+    names: Mapping[int, str],
 ) -> ValueChange:
     key = change.entity_key
     field = str(key.get("field", "value"))
@@ -317,6 +376,27 @@ def _change(
             reasons=() if trade is not None else (NOT_SERVED,),
             quality_flags=(),
             proof=trade.proof if trade is not None else None,
+        )
+    if change.entity == "fund_position":
+        ref = _position_key(change)
+        position = positions.get(ref)
+        versions = {accession: filing.extractor_version for accession, filing in filed.items()}
+        return ValueChange(
+            **{**common, "ticker": None, "company": names.get(change.cik, company.name)},
+            entity="fund_position",
+            accession_no=None,
+            amends=None,
+            slot=None,
+            cusip=ref[2],
+            put_call=ref[3],
+            metric=None,
+            period_type=None,
+            period_end=ref[1],
+            unit="shares" if field == "shares" else "USD",
+            value=getattr(position, field) if position is not None else None,
+            reasons=() if position is not None else (POSITION_GONE,),
+            quality_flags=tuple(position.quality_flags) if position is not None else (),
+            proof=position_proof(position, versions) if position is not None else None,
         )
     metric_key = _metric_key(change)
     view = rows.get(metric_key)
