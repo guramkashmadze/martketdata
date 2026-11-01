@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set nav = "compare" %}
+{% block title %}Compare{% if comparison %}: {{ comparison.companies | map(attribute="ticker") | join(", ") }}{% endif %}{% endblock %}
+{% block content %}
+<h1>Compare companies</h1>
+<p class="sub">Two to five companies side by side: for each metric, each company's newest value of
+the period type, with its own period end. Values are shown side by side, never ranked.</p>
+<form class="controls" action="/compare" method="get">
+  <label for="tickers">Tickers</label>
+  <input id="tickers" name="tickers" value="{{ tickers }}" placeholder="AAPL, MSFT, GOOGL" required maxlength="200" autocomplete="off">
+  <label for="period">Period</label>
+  <select id="period" name="period">
+    {% for each in periods %}<option value="{{ each }}"{% if each == period %} selected{% endif %}>{{ period_names[each] }}</option>{% endfor %}
+  </select>
+  <button type="submit">Compare</button>
+</form>
+{% if message %}<p class="pending" role="status">{{ message }}</p>{% endif %}
+{% if comparison %}
+<p class="note" id="compare-note">Below each value, the end of its period: twelve months by default,
+which compares fiscal years that end in different months. Each value links to its proof.</p>
+<div class="scroll">
+<table class="sticky" aria-describedby="compare-note">
+  <thead>
+    <tr>
+      <th scope="col" class="metric">Metric</th>
+      {% for company in comparison.companies %}
+      <th scope="col" class="num"><a href="{{ company_url(company.ticker) }}">{{ company.ticker }}</a><br><span class="note">{{ company.name or "" }}</span></th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for compared in comparison.metrics %}
+    <tr>
+      <th scope="row" class="metric">{{ metric_names.get(compared.metric, compared.metric) }}<br><span class="note">{{ scale_name(compared.unit) }}</span></th>
+      {% for company in comparison.companies %}
+      {% set row = compared["values"].get(company.ticker) %}
+      <td class="num">{% if row %}<a class="v" href="{{ metric_url(company.ticker, row) }}">{{ row.value | scaled(compared.unit) }}</a>{% if row.quality_flags %}<span class="note" title="{{ row.quality_flags | join(', ') }}"> *</span>{% endif %}<br><span class="note">{{ row.period_end | day }}</span>{% else %}—{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="note">* a quality flag: the proof page says what it means. A dash: none of the company's
+filings reports it.</p>
+{% endif %}
+{% endblock %}
