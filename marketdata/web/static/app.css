@@ -2,7 +2,7 @@
    colours keep a contrast of at least 4.5:1 with their backgrounds in both themes. */
 :root {
   --bg: #ffffff; --fg: #1b1f24; --muted: #5b6470; --line: #d9dee4; --accent: #0b5cad;
-  --ok: #1a7f37; --warn: #8a5a00; --bad: #b42318; --chip: #eef1f4; --head: #f6f8fa;
+  --ok: #197a35; --warn: #8a5a00; --bad: #b42318; --chip: #eef1f4; --head: #f6f8fa;
   --focus: #0b5cad;
 }
 @media (prefers-color-scheme: dark) {
@@ -60,6 +60,11 @@ dl { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 
      margin: 0; }
 dt { color: var(--muted); }
 dd { margin: 0; overflow-wrap: anywhere; }
+dd.value, dd.num { overflow-wrap: normal; }
+@media (max-width: 640px) {
+  dl { grid-template-columns: 1fr; gap: 0; }
+  dt { margin-top: 8px; }
+}
 ul { margin: 0; padding-left: 18px; }
 code, .quote { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
                font-size: .85rem; }
@@ -72,6 +77,7 @@ caption { text-align: left; color: var(--muted); font-size: .85rem; padding: 0 0
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line);
          vertical-align: top; }
 th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+th .note { font-weight: 400; }
 thead th { white-space: nowrap; }
 .num { font-variant-numeric: tabular-nums; }
 th.num, td.num { text-align: right; white-space: nowrap; }

@@ -5,7 +5,7 @@
 the new value and why, served by <code>/v1/changes</code> and sent as <code>data.changed</code>.</p>
 <div class="scroll">
 <table>
-  <thead><tr><th>When (UTC)</th><th>Value</th><th>Old</th><th>New</th><th>Why</th></tr></thead>
+  <thead><tr><th scope="col">When (UTC)</th><th scope="col">Value</th><th scope="col" class="num">Old</th><th scope="col" class="num">New</th><th scope="col">Why</th></tr></thead>
   <tbody>
   {% for change in entries %}
     <tr>
@@ -28,7 +28,7 @@ the new value and why, served by <code>/v1/changes</code> and sent as <code>data
 <h2>Filings</h2>
 <div class="scroll">
 <table>
-  <thead><tr><th>Form</th><th>Filed</th><th>Accession number</th></tr></thead>
+  <thead><tr><th scope="col">Form</th><th scope="col">Filed</th><th scope="col">Accession number</th></tr></thead>
   <tbody>
   {% for source in sources %}
     <tr>
@@ -180,8 +180,9 @@ newest first; each opens the filing on sec.gov.</p>
       <td>{{ filing.form }}{% if filing.amendment_type %} <span class="note">{{ filing.amendment_type | lower }}</span>{% endif %}<br><span class="note">{{ filing.accession_no }}</span></td>
       <td class="num">{{ filing.filed_at | day }}</td>
       <td>{{ filing.value_unit }}<br><span class="note">{{ filing.unit_rule }}</span></td>
-      <td class="num">{{ filing.lines | exact }}{% if filing.entry_total is not none %}<br><span class="note">summary page {{ filing.entry_total | exact }}</span>{% endif %}</td>
-      <td class="num">{{ filing.value_sum | exact }}{% if filing.value_total is not none %}<br><span class="note">summary page {{ filing.value_total | exact }}</span>{% endif %}</td>
+      {% set table = filing.table_url or filing.filing_url %}
+      <td class="num"><a href="{{ table }}">{{ filing.lines | exact }}</a>{% if filing.entry_total is not none %}<br><span class="note">summary page {{ filing.entry_total | exact }}</span>{% endif %}</td>
+      <td class="num"><a href="{{ table }}">{{ filing.value_sum | exact }}</a>{% if filing.value_total is not none %}<br><span class="note">summary page {{ filing.value_total | exact }}</span>{% endif %}</td>
       <td><a href="{{ filing.filing_url }}">filing</a>{% if filing.table_url %} · <a href="{{ filing.table_url }}">information table</a>{% endif %}</td>
     </tr>
   {% endfor %}

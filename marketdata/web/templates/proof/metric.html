@@ -21,7 +21,7 @@
   <dt>Latest filing</dt>
   <dd>{% if row.proof.filing_url %}<a href="{{ row.proof.filing_url }}">{{ row.proof.accession_no }}</a>, filed {{ row.filed_at or "—" }}{% else %}none{% endif %}</dd>
   <dt>Filer</dt>
-  <dd>CIK {{ row.cik }}{% if row.cik != proof.cik %}, a predecessor of {{ who }}: its filings hold this period{% endif %}</dd>
+  <dd>CIK {{ row.cik }}{% if row.cik != proof.cik %}, a predecessor of {{ who }}: its filings report this period{% endif %}</dd>
   <dt>Calc version</dt><dd>{{ row.proof.calc_version }}</dd>
   {% if row.quality_flags %}
   <dt>Flags</dt>

@@ -112,8 +112,9 @@ after its release (docs/EDGE_CASES.md). A mismatch is shown, never smoothed over
 
 ## 3. The proof page of a number (everyone)
 
-Open in a browser, with any user name and the API key as the password (HTTP Basic auth; in M1
-the pages sit behind a key, from E15 they follow the web UI's access rule):
+Open in a browser, with any user name and the API key as the password (HTTP Basic auth: the
+pages follow the web UI's access rule, `UI_MODE=private` by default; part 9 shows them in the
+UI):
 
 - `$BASE/proof/earnings/0000320193-26-000018`: Apple's release: each value with the row as
   printed, the scale, the checks, the 10-Q's value and the links to the filing and the exhibit
@@ -129,8 +130,8 @@ Or with curl:
 curl -s -u "demo:$KEY" $BASE/proof/earnings/0000320193-26-000018 -o apple.html
 ```
 
-The pages load no script, font or image and set no cookie. A value that failed a check is shown
-as missing, with why.
+The pages load no script and set no cookie. A value that failed a check is shown as missing,
+with why.
 
 ## 4. A webhook received by a test receiver (engineers)
 
@@ -304,6 +305,48 @@ latest report and `GET /v1/companies/AAPL/funds` who holds Apple. A 13F is filed
 after the quarter end and lists long positions only. In an AI chat, "What did Berkshire
 Hathaway buy and sell last quarter?" calls `investor_portfolio` (5.9 KB, with the 13F's link).
 
+## 9. The web UI (everyone)
+
+The same data in a browser, read-only and rendered on the server from the same service
+functions as the API and MCP (E15). Open `$BASE/`: with `UI_MODE=private`, the default, the
+browser asks for a user name and a password: any user name, and the API key as the password.
+Each page counts against the key's requests a minute, like a `/v1` call.
+
+1. Type `aapl` in the search box: Apple's page opens (`$BASE/companies/AAPL`). A name or a CIK
+   lists the matches instead.
+2. Under "Latest earnings release", click Revenue's **109,417** (USD millions). Its proof page
+   opens at revenue: the row as printed in the press release (`| Total net sales (1) | 109,417 |
+   94,036 | 364,357 | 313,695 |`), the scale, the three checks it passed and the 10-Q:
+   matched, 109,417,000,000 USD from 0000320193-26-000020.
+3. Back on Apple's page: twelve months and eight quarters of the core metrics, exact in USD
+   millions, with a chart (a bar opens its value's proof); recent filings with their labels; the
+   insider section (16 sales in the last 90 days on 2026-11-01, switchable to 365 days or every
+   code; each trade's numbers open its Form 4 as read, every line served or superseded); and the
+   9 curated managers holding Apple, by name, each position linked to the 13F lines it adds up.
+4. `$BASE/funds/1067983`: Berkshire Hathaway's report for 2026Q2, filed 2026-08-14: 29
+   positions by value with weights and changes (seven added, six trimmed, one new, one exited),
+   any reported quarter, every number linked to its proof.
+5. `$BASE/compare?tickers=AAPL,MSFT,GOOGL`: side by side, twelve months by default, never
+   ranked. `$BASE/status`: freshness, the track record and the accuracy report.
+6. `$BASE/companies/SPY` and `$BASE/companies/TSM`: a fund and a foreign issuer get the parts
+   that apply (filings, insiders for TSM, the managers holding them) and why the rest don't.
+
+The pages load only this site's stylesheet and two vendored scripts (htmx 2.0.11 and
+Chart.js 4.5.1), set no cookie and work at phone width; the server's access log keeps client
+addresses cut short. Without the key a page is a 401 that makes the browser ask for it:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" $BASE/companies/AAPL
+```
+
+```bash
+curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" -u "demo:$KEY" $BASE/companies/AAPL
+```
+
+On the dev database on 2026-11-01: 401, then 200 in 0.09 s (Apple's page, 54 KB, 265 proof
+links). `UI_MODE=public` opens the pages to anyone, at most `UI_RATE_PER_MIN` requests a minute
+from one address; it waits on OD-13 (the price license, or prices hidden).
+
 ## The integration on one page
 
 - **Auth.** `X-API-Key: mdk_...` on every `/v1` request (`/v1/status` needs none). The operator
@@ -314,8 +357,10 @@ Hathaway buy and sell last quarter?" calls `investor_portfolio` (5.9 KB, with th
   `json.loads(text, parse_float=Decimal)`), not floats. Times are UTC with a `Z`.
 - **Proof.** Every value has a `proof`: an earnings value its filing, exhibit URL, the row as
   printed, the scale words, the checks and its cross-check; a metric its filing, XBRL concept,
-  method, contributing filings and calc version. Proof pages: `/proof/earnings/{accession_no}`
-  and `/proof/metrics/{ticker}/{metric}/{period_type}/{period_end}`.
+  method, contributing filings and calc version. Proof pages: `/proof/earnings/{accession_no}`,
+  `/proof/metrics/{ticker}/{metric}/{period_type}/{period_end}`, `/proof/insiders/{accession_no}`
+  and `/proof/funds/{manager_cik}/{quarter}/{cusip}`; the web UI at `/` links every number to
+  one.
 - **Missing data.** A value that failed a check, or doesn't apply, is `null` with `reasons` or a
   quality flag. Funds and foreign issuers answer 422 `not_applicable` with the reason.
 - **Errors.** `{"error": {"code", "message"}}`: `invalid_parameter` 400, `unauthorized` 401,

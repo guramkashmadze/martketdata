@@ -4,6 +4,6 @@
 {% if activity.next_cursor %}<script defer src="{{ htmx }}"></script>{% endif %}
 {% endblock %}
 {% block content %}
-<p class="sub"><a href="{{ company_url(activity.ticker) }}">{{ activity.company or activity.ticker }} ({{ activity.ticker }})</a></p>
+<h1><a href="{{ company_url(activity.ticker) }}">{{ activity.company or activity.ticker }}</a> <span class="badge">{{ activity.ticker }}</span></h1>
 {% include "partials/insiders.html" %}
 {% endblock %}

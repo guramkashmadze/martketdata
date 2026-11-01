@@ -145,7 +145,12 @@ filing date and SEC link), `as_of` (when the newest row used last changed) and t
 Numbers keep every digit. A metric value carries a short proof: the filing it came from
 (`accession_no`; for a derived, trailing or computed value the latest filing it reads), the
 method and the XBRL concept, named once for a series whose values share it, and its quality
-flags. The full proof of any value is one `/v1` call or proof page away (D-108).
+flags. The full proof of any value is one `/v1` call or proof page away (D-108). With
+`PUBLIC_BASE_URL` set, answers name those pages in `proof_url` (E15): `latest_earnings` its
+release's page; `company_snapshot`, `get_financials`, `compare_companies` and `insider_activity`
+one address with `{placeholders}` to fill in from each value, e.g.
+`https://<host>/proof/metrics/AAPL/{metric}/Q/{period_end}`. The pages ask for the same API key
+as the password of HTTP Basic auth while the web UI is private.
 
 | Tool | Use it for | Arguments | Limits |
 | --- | --- | --- | --- |
