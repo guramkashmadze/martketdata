@@ -2137,6 +2137,7 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-11-03 | E7c-S1 | In Docker the API sees every request as coming from Docker's gateway (`192.168.50.x` on Docker Desktop): public mode's per-address limit would put all visitors under one, as behind Caddy (the E15-S1 row) | E7c, E11 |
 | 2026-11-03 | E7c-S1 | Dev database: client `guram-claude-code` and its key 9, for Guram's Claude Code (`marketdata` at user scope, `http://localhost:8000/mcp`); the key is kept only in `~/.claude.json` | — |
 | 2026-11-03 | E7c-S1 | The Docker commits are local: pushing them waits for Guram's OK | Guram |
+| 2026-11-03 | E7c-S1 | Done: the Docker commits pushed to `origin` with Guram's OK, with E15's CI record `2bfcc3e`; CI on main is green ([run 41685339813](https://github.com/guramkashmadze/martketdata/actions/runs/41685339813), commit `a048c62`, 2 min 56 s) | — |
 
 ---
 
