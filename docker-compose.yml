@@ -22,5 +22,30 @@ services:
       timeout: 3s
       retries: 10
 
+  # The API, MCP server and web UI from the Dockerfile (D-134), running without a terminal and
+  # started again after a crash or a Docker restart: `docker compose up -d api`. The settings
+  # come from .env; only the database address is the container's own.
+  api:
+    build: .
+    image: marketdata
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Inside the container localhost is the container: a PostgreSQL on this machine is
+      # host.docker.internal (CONTAINER_DATABASE_URL in .env). Without it, the PostgreSQL above.
+      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql://marketdata:marketdata@postgres:5432/marketdata}
+    # Published on this machine's localhost only, as PostgreSQL is.
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+
 volumes:
   postgres-data:

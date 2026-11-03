@@ -12,6 +12,7 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Lint and types: pdm run lint (black --check, isort --check-only, flake8, mypy)
 - Format: pdm run fmt
 - API: pdm run uvicorn marketdata.api.app:app --reload
+- API in Docker, kept running (D-134): docker compose up -d api; after a code change, docker compose up -d --build api (CONTAINER_DATABASE_URL in .env points it at a local PostgreSQL)
 - Worker: pdm run marketdata worker
 - Scheduler: pdm run marketdata scheduler
 - Extraction hit rate: pdm run marketdata extract report

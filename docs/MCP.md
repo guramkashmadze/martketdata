@@ -11,7 +11,11 @@ Information from public filings. Not investment advice.
 ## What you need
 
 - **The server.** `/mcp` is part of the API: `pdm run uvicorn marketdata.api.app:app --port 8000`
-  serves it at `http://localhost:8000/mcp`. On the live VM (OD-1) it is `https://<live host>/mcp`;
+  serves it at `http://localhost:8000/mcp` while that command runs. To keep it running without a
+  terminal, run the API in Docker: `docker compose up -d api` (D-134) starts it again after a
+  crash and whenever Docker Desktop starts; for a PostgreSQL on this machine, set
+  `CONTAINER_DATABASE_URL` in `.env` (`.env.example` shows it), and after a code change rebuild it
+  with `docker compose up -d --build api`. On the live VM (OD-1) it is `https://<live host>/mcp`;
   set `PUBLIC_BASE_URL` to that address, as the server accepts only this machine's host name and
   the public one (DNS rebinding protection, D-107).
 - **An API key** with the `api` scope, sent in the `X-API-Key` header, the same key as `/v1`:
@@ -40,7 +44,9 @@ curl -s http://localhost:8000/mcp -H "X-API-Key: $MARKETDATA_API_KEY" -H "Conten
 
 Without a key the answer is `401` with `{"error":{"code":"unauthorized","message":"Send your API
 key in the X-API-Key header."}}`; a revoked key is `401`, a `review` key `403`, and a key over its
-rate `429` with `Retry-After`.
+rate `429` with `Retry-After`. A client that says `ECONNREFUSED` reached nothing at all: no API is
+running on port 8000. Start it, then reconnect the server in the client (in Claude Code: `/mcp`,
+the server, Reconnect).
 
 ## Connecting a client
 

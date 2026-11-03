@@ -1,0 +1,9 @@
+# The build context holds only what the Dockerfile copies: never .env, var/ (the raw store) or
+# anything else not listed here.
+*
+!pyproject.toml
+!pdm.lock
+!README.md
+!marketdata/
+**/__pycache__/
+**/*.py[cod]

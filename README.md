@@ -38,6 +38,8 @@ pdm run marketdata universe check     # check data/universe.csv against the stor
 pdm run marketdata company show <TICKER>   # CIK, name, class, SIC, fiscal year end, tickers, what data applies
 pdm run marketdata worker             # run queued tasks; the one process that calls the SEC
 pdm run marketdata scheduler          # enqueue the filings watch (every 10 minutes) and the daily security master
+docker compose up -d api              # the API, MCP server and web UI in Docker, kept running (CONTAINER_DATABASE_URL in .env)
+docker compose up -d --build api      # the same after a code change
 pdm run marketdata backfill filings --years 5   # queue five years of filing history for the worker
 pdm run marketdata tasks list         # tasks by kind and status, with errors
 pdm run marketdata filings list <TICKER>   # a company's filings with plain-language event labels
