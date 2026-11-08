@@ -40,7 +40,8 @@ export BASE=http://127.0.0.1:8000 KEY=mdk_...
 ```
 
 The dev database needs the history loaded by earlier epics (`backfill filings`, `backfill
-earnings`, `backfill facts`, `backfill insiders`; for part 8 `managers load` and `backfill funds`);
+earnings`, `backfill facts`, `backfill insiders`; for part 8 `managers load` and `backfill funds`;
+for part 10 `backfill stakes`);
 the live VM has it from the live run. `/docs` on the same server is
 the API reference, with an example for every route.
 
@@ -346,6 +347,28 @@ curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" -u "demo:$KEY" $BASE/com
 On the dev database on 2026-11-01: 401, then 200 in 0.09 s (Apple's page, 54 KB, 265 proof
 links). `UI_MODE=public` opens the pages to anyone, at most `UI_RATE_PER_MIN` requests a minute
 from one address; it waits on OD-13 (the price license, or prices hidden).
+
+## 10. Who owns 5% or more (everyone)
+
+Whoever owns more than 5% of a class of a company's shares files a Schedule 13D or 13G and amends
+it as the stake changes (E16). Each holder's latest structured filing about each class is served,
+by name, with every reporting person and the filing as proof; holders below 5% are listed as
+exited, and the older filings, which are not read, as links:
+
+```bash
+curl -s -H "X-API-Key: $KEY" "$BASE/v1/companies/AMD/stakes" \
+  | jq '{holders: [.data.holders[] | {holder, form, filed_at, event_date, ticker, shares, percent}], exited: [.data.exited[] | {holder, form, shares, percent}], checked_at}'
+```
+
+On the dev database on 2026-11-08 (466 structured filings of 65 companies parsed), AMD's holder is
+Vanguard Capital Management with 122,092,206 shares, 7.48% of the common stock (SCHEDULE 13G
+0002100119-26-000052, filed 2026-04-29 for 2026-03-31), and The Vanguard Group is listed as
+exited at 0 shares (its SCHEDULE 13G/A of 2026-03-26 ticks item 5). Alphabet's page shows
+Vanguard Capital Management twice, for the Class C (6.41%) and Class A (7.48%) shares, and Sergey
+Brin's 5.81% of Class A. The company page's "5% holders" section links each number to
+`/proof/stakes/{accession_no}`, which shows the filing as read: every reporting person, a 13D's
+purpose word for word, the checks and which later filing replaced an earlier one. In an AI chat,
+"Who owns more than 5% of AMD?" calls `major_holders` (2.1 KB).
 
 ## The integration on one page
 

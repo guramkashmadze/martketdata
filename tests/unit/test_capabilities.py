@@ -1,6 +1,7 @@
 """E2-S5: which data kinds apply to a company, with the reason (PLAN.md §9.1, D-018). In the MVP,
 earnings and fundamentals apply to domestic filers in the universe only; insider trades (E8) to
-domestic filers and foreign private issuers in the universe."""
+domestic filers and foreign private issuers in the universe; 5% stakes (E16) to every universe
+company."""
 
 from datetime import UTC, datetime
 
@@ -32,6 +33,7 @@ def test_a_domestic_filer_in_the_universe_gets_earnings_and_fundamentals() -> No
         ("earnings", True),
         ("fundamentals", True),
         ("insiders", True),
+        ("stakes", True),
     ]
     assert capabilities.of("fundamentals").reason == (
         "A domestic filer in the covered universe: its 10-K and 10-Q apply."
@@ -96,6 +98,7 @@ def test_a_foreign_issuer_in_the_universe_gets_insiders_only() -> None:
         ("earnings", False),
         ("fundamentals", False),
         ("insiders", True),
+        ("stakes", True),
     ]
     assert capabilities.of("insiders").reason == (
         "A foreign private issuer in the covered universe: the Form 4 filings of its directors "
@@ -120,3 +123,31 @@ def test_insiders_dont_apply_to_the_rest(
     insiders = capabilities_for(company(filer_type, in_universe)).of("insiders")
 
     assert (insiders.applies, insiders.reason) == (False, reason)
+
+
+@pytest.mark.parametrize(
+    ("filer_type", "in_universe", "applies", "reason"),
+    [
+        (
+            "fund",
+            True,
+            True,
+            "In the covered universe: the Schedule 13D and 13G filings about it apply, read from "
+            "the SEC's structured format (from 2024).",
+        ),
+        ("foreign_private_issuer", True, True, None),
+        ("other", True, True, None),
+        ("domestic", False, False, "Not in the covered universe."),
+        ("unknown", True, False, "Not classified yet: its SEC filings could not be loaded."),
+    ],
+)
+def test_stakes_apply_to_every_universe_company(
+    filer_type: FilerType, in_universe: bool, applies: bool, reason: str | None
+) -> None:
+    """E16: whoever owns more than 5% of a class files a 13D or 13G, whatever the company's
+    class; only universe companies' listings are watched and parsed."""
+    stakes = capabilities_for(company(filer_type, in_universe)).of("stakes")
+
+    assert stakes.applies is applies
+    if reason is not None:
+        assert stakes.reason == reason

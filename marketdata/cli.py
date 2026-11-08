@@ -98,7 +98,7 @@ _GROUPS = [
     ("company", "Look up a company: identity, class, tickers and what data applies.", "E2"),
     ("filings", "A company's filings with plain-language event labels.", "E3"),
     ("tasks", "List, retry and purge queued tasks.", "E3"),
-    ("backfill", "Load history: filings, earnings, facts, prices, insiders, funds.", "E3"),
+    ("backfill", "Load history: filings, earnings, facts, prices, insiders, funds, stakes.", "E3"),
     ("extract", "Earnings extraction and the hit-rate report.", "E7a"),
     ("earnings", "A company's latest earnings release, each value with its proof.", "E7a"),
     ("metrics", "A company's reported financial metrics, each with its filing.", "E4a"),
@@ -348,6 +348,51 @@ def backfill_insiders(
         "Follow them with `marketdata tasks list --kind insiders_backfill` and "
         "`--kind form4_parse`."
     )
+
+
+@groups["backfill"].command("stakes")
+def backfill_stakes(
+    force: Annotated[
+        bool,
+        typer.Option(help="Parse filings that were parsed before again (a new parser)."),
+    ] = False,
+    tickers: Annotated[
+        list[str] | None,
+        typer.Option("--ticker", help="Only this universe company (repeatable); default: all."),
+    ] = None,
+) -> None:
+    """Queue a stakes backfill for each universe company; the worker runs them.
+
+    Each task parses every structured Schedule 13D and 13G (and amendment) listed about the
+    company and its predecessors, the first filed in July 2024, from the listings already
+    stored: it watches no company. A company's filings are stored in one transaction, so a
+    first backfill announces nothing. Exits with 1 when the universe is empty.
+    """
+    settings = _settings()
+
+    async def work(conn: AsyncConnection[Any]) -> list[Task]:
+        ciks = None
+        if tickers:
+            ciks = []
+            for text in tickers:
+                security = await resolve_ticker(conn, text)
+                if not security.in_universe:
+                    raise InvalidParameter(
+                        f"{security.ticker} is outside the universe: 13D and 13G filings are "
+                        "loaded for universe companies only (PLAN.md §9.15)"
+                    )
+                ciks.append(security.cik)
+        return await task_scheduler.enqueue_stakes_backfills(conn, force=force, ciks=ciks)
+
+    queued = _queue(settings, work)
+    if not queued:
+        raise _fail("No universe companies: run `marketdata ingest security-master` first.")
+    mine = [task for task in queued if task.status == "queued"]
+    typer.echo(
+        f"Queued {len(mine)} stakes backfills for {len(queued)} universe companies; the worker "
+        "runs them."
+    )
+    typer.echo("Follow them with `marketdata tasks list --kind stakes_backfill`.")
 
 
 @groups["backfill"].command("funds")

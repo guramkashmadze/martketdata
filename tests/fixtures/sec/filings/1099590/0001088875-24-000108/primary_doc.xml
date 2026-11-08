@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13g" xmlns:com="http://www.sec.gov/edgar/common">
+  <headerData>
+    <submissionType>SCHEDULE 13G/A</submissionType>
+    <previousAccessionNumber>0001088875-11-000008</previousAccessionNumber>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <cik>0001088875</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>16</amendmentNo>
+      <securitiesClassTitle>Common Stock</securitiesClassTitle>
+      <eventDateRequiresFilingThisStatement>09/30/2024</eventDateRequiresFilingThisStatement>
+      <issuerInfo>
+        <issuerCik>0001099590</issuerCik>
+        <issuerName>MERCADOLIBRE INC</issuerName>
+        <issuerCusip>58733R102</issuerCusip>
+        <issuerPrincipalExecutiveOfficeAddress>
+          <com:street1>DR. LUIS BONAVITA 1294 OF. 1733 TOWER II</com:street1>
+          <com:street2>DR. LUIS BONAVITA 1294 OF. 1733 TOWER II</com:street2>
+          <com:city>MONTEVIDEO</com:city>
+          <com:stateOrCountry>X3</com:stateOrCountry>
+          <com:zipCode>11300</com:zipCode>
+        </issuerPrincipalExecutiveOfficeAddress>
+      </issuerInfo>
+      <designateRulesPursuantThisScheduleFiled>
+        <designateRulePursuantThisScheduleFiled>Rule 13d-1(b)</designateRulePursuantThisScheduleFiled>
+      </designateRulesPursuantThisScheduleFiled>
+    </coverPageHeader>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>BAILLIE GIFFORD &amp; CO</reportingPersonName>
+      <citizenshipOrOrganization>X0</citizenshipOrOrganization>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>3592157.00</soleVotingPower>
+        <sharedVotingPower>0.00</sharedVotingPower>
+        <soleDispositivePower>4689139.00</soleDispositivePower>
+        <sharedDispositivePower>0.00</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>4689139.00</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <classPercent>9.3</classPercent>
+      <typeOfReportingPerson>IA</typeOfReportingPerson>
+    </coverPageHeaderReportingPersonDetails>
+    <items>
+      <item1>
+        <issuerName>MERCADOLIBRE INC</issuerName>
+        <issuerPrincipalExecutiveOfficeAddress>DR. LUIS BONAVITA 1294 OF. 1733 TOWER II, DR. LUIS BONAVITA 1294 OF. 1733 TOWER II, MONTEVIDEO, URUGUAY, 11300.</issuerPrincipalExecutiveOfficeAddress>
+      </item1>
+      <item2>
+        <filingPersonName>Baillie Gifford &amp; Co</filingPersonName>
+        <principalBusinessOfficeOrResidenceAddress>Calton Square
+1 Greenside Row
+Edinburgh
+EH1 3AN
+Scotland
+UK
+</principalBusinessOfficeOrResidenceAddress>
+        <citizenship>Scotland</citizenship>
+      </item2>
+      <item3>
+        <notApplicableFlag>N</notApplicableFlag>
+        <typeOfPersonFiling>FI</typeOfPersonFiling>
+        <otherTypeOfPersonFiling>Investment Adviser </otherTypeOfPersonFiling>
+      </item3>
+      <item4>
+        <amountBeneficiallyOwned>4,689,139</amountBeneficiallyOwned>
+        <classPercent>9.25</classPercent>
+        <numberOfSharesPersonHas>
+          <solePowerOrDirectToVote>3,592,157</solePowerOrDirectToVote>
+          <sharedPowerOrDirectToVote>0.00</sharedPowerOrDirectToVote>
+          <solePowerOrDirectToDispose>4,689,139</solePowerOrDirectToDispose>
+          <sharedPowerOrDirectToDispose>0.00</sharedPowerOrDirectToDispose>
+        </numberOfSharesPersonHas>
+      </item4>
+      <item5>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item5>
+      <item6>
+        <notApplicableFlag>N</notApplicableFlag>
+        <ownershipMoreThan5PercentOnBehalfOfAnotherPerson>Securities reported on this Schedule 13G as being beneficially owned by Baillie Gifford &amp; Co. are held by Baillie Gifford &amp; Co. and/or one or more of its investment adviser subsidiaries, which may include Baillie Gifford Overseas Limited, on behalf of investment advisory clients, which may include investment companies registered under the Investment Company Act, employee benefit plans, pension funds or other institutional clients.</ownershipMoreThan5PercentOnBehalfOfAnotherPerson>
+      </item6>
+      <item7>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item7>
+      <item8>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item8>
+      <item9>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item9>
+      <item10>
+        <notApplicableFlag>N</notApplicableFlag>
+        <certifications>By signing below I certify that, to the best of my knowledge and belief, the securities referred to above were acquired and are held in the ordinary course of business and were not acquired and are not held for the purpose of or with the effect of changing or influencing the control of the issuer of the securities and were not acquired and are not held in connection with or as a participant in any transaction having that purpose or effect, other than activities solely in connection with a nomination under ? 240.14a-11.
+
+By signing below I certify that, to the best of my knowledge and belief, the foreign regulatory scheme applicable to Investment Adviser is substantially comparable to the regulatory scheme applicable to the functionally equivalent U.S. institution(s). I also undertake to furnish to the Commission staff, upon request, information that would otherwise be disclosed in a Schedule 13D.
+
+</certifications>
+      </item10>
+    </items>
+    <signatureInformation>
+      <reportingPersonName>BAILLIE GIFFORD &amp; CO</reportingPersonName>
+      <signatureDetails>
+        <signature>Grant Meikle</signature>
+        <title>Threshold &amp; Transaction Reporting Manager</title>
+        <date>10/18/2024</date>
+      </signatureDetails>
+    </signatureInformation>
+  </formData>
+</edgarSubmission>

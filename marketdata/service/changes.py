@@ -17,6 +17,12 @@ E9: a fund position changes when a 13F-HR/A restates or adds to a manager's quar
 report is read again in another unit or parser version. Its change names the manager (`cik`
 and `company`), the quarter end, the CUSIP as filed and put or call, the shares or value
 (`field`) before and after, and the position as served now with its proof.
+
+E16: a 5% stake changes when a later Schedule 13D or 13G of its holder replaces a served one with
+another amount, percent or exit, or when a new parser version reads a served filing otherwise.
+Its change names the filing that was served (`accession_no`) and the one that serves the stake
+now (`served_from`), the shares before and after (the percents are in the detail), and the
+stake as served now with its proof.
 """
 
 from collections.abc import Mapping, Sequence
@@ -55,12 +61,15 @@ from marketdata.service.served import (
     sources_of,
     unique_flags,
 )
+from marketdata.service.stakes import StakeHolder, StakeProof
+from marketdata.service.stakes import served_now as stakes_served_now
 
 type Reason = Literal["correction", "restatement", "amendment"]
 REASONS: tuple[Reason, ...] = ("correction", "restatement", "amendment")
 GONE = "the value is no longer stored"
 NOT_SERVED = "the trade is no longer served: the detail says why"
 POSITION_GONE = "the manager's quarter no longer has this position: the detail says why"
+STAKE_GONE = "the filing is no longer stored"
 
 
 class ValueChange(BaseModel):
@@ -72,7 +81,9 @@ class ValueChange(BaseModel):
     changed_at: datetime
     reason: Reason
     detail: str | None  # e.g. the rules versions, or the filing that restates
-    entity: Literal["earnings_fact", "financial_metric", "insider_transaction", "fund_position"]
+    entity: Literal[
+        "earnings_fact", "financial_metric", "insider_transaction", "fund_position", "stake_holding"
+    ]
     ticker: str | None
     cik: int  # the company's, also for a value its predecessor filed
     company: str | None
@@ -81,11 +92,11 @@ class ValueChange(BaseModel):
     amends: str | None  # an 8-K/A: the release whose values it changed
     slot: str | None  # an earnings fact: revenue, operating_income, net_income, eps_diluted
     line_no: int | None = None  # an insider trade: its line in the Form 4 (`accession_no`)
-    served_from: str | None = None  # an insider trade: the filing that serves it now
+    served_from: str | None = None  # an insider trade or a stake: the filing that serves it now
     cusip: str | None = None  # a fund position: the security, as the 13F states it (E9)
     put_call: str | None = None  # a fund position: PUT or CALL, null for shares held outright
-    field: str  # value, or prior_value: the same quarter a year earlier; shares for a trade;
-    # shares or value_usd for a fund position
+    field: str  # value, or prior_value: the same quarter a year earlier; shares for a trade
+    # or a stake; shares or value_usd for a fund position
     metric: str | None  # a metric value
     period_type: str | None  # a metric value: Q, FY or TTM
     period_end: date | None
@@ -95,7 +106,7 @@ class ValueChange(BaseModel):
     value: Number | None  # what is served now, with the proof below
     reasons: tuple[str, ...]  # why the value served now is null
     quality_flags: tuple[str, ...]
-    proof: FactProof | MetricProof | InsiderProof | PositionProof | None
+    proof: FactProof | MetricProof | InsiderProof | PositionProof | StakeProof | None
 
 
 class ChangeFeed(BaseModel):
@@ -173,6 +184,8 @@ def proof_path(change: ValueChange) -> str | None:
     """The proof page of the changed value (§9.10)."""
     if change.entity == "earnings_fact" and change.accession_no:
         return f"/proof/earnings/{change.accession_no}"
+    if change.entity == "stake_holding" and change.accession_no:
+        return f"/proof/stakes/{change.accession_no}"
     if change.metric and change.ticker and change.period_type and change.period_end:
         return (
             f"/proof/metrics/{change.ticker}/{change.metric}/{change.period_type}/"
@@ -212,12 +225,22 @@ async def _build(
         conn, [_line_key(change) for change in stored if change.entity == "insider_transaction"]
     )
     positions, filed = await _positions_now(conn, stored)
+    stakes = await stakes_served_now(
+        conn,
+        [
+            str(change.entity_key["accession_no"])
+            for change in stored
+            if change.entity == "stake_holding"
+        ],
+    )
     names = {
         manager.manager_cik: manager.display_name
         for manager in await managers.list_managers(conn, curated=False)
     }
     changes = tuple(
-        _change(change, companies[change.cik], releases, rows, trades, positions, filed, names)
+        _change(
+            change, companies[change.cik], releases, rows, trades, positions, filed, names, stakes
+        )
         for change in stored
     )
     views = list(rows.values())
@@ -254,6 +277,16 @@ async def _build(
                     url=urls.filing_folder(filing.manager_cik, filing.accession_no),
                 )
                 for filing in filed.values()
+            ],
+            [
+                Source(
+                    accession_no=stake.proof.accession_no,
+                    form=stake.proof.form,
+                    filed_at=stake.proof.filed_at,
+                    url=stake.proof.filing_url,
+                )
+                for stake in stakes.values()
+                if stake is not None
             ],
         ),
         as_of=newest(
@@ -318,6 +351,7 @@ def _change(
     positions: Mapping[PositionRef, StoredPosition],
     filed: Mapping[str, StoredF13Filing],
     names: Mapping[int, str],
+    stakes: Mapping[str, StakeHolder | None],
 ) -> ValueChange:
     key = change.entity_key
     field = str(key.get("field", "value"))
@@ -376,6 +410,25 @@ def _change(
             reasons=() if trade is not None else (NOT_SERVED,),
             quality_flags=(),
             proof=trade.proof if trade is not None else None,
+        )
+    if change.entity == "stake_holding":
+        accession = str(key["accession_no"])
+        stake = stakes.get(accession)
+        return ValueChange(
+            **{**common, "field": "shares"},
+            entity="stake_holding",
+            accession_no=accession,
+            amends=None,
+            slot=None,
+            served_from=str(key["served_from"]) if key.get("served_from") else None,
+            metric=None,
+            period_type=None,
+            period_end=stake.event_date if stake is not None else None,
+            unit="shares",
+            value=stake.shares if stake is not None else None,
+            reasons=() if stake is not None else (STAKE_GONE,),
+            quality_flags=stake.quality_flags if stake is not None else (),
+            proof=stake.proof if stake is not None else None,
         )
     if change.entity == "fund_position":
         ref = _position_key(change)

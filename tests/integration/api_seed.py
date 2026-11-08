@@ -9,7 +9,9 @@ compare with; FNDX is a fund and FPIX a foreign private issuer; OUTC is a domest
 the universe. E5b: one value change of each reason, the predecessor's restatement among them.
 E8: ACME's chief executive sold shares ten days ago in two lines of one Form 4 under a 10b5-1
 plan, and gave some away. E9: a curated manager's 13F report for 2026-06-30 holds ACME in two
-lines (one per other manager) and a call on BETA.
+lines (one per other manager) and a call on BETA. E16: Big Index Advisers' 13G on ACME
+replaces its earlier one, Activist Partners and its general partner fell below 5% in their
+13D/A, and an old-format SC 13G is listed, not parsed.
 """
 
 import json
@@ -34,6 +36,10 @@ BETA_10Q = "0002002000-26-000011"
 INSIDER_FORM4 = "0001001000-26-000050"
 MANAGER = 9009
 MANAGER_13F = "0009009000-26-000003"
+STAKE_13G = "0009100000-26-000012"  # Big Index Advisers, 6.25% of ACME
+STAKE_13G_BEFORE = "0009100000-25-000040"  # its earlier 13G, 5.5%
+STAKE_13D = "0009200000-26-000007"  # Activist Partners' 13D/A, below 5%
+OLD_13G = "0009300000-24-000002"  # an SC 13G in the old format
 ACME_CUSIP, BETA_CUSIP = "000900110", "000900219"
 CALC = "2.3"
 
@@ -77,6 +83,7 @@ async def seed(conn: Conn) -> None:
     await _changes(conn)
     await _insiders(conn)
     await _fund(conn)
+    await _stakes(conn)
     await conn.execute(
         "insert into xbrl_facts (cik, taxonomy, concept, unit, period_start, period_end, value, "
         "fy, fp, form, filed_at, accession_no) values "
@@ -532,3 +539,60 @@ async def _fund(conn: Conn) -> None:
             "'matched', security_id, %s, %s from securities where ticker = %s",
             [cusip, f"BBG{cusip}", ticker, ticker],
         )
+
+
+async def _stakes(conn: Conn) -> None:
+    """E16: structured 13G and 13D filings about ACME, stored as the ingest stores them."""
+    filed: list[tuple[str, str, str, int, str | None, str, str | None, bool | None]] = [
+        # accession, form, filed, filer, previous, event, purpose, item 5
+        (STAKE_13G_BEFORE, "SCHEDULE 13G", "2025-11-10", 9100, None, "2025-09-30", None, None),
+        (STAKE_13G, "SCHEDULE 13G/A", "2026-05-10", 9100, STAKE_13G_BEFORE, "2026-03-31", None,
+         False),
+        (STAKE_13D, "SCHEDULE 13D/A", "2026-09-01", 9200, None, "2026-08-28",
+         "The Reporting Persons sold shares in open market transactions.\n\nThey may sell more.",
+         None),
+    ]  # fmt: skip
+    for accession, form, day, filer, previous, event, purpose, ceased in filed:
+        key = f"raw/sec/{ACME}/{accession}/primary_doc.xml"
+        await conn.execute(
+            "insert into raw_objects (key, url, sha256, size_bytes, fetched_at) "
+            "values (%s, %s, %s, 1, now())",
+            [
+                key,
+                "https://www.sec.gov/Archives/edgar/data/" + key.removeprefix("raw/sec/"),
+                "1" * 64,
+            ],
+        )
+        await conn.execute(
+            "insert into stake_filings (accession_no, issuer_cik, form, filed_at, filer_cik, "
+            "previous_accession, amendment_no, issuer_name, cusips, class_title, event_date, "
+            "rules, ceased_5pct, purpose, checks, doc_name, raw_key, schema_version, method, "
+            "extractor_version) values (%s, %s, %s, %s, %s, %s, %s, 'ACME CORP', %s, "
+            "'Common Stock', %s, %s, %s, %s, %s, 'primary_doc.xml', %s, 'X0202', "
+            "'schedule13_xml', '1')",
+            [
+                accession, ACME, form, day, filer, previous, 1 if form.endswith("/A") else None,
+                [ACME_CUSIP], event, ["Rule 13d-1(b)"] if "13G" in form else [], ceased, purpose,
+                ["issuer_matches_listing", "form_matches_listing", "percent_in_range",
+                 "powers_within_amount"], key,
+            ],
+        )  # fmt: skip
+    persons: list[tuple[str, int, str, int | None, str, int, str]] = [
+        (STAKE_13G_BEFORE, 1, "Big Index Advisers", None, "IA", 11000000, "5.5"),
+        (STAKE_13G, 1, "Big Index Advisers", None, "IA", 12500000, "6.25"),
+        (STAKE_13D, 1, "Activist Partners LP", 9200, "PN", 8200000, "4.1"),
+        (STAKE_13D, 2, "Activist GP LLC", 9201, "OO", 8200000, "4.1"),
+    ]
+    for accession, position, name, cik, kind, amount, percent in persons:
+        await conn.execute(
+            "insert into stake_persons (accession_no, position, name, cik, types, citizenship, "
+            "amount, percent, sole_voting, shared_voting, sole_dispositive, shared_dispositive, "
+            "method, extractor_version) values (%s, %s, %s, %s, %s, 'DE', %s, %s, 0, %s, 0, %s, "
+            "'schedule13_xml', '1')",
+            [accession, position, name, cik, [kind], amount, Decimal(percent), amount, amount],
+        )
+    await conn.execute(
+        "insert into filings (accession_no, cik, form, filed_at, file_number) "
+        "values (%s, %s, 'SC 13G', '2024-02-12', '005-00001')",
+        [OLD_13G, ACME],
+    )

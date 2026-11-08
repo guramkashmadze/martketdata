@@ -9,6 +9,16 @@ SEC_FOLDER = "https://www.sec.gov/Archives/edgar/data/"
 EARNINGS_PROOF = ("accession_no", "document_url", "source_quote", "scale_text", "method")
 METRIC_PROOF = ("accession_no", "filing_url", "method", "calc_version")
 FUND_PROOF = ("accession_nos", "lines", "method", "extractor_version")  # E9: a 13F position
+STAKE_PROOF = (  # E16: a 5% stake's 13D or 13G
+    "accession_no",
+    "form",
+    "filed_at",
+    "filing_url",
+    "document_url",
+    "method",
+    "extractor_version",
+    "checks",
+)
 INSIDER_PROOF = (  # E8: each Form 4 an insider trade sums
     "accession_no",
     "form",
@@ -49,6 +59,11 @@ def check_envelope(body: dict[str, Any]) -> None:
     for position in _positions(body["data"]):  # E9: every 13F position names its reports
         assert all(position["proof"][key] for key in FUND_PROOF), position
         assert position["value_usd"] is not None and position["shares"] is not None, position
+    for stake in _stakes(body["data"]):  # E16: every stake names its filing and checks
+        assert all(stake["proof"][key] for key in STAKE_PROOF), stake
+        assert stake["proof"]["filing_url"].startswith(SEC_FOLDER), stake
+        assert stake["shares"] is not None and stake["percent"] is not None, stake
+        assert stake["unit"] == "shares" and stake["reporting_persons"], stake
 
 
 def check_proof(item: dict[str, Any]) -> None:
@@ -114,3 +129,15 @@ def _positions(node: Any) -> Any:
     elif isinstance(node, list):
         for child in node:
             yield from _positions(child)
+
+
+def _stakes(node: Any) -> Any:
+    """Every 5% stake (E16): a holder with its reporting persons."""
+    if isinstance(node, dict):
+        if "reporting_persons" in node and "proof" in node:
+            yield node
+        for child in node.values():
+            yield from _stakes(child)
+    elif isinstance(node, list):
+        for child in node:
+            yield from _stakes(child)

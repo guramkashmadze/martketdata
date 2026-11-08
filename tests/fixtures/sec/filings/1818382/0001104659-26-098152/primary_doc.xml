@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+  <schemaVersion>X0202</schemaVersion>
+<headerData>
+    <submissionType>SCHEDULE 13D/A</submissionType>
+    <previousAccessionNumber>0001104659-21-112194</previousAccessionNumber>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <!-- Field: Pseudo-Tag; ID: Name; Data: FRESENIUS MEDICAL CARE HOLDINGS INC /NY/ -->
+          <cik>0000042872</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>11</amendmentNo>
+      <securitiesClassTitle>Common Stock, par value $0.0001 per share</securitiesClassTitle>
+      <dateOfEvent>08/14/2026</dateOfEvent>
+      <previouslyFiledFlag>false</previouslyFiledFlag>
+      <issuerInfo>
+        <issuerCIK>0001818382</issuerCIK>
+        <issuerCusips>
+          <issuerCusipNumber>020751103</issuerCusipNumber>
+        </issuerCusips>
+        <issuerName>HUMACYTE, INC.</issuerName>
+        <address>
+          <com:street1>2525 East North Carolina Highway 54</com:street1>
+          <com:city>Durham</com:city>
+          <com:stateOrCountry>NC</com:stateOrCountry>
+          <com:zipCode>27713</com:zipCode>
+        </address>
+      </issuerInfo>
+      <authorizedPersons>
+        <notificationInfo>
+          <personName>Robert A. Grauman</personName>
+          <personPhoneNum>646 202-2932</personPhoneNum>
+          <personAddress>
+            <com:street1>145 West 86 Street</com:street1>
+            <com:city>New York</com:city>
+            <com:stateOrCountry>NY</com:stateOrCountry>
+            <com:zipCode>10024</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+        <notificationInfo>
+          <personName>Thomas D. Brouillard</personName>
+          <personPhoneNum>781 699 9000</personPhoneNum>
+          <personAddress>
+            <com:street1>Fresenius Medical Care Holdings, Inc.</com:street1>
+            <com:street2>920 Winter Street</com:street2>
+            <com:city>Waltham</com:city>
+            <com:stateOrCountry>MA</com:stateOrCountry>
+            <com:zipCode>02451-1547</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+        <notificationInfo>
+          <personName>Christof Koester</personName>
+          <personPhoneNum>011 49 6172 609 0</personPhoneNum>
+          <personAddress>
+            <com:street1>Fresenius Medical Care AG</com:street1>
+            <com:street2>Else-Kroener Strasse 1</com:street2>
+            <com:city>Bad Homburg</com:city>
+            <com:stateOrCountry>2M</com:stateOrCountry>
+            <com:zipCode>61352</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+      </authorizedPersons>
+    </coverPageHeader>
+    <reportingPersons>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0000042872</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>Fresenius Medical Care Holdings, Inc.</reportingPersonName>
+        <fundType>WC</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>NY</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>13603235.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>13603235.00</sharedDispositivePower>
+        <aggregateAmountOwned>13603235.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.9</percentOfClass>
+        <typeOfReportingPerson>CO</typeOfReportingPerson>
+      </reportingPersonInfo>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0001333141</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>Fresenius Medical Care AG</reportingPersonName>
+        <fundType>AF</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>2M</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>13603235.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>13603235.00</sharedDispositivePower>
+        <aggregateAmountOwned>13603235.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.9</percentOfClass>
+        <typeOfReportingPerson>CO</typeOfReportingPerson>
+      </reportingPersonInfo>
+    </reportingPersons>
+    <items1To7>
+      <item1>
+        <securityTitle>Common Stock, par value $0.0001 per share</securityTitle>
+        <issuerName>HUMACYTE, INC.</issuerName>
+        <issuerPrincipalAddress>
+          <com:street1>2525 East North Carolina Highway 54</com:street1>
+          <com:city>Durham</com:city>
+          <com:stateOrCountry>NC</com:stateOrCountry>
+          <com:zipCode>27713</com:zipCode>
+        </issuerPrincipalAddress>
+        <commentText>This Amendment No. 11 amends certain information contained in the Schedule 13D originally filed by Fresenius Medical Care Holdings, Inc., a New York Corporation ("FMCH") and Fresenius Medical Care AG a German stock corporation formerly called Fresenius Medical Care AG &amp; Co. KGaA ("FME AG") on September 2, 2021, as previously amended by Amendment No. 1 filed December 1, 2023, Amendment No. 2 filed March 7, 2024, Amendment No 3 filed November 18, 2024, Amendment No 4 filed May 22, 2025, Amendment No 5 filed solely by FME AG on October 16 2025, Amendment No. 6 filed by FME AG and FMCH on January 9, 2026, Amendment No. 7 filed March 24, 2026, Amendment No 8 filed Apil 27, 2026, Amendment No 9 filed June 15, 2026, and Amendment No 10 filed July 13, 2026 (as so amended, the "Schedule 13D"), with respect to the common stock, par value $0.0001 per share (the "Common Stock") of Humacyte, Inc., a Delaware corporation, formerly known as Alpha Healthcare Acquisition Corp. (the "Issuer" or "Humacyte"). Capitalized terms not otherwise defined herein have the meanings set forth in the Schedule 13D. Except as provided herein, this Amendment No. 11 does not modify any of the information previously reported on the Schedule 13D.</commentText>
+      </item1>
+      <item2>
+        <filingPersonName>Effective August 1, 2026, Ms. Cassie McLean assumed office as a member of the Management Board of FME AG and Chief Executive Officer of FME AG's global operating segment Care Delivery, and as President and CEO of FMCH. Ms. McLean succeeds Mr. Craig Cordola who retired from his positions with FME AG and its affiliates effective July 31, 2026.
+
+Schedule I to this Schedule 13D in the form annexed to this Schedule 13D (Amendment No 2), as previously amended, is hereby further amended by deleting Mr. Cordola from (i) the list of members of the FME AG Management Board set forth therein and (ii) the list of officers of FMCH set forth therein and replacing him on each such list with Ms. McLean.</filingPersonName>
+        <principalBusinessAddress>Ms. McLean's business address is c/o FME AG, at its address set forth in this Schedule 13D.</principalBusinessAddress>
+        <principalJob>Ms. McLean's present principal occupation or employment comprises her positions with FME AG and FMCH set forth in Item 2(a) of this Schedule 13D (Amendment No. 11).</principalJob>
+        <hasBeenConvicted>To the knowledge of the Filing Persons, during the last five years Ms. McLean has not been convicted in a criminal proceeding (excluding traffic violations or similar misdemeanors), nor was she a party to a civil proceeding of a United States judicial or administrative body of competent jurisdiction and as a result of such proceeding was or is subject to a judgment, decree or final order enjoining future violations of, or prohibiting or mandating activities subject to, federal or state securities laws or finding any violation with respect to such laws.</hasBeenConvicted>
+        <citizenship>Ms. McLean is a citizen of the United States.</citizenship>
+      </item2>
+      <item5>
+        <percentageOfClassSecurities>On the date of this Schedule 13D (Amendment No. 11), giving effect to the sales reported in Item 5(c) below, FMCH is the beneficial owner of 13,603,235 shares of the Issuer's Common Stock, constituting approximately 4.9% of the Issuer's outstanding voting shares. Such percentage ownership is calculated by reference to a total of 277,798,105 shares outstanding as of August 10, 2026, as set forth on the cover page of the Issuer's Quarterly Report on Form 10-Q filed August12, 2026. All such 13,603,235 Shares are issued and outstanding and owned directly by FMCH. Such 13,603,235 shares of Common Stock exclude any additional contingent shares of Common Stock that may be issued pursuant to the terms of the Business Combination Agreement described in the initial Schedule 13D, and FME AG and FMCH disclaim any present beneficial interest in any such additional shares.</percentageOfClassSecurities>
+        <numberOfShares>FMCH is the record owner of the 13,603,235 shares of Common Stock reported in this Schedule 13D (Amendment No 11) as beneficially owned by FMCH and FME AG and possesses voting and dispositive power over such shares. FME AG is the indirect sole shareholder of FMCH and may be deemed to be a beneficial owner of such shares.</numberOfShares>
+        <transactionDesc>Through the close of trading on Monday, August 17, FMCH has effected the following sales of shares of the Issuer's Common Stock (all prices per share and total proceeds are before commissions and SEC fees):
+
+On August 10. 2026, FMC sold a total of 197,500 shares of the Issuer's Common Stock at a weighted average sale price of $0.7249 per share, for total proceeds of $143,167.75.
+
+On August 11. 2026, FMC sold a total of 220,000 shares of the Issuer's Common Stock at a weighted average sale price of $0.7213 per share, for total proceeds of $158,686.00.
+
+On August 12. 2026, FMC sold a total of 680,000 shares of the Issuer's Common Stock at a weighted average sale price of $0.6389 per share, for total proceeds of $434,452.00.
+
+On August 13. 2026, FMC sold a total of 1,300,000 shares of the Issuer's Common Stock at a weighted average sale price of $0.5973 per share, for total proceeds of $776,490.00.
+
+On August 14. 2026, FMC sold a total of 1,300,000 shares of the Issuer's Common Stock at a weighted average sale price of $0.5585 per share, for total proceeds of $726,050.00.
+
+On August 17. 2026, FMC sold a total of 1,012,000 shares of the Issuer's Common Stock at a weighted average sale price of $0.5547 per share, for total proceeds of $541,104.83.
+
+The foregoing sales were made on the Nasdaq Stock Market LLC in accordance with the Rule 10b5-1 Plan established by FMCH with Citigroup Global Markets Inc. (CGMI) on July 10, 2026, with CGMI acting as FMCH's agent under the plan. For additional information regarding the Rule 10b5-1 Plan, see Amendment No. 10 to the Schedule 13D filed July 13, 2026</transactionDesc>
+        <date5PercentOwnership>The reporting persons ceased to beneficially own more than five percent of the Issuer's Common Stock on August 17, 2026.</date5PercentOwnership>
+      </item5>
+    </items1To7>
+    <signatureInfo>
+      <signaturePerson>
+        <signatureReportingPerson>Fresenius Medical Care Holdings, Inc.</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Mollie Miller</signature>
+          <title>Mollie Miller, VP and Asst Treasurer</title>
+          <date>08/18/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+      <signaturePerson>
+        <signatureReportingPerson>Fresenius Medical Care AG</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ ppa Angela Koelbl</signature>
+          <title>Dr. Angela Koelbl, Registered, Manager (Prokurist)</title>
+          <date>08/18/2026</date>
+        </signatureDetails>
+        <signatureDetails>
+          <signature>/s/ ppa Christof Koester</signature>
+          <title>Christof Koester (Registered Manager, (Prokurist)</title>
+          <date>08/18/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+    </signatureInfo>
+  </formData>
+</edgarSubmission>

@@ -19,6 +19,7 @@ from marketdata.service.proof import (
     fund_position_proof,
     insider_filing_proof,
     metric_proof,
+    stake_filing_proof,
 )
 from marketdata.web.access import require_ui_access
 from marketdata.web.render import page
@@ -60,6 +61,14 @@ async def insider_page(
     conn: Conn, accession_no: Annotated[str, Path(description="The Form 4's accession number.")]
 ) -> HTMLResponse:
     return page("proof/insider.html", proof=await insider_filing_proof(conn, accession_no))
+
+
+@router.get("/stakes/{accession_no}", response_class=HTMLResponse)
+async def stake_page(
+    conn: Conn,
+    accession_no: Annotated[str, Path(description="The Schedule 13D or 13G's accession number.")],
+) -> HTMLResponse:
+    return page("proof/stake.html", proof=await stake_filing_proof(conn, accession_no))
 
 
 @router.get("/funds/{manager_cik}/{quarter}/{cusip}", response_class=HTMLResponse)

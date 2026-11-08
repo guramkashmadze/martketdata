@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% import "parts.html" as parts %}
+{% set issuer = proof.issuer.name or proof.issuer_name or ("CIK " ~ proof.issuer.cik) %}
+{% set holder = proof.persons[0].name %}
+{% block title %}{{ proof.form }} {{ proof.accession_no }}{% endblock %}
+{% block content %}
+{% if proof.issuer.ticker %}<p class="sub"><a href="{{ company_url(proof.issuer.ticker) }}">{{ issuer }}</a> · proof</p>{% endif %}
+<h1>{{ issuer }}{% if proof.issuer.ticker %} ({{ proof.issuer.ticker }}){% endif %}: {{ proof.form }}</h1>
+<p class="sub">{{ holder }} · filed {{ proof.filed_at | day }} · {{ proof.accession_no }}</p>
+
+<h2>The stake</h2>
+<dl>
+  <dt>Holder</dt><dd>{{ holder }}{% if proof.persons | length > 1 %} and {{ proof.persons | length - 1 }} other reporting {{ "person" if proof.persons | length == 2 else "persons" }}{% endif %}</dd>
+  <dt>Shares</dt>
+  <dd class="num">{{ proof.shares | exact }} <span class="note">the largest amount one reporting person states: joint filers' amounts overlap and are never added</span></dd>
+  <dt>Percent of the class</dt><dd class="num">{{ proof.percent | exact }}%</dd>
+  <dt>Class</dt><dd>{{ proof.class_title or "—" }}{% if proof.ticker %} <span class="badge">{{ proof.ticker }}</span>{% endif %}{% if proof.cusips %} <span class="note">CUSIP {{ proof.cusips | join(", ") }}, as filed</span>{% endif %}</dd>
+  <dt>Event date</dt><dd class="num">{{ proof.event_date | day }} <span class="note">the date of the event that required the filing</span></dd>
+  <dt>Status</dt>
+  <dd>{% if proof.exited %}<span class="not_applicable">exited</span>: {% if proof.ceased_5pct %}item 5 says the holder no longer owns more than 5% of the class{% else %}every reporting person reports below 5% of the class{% endif %}{% else %}<span class="applies">held</span>: more than 5% of the class{% endif %}</dd>
+  <dt>Served</dt>
+  <dd>{% if proof.served %}<span class="passed">served</span>: the holder's latest filing about the class{% else %}<span class="not_applicable">not served</span>: replaced by the holder's later filing <a href="{{ stake_url(proof.served_by.accession_no) }}">{{ proof.served_by.form }} {{ proof.served_by.accession_no }}</a> of {{ proof.served_by.filed_at | day }}{% endif %}</dd>
+</dl>
+
+<h2>The filing</h2>
+<dl>
+  <dt>Filing</dt>
+  <dd><a href="{{ proof.index_url }}">{{ proof.form }} {{ proof.accession_no }}</a> (the filing on sec.gov) and <a href="{{ proof.document_url }}">its XML</a>, which the stake was read from</dd>
+  <dt>Schedule</dt>
+  <dd>{% if proof.schedule == "13D" %}13D: the holder may seek to influence or control the company{% else %}13G: a passive investor, a qualified institution or an exempt investor{% endif %}{% if proof.amendment_no %}; amendment {{ proof.amendment_no }}{% endif %}</dd>
+  {% if proof.rules %}<dt>Filed under</dt><dd>{{ proof.rules | join(", ") }}</dd>{% endif %}
+  <dt>Filed by</dt><dd>CIK {{ proof.filer_cik }}</dd>
+  {% if proof.previous_accession %}<dt>Previous filing named</dt><dd>{{ proof.previous_accession }}</dd>{% endif %}
+  {% if proof.issuer_name %}<dt>Issuer, as filed</dt><dd>{{ proof.issuer_name }} (CIK {{ proof.issuer.cik }})</dd>{% endif %}
+  <dt>Read by</dt><dd>{{ proof.method }} version {{ proof.extractor_version }}{% if proof.schema_version %}, schema {{ proof.schema_version }}{% endif %}, {{ proof.parsed_at | utc }}</dd>
+</dl>
+
+<h2>Reporting persons</h2>
+<p class="sub">Each person's cover page as filed. Amounts and powers are shares of the class.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Person</th><th scope="col">Type</th><th scope="col">Citizenship or place of organization</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Percent</th><th scope="col" class="num">Sole voting</th><th scope="col" class="num">Shared voting</th><th scope="col" class="num">Sole dispositive</th><th scope="col" class="num">Shared dispositive</th></tr></thead>
+  <tbody>
+  {% for person in proof.persons %}
+    <tr>
+      <td>{{ person.name }}{% if person.cik %}<br><span class="note">CIK {{ person.cik }}</span>{% endif %}{% if person.member_of_group == "a" %}<br><span class="note">a member of a group</span>{% endif %}</td>
+      <td>{{ person.types | join(", ") or "—" }}</td>
+      <td>{{ person.citizenship or "—" }}</td>
+      <td class="num">{{ person.shares | exact }}</td>
+      <td class="num">{{ person.percent | exact }}%</td>
+      <td class="num">{{ person.sole_voting | exact }}</td>
+      <td class="num">{{ person.shared_voting | exact }}</td>
+      <td class="num">{{ person.sole_dispositive | exact }}</td>
+      <td class="num">{{ person.shared_dispositive | exact }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if proof.purpose %}
+<h2>Purpose of the transaction (Item 4)</h2>
+<p class="sub">As filed, word for word.</p>
+<blockquote class="filed-text">{{ proof.purpose }}</blockquote>
+{% endif %}
+
+<h2>The holder's filings about the class</h2>
+<p class="sub">Newest first; the newest is served. Each links to its own proof page.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Filing</th><th scope="col" class="num">Filed</th><th scope="col" class="num">Event date</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Percent</th><th scope="col">Status</th></tr></thead>
+  <tbody>
+  {% for ref in proof.holder_filings %}
+    <tr>
+      <td><a href="{{ stake_url(ref.accession_no) }}">{{ ref.form }} {{ ref.accession_no }}</a>{% if ref.accession_no == proof.accession_no %} <span class="note">this filing</span>{% endif %}</td>
+      <td class="num">{{ ref.filed_at | day }}</td>
+      <td class="num">{{ ref.event_date | day }}</td>
+      <td class="num"><a class="v" href="{{ stake_url(ref.accession_no) }}">{{ ref.shares | exact }}</a></td>
+      <td class="num"><a class="v" href="{{ stake_url(ref.accession_no) }}">{{ ref.percent | exact }}%</a></td>
+      <td>{{ "exited" if ref.exited else "held" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if proof.checks or proof.flags %}
+<h2>Checks and flags</h2>
+<dl>
+  {% for code, meaning in proof.checks.items() %}<dt><span class="passed">{{ code }}</span></dt><dd>{{ meaning }}</dd>{% endfor %}
+  {% for code, meaning in proof.flags.items() %}<dt><span class="pending">{{ code }}</span></dt><dd>{{ meaning }}; a flag never changes a value</dd>{% endfor %}
+</dl>
+{% endif %}
+
+{{ parts.history(proof.history, "shares", stake_reasons) }}
+{% endblock %}

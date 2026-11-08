@@ -29,6 +29,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from marketdata.normalize.filing_events import SUBJECT_FILE_NUMBER
 from marketdata.normalize.freshness import CHECK_OVERDUE_AFTER
 from marketdata.normalize.security_master import FilerType, SecFileError
 
@@ -39,6 +40,7 @@ FACTS_REFRESH = "facts_refresh"  # E4a, key: CIK
 EARNINGS_EXTRACT = "earnings_extract"  # E7a, key: accession number
 FORM4_PARSE = "form4_parse"  # E8, key: accession number
 F13_PARSE = "f13_parse"  # E9, key: accession number
+STAKE_PARSE = "stake_parse"  # E16, key: accession number
 
 # The 10-K and 10-Q family (with transition reports, D-052), whose XBRL facts E4a loads.
 PERIODIC_FORMS = frozenset(
@@ -47,6 +49,9 @@ PERIODIC_FORMS = frozenset(
 EARNINGS_FORMS = frozenset({"8-K", "8-K/A"})
 INSIDER_FORMS = frozenset({"4", "4/A"})
 F13_FORMS = frozenset({"13F-HR", "13F-HR/A"})
+# The structured Schedules 13D and 13G (D-061), parsed from their XML (E16); the old codes
+# (SC 13D ...) are HTML or text and stay links.
+STAKE_FORMS = frozenset({"SCHEDULE 13D", "SCHEDULE 13D/A", "SCHEDULE 13G", "SCHEDULE 13G/A"})
 
 # The acceptance-time check (D-057). EDGAR accepts filings from 06:00 to 22:00 Eastern; a
 # transmission begun before 22:00 can be accepted a few minutes after. Filings the SEC makes
@@ -270,9 +275,10 @@ def route(
 ) -> list[Route]:
     """§4's task routing for a newly seen filing. Earnings and facts are produced for domestic
     filers only (§9.1); Form 4 is parsed from the issuer's listing (E8); 13F only for curated
-    managers (E9). `manager_only`: the filer is watched as a curated manager only, not as a
-    universe company, so nothing but its 13F reports is routed (Markel Group's own 10-Qs and
-    Forms 4 are not covered)."""
+    managers (E9); a structured 13D or 13G from the listing of the company it is about, whatever
+    the company's class (E16). `manager_only`: the filer is watched as a curated manager only,
+    not as a universe company, so nothing but its 13F reports is routed (Markel Group's own
+    10-Qs and Forms 4 are not covered)."""
     accession = {"cik": filing.cik, "accession_no": filing.accession_no}
     if filing.form in F13_FORMS:
         return [Route(F13_PARSE, filing.accession_no, accession)] if curated_manager else []
@@ -288,6 +294,8 @@ def route(
         return [Route(EARNINGS_EXTRACT, filing.accession_no, accession)]
     if filing.form in INSIDER_FORMS and filing.file_number is None:
         return [Route(FORM4_PARSE, filing.accession_no, accession)]
+    if filing.form in STAKE_FORMS and (filing.file_number or "").startswith(SUBJECT_FILE_NUMBER):
+        return [Route(STAKE_PARSE, filing.accession_no, accession)]
     return []
 
 
