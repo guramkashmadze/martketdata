@@ -2138,6 +2138,8 @@ Sessions append unfinished work, known data differences and ideas here, with the
 | 2026-11-03 | E7c-S1 | Dev database: client `guram-claude-code` and its key 9, for Guram's Claude Code (`marketdata` at user scope, `http://localhost:8000/mcp`); the key is kept only in `~/.claude.json` | — |
 | 2026-11-03 | E7c-S1 | The Docker commits are local: pushing them waits for Guram's OK | Guram |
 | 2026-11-03 | E7c-S1 | Done: the Docker commits pushed to `origin` with Guram's OK, with E15's CI record `2bfcc3e`; CI on main is green ([run 41685339813](https://github.com/guramkashmadze/martketdata/actions/runs/41685339813), commit `a048c62`, 2 min 56 s) | — |
+| 2026-11-08 | E6-S3 | Done from the E6-S1 row on AI clients: Claude Code answered the E6 demo question through `/mcp` (2026-11-03), and Claude Desktop's Chat tab connected through `mcp-remote@0.15.2` and listed the tools (2026-11-08). The MCP Inspector is still not run | — |
+| 2026-11-08 | E6-S3 | Dev database: client `guram-claude-desktop` and its key 10, for Claude Desktop's Chat tab (`claude_desktop_config.json`, with the file as it was before kept beside it as `.bak-2026-11-08`); the key is kept only in that file | — |
 
 ---
 
