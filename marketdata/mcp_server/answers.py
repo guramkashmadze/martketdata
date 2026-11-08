@@ -169,6 +169,7 @@ class FilingsAnswer(BaseModel):
     cik: int
     company: str | None
     form: str | None  # the form asked for; null: reports and stakes (D-110)
+    matched_forms: tuple[str, ...] | None  # the codes it matched, amendments included (D-139)
     since: date  # filed on or after
     filings: tuple[Filing, ...]  # newest first
     more: bool  # more filings than these match: ask for fewer days or one form
@@ -183,7 +184,8 @@ def filings(
             ticker=data.ticker,
             cik=data.cik,
             company=data.company,
-            form=form,
+            form=form if data.matched_forms is not None else None,  # a blank form is none
+            matched_forms=data.matched_forms,
             since=since,
             filings=tuple(filing_of(view) for view in data.filings),
             more=data.next_cursor is not None,
@@ -192,6 +194,15 @@ def filings(
         as_of=served.as_of,
         checked_at=served.checked_at,
         check_overdue=served.check_overdue,
+    )
+
+
+def without_oldest(built: Answer[FilingsAnswer]) -> Answer[FilingsAnswer]:
+    """The answer less its oldest filing, saying that more match: twenty 8-Ks with many items
+    each would take it past §10.3's 8 KB (D-139)."""
+    data = built.data
+    return built.model_copy(
+        update={"data": data.model_copy(update={"filings": data.filings[:-1], "more": True})}
     )
 
 

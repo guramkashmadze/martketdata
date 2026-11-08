@@ -183,7 +183,7 @@ as the password of HTTP Basic auth while the web UI is private.
 | `lookup_company` | A ticker from a name, a ticker or a CIK, and whether the company is covered | `query` | 10 matches |
 | `company_snapshot` | "Tell me about …": identity, latest quarter, trailing twelve months of the 16 core metrics, latest release, three latest filings | `ticker` | |
 | `get_financials` | History and trends | `ticker`, `metrics`, `period` (Q, FY or TTM; Q by default), `limit` (periods, 8 by default) | 12 periods, 16 metrics, 40 values |
-| `recent_filings` | What a company filed or announced, with plain-language labels | `ticker`, `form`, `days` (90 by default) | 20 filings, 365 days |
+| `recent_filings` | What a company filed or announced, with plain-language labels | `ticker`, `form` (a form and its family), `days` (90 by default) | 20 filings, 365 days |
 | `compare_companies` | Two to five companies side by side, never ranked | `tickers`, `metrics`, `period` (TTM by default) | 25 values |
 | `latest_earnings` | The latest results release, each value with its full proof and the cross-check against the 10-Q or 10-K | `ticker` | |
 | `insider_activity` | Whether directors, officers and 10% owners bought or sold, from their Forms 4 | `ticker`, `days` (90 by default), `codes` (P and S by default; `["all"]`) | 12 trades, 8 insiders, 365 days |
@@ -193,7 +193,17 @@ as the password of HTTP Basic auth while the web UI is private.
 Without `metrics`, `get_financials` and `compare_companies` use revenue, operating income, net
 income, diluted EPS and free cash flow. Without `form`, `recent_filings` lists annual,
 quarterly and current reports and 5% stakes in the company, not prospectuses or insider forms
-(D-110). Amounts are in base units: USD, shares, USD per share; margins and growth are percents.
+(D-110). A `form` matches its family (D-139): the form, its amendments and its other SEC codes,
+in any case and spacing. `13G`, `SC 13G` and `SCHEDULE 13G` each match `SC 13G`, `SC 13G/A`,
+`SCHEDULE 13G` and `SCHEDULE 13G/A` (the SEC changed the codes when the schedules became
+structured XML in 2024), the same for 13D; `8-K` matches 8-K/A and a successor issuer's 8-K12B,
+`10-K` and `10-Q` their amendments and transition reports (10-KT, 10-QT); any other form, such
+as `4` or `S-1`, itself and its `/A`. An amendment (`8-K/A`, `13G/A`) matches amendments only.
+The answer's `matched_forms` lists the codes. 13D and 13G filings are those about the company,
+its 5% holders, never its own stakes in other companies (JPMorgan files many); a 13G
+amendment, which the list without `form` leaves out, comes with its label ("A passive 5% holder
+changed its stake") at importance `hidden`. Amounts are in base units: USD, shares, USD per
+share; margins and growth are percents.
 
 `insider_activity` (E8) answers totals per transaction code over the window, each insider's
 trades summed (newest activity first, never ordered by size) and the newest trades: per insider,

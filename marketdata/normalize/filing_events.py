@@ -1,8 +1,9 @@
 """Plain-language labels for 8-K items and 5% stake filings (PLAN.md §9.6; E3-S6).
 
-Pure. Each event has an importance; hidden ones (item 9.01, a Schedule 13G amendment) are never
-returned. An 8-K item the table doesn't know is returned with a label that names only its code,
-never dropped (D-064).
+Pure. Each event has an importance; hidden ones (item 9.01, a Schedule 13G amendment) aren't
+returned, except a hidden form's label when its form was asked for: a 13G amendment listed
+because a client asked for 13G filings keeps its label, as hidden (D-139). An 8-K item the table
+doesn't know is returned with a label that names only its code, never dropped (D-064).
 
 Schedule 13D and 13G filings have form codes from before and after the SEC's structured format
 (`SC 13D` until December 2024, `SCHEDULE 13D` since; D-061). They are labelled only on the
@@ -76,13 +77,16 @@ FORM_LABELS: dict[str, Label] = {
 class FilingEvent:
     item_or_form: str  # an 8-K item ("2.02") or the form as filed ("SCHEDULE 13D")
     label: str
-    importance: Importance  # "high" or "normal"; hidden events are not returned
+    # "high" or "normal"; "hidden" only for a hidden form asked for by its form (D-139)
+    importance: Importance
 
 
 def filing_events(
-    form: str, items_8k: Sequence[str] | None, file_number: str | None
+    form: str, items_8k: Sequence[str] | None, file_number: str | None, *, form_asked: bool = False
 ) -> list[FilingEvent]:
-    """The events one company's listing of a filing shows, in the order the SEC lists items."""
+    """The events one company's listing of a filing shows, in the order the SEC lists items.
+    With `form_asked` (the filing is listed because its form was asked for), a hidden form
+    label is returned too, as hidden; hidden 8-K items never are."""
     if form.startswith("8-K"):  # 8-K, 8-K/A and the successor forms 8-K12B, 8-K12G3, 8-K15D5
         events = []
         for code in dict.fromkeys(items_8k or ()):
@@ -91,7 +95,7 @@ def filing_events(
                 events.append(FilingEvent(code, label.text, label.importance))
         return events
     stake = FORM_LABELS.get(form)
-    if stake is None or stake.importance == "hidden":
+    if stake is None or (stake.importance == "hidden" and not form_asked):
         return []
     if not (file_number or "").startswith(SUBJECT_FILE_NUMBER):
         return []  # the filer's own listing

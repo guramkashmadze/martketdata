@@ -4,6 +4,11 @@ MCP server from E6).
 Reads the filings table only; it never calls the SEC (CLAUDE.md). A company's filings include
 its predecessors' (D-068): XOM's history is under Exxon Mobil Corp (34088). Each filing links to
 its index page on sec.gov, the proof of what was filed.
+
+A form asked for matches its family (D-139, normalize/form_families.py): `13G` the four 13G
+codes, `8-K` its amendments too; the answer names the codes in `matched_forms`. A 13D or 13G
+asked for counts only on the listing of the company it is about, as in the list without a
+form: JPMorgan's own stakes in other companies aren't JPMorgan's 5% holders.
 """
 
 from collections.abc import Sequence
@@ -16,6 +21,7 @@ from pydantic import BaseModel, ConfigDict
 from marketdata.db.repositories import filings
 from marketdata.db.repositories.filings import Filing
 from marketdata.normalize.filing_events import SUBJECT_FILE_NUMBER, Importance, filing_events
+from marketdata.normalize.form_families import STAKE_CODES, form_family
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, resolve_ticker
 from marketdata.service.errors import InvalidParameter
@@ -75,6 +81,9 @@ class CompanyFilings(BaseModel):
     ticker: str
     cik: int
     company: str | None
+    # The form codes the asked form matched: its family, amendments and other SEC codes
+    # included (D-139); null when no form was asked for.
+    matched_forms: tuple[str, ...] | None = None
     filings: tuple[FilingView, ...]  # newest first
     next_cursor: str | None  # pass it as `cursor` for the next page; null on the last
 
@@ -90,16 +99,19 @@ async def recent_filings(
     cursor: str | None = None,
 ) -> Served[CompanyFilings]:
     """A company's filings (its predecessors' too), newest first, with their events (hidden
-    ones left out); of one form when `form` is given (e.g. 8-K, 'SCHEDULE 13D'), filed on or
-    after `since`. Filings apply to every filer class. Without a form, `reports_only` keeps
-    the snapshot's forms: annual, quarterly and current reports and 5% stakes in the company
-    (D-098; the MCP tool's default, D-110)."""
+    ones left out), filed on or after `since`. Filings apply to every filer class. With `form`
+    (e.g. 8-K, 13G, 'SCHEDULE 13D/A'), the form's family: its amendments and its other SEC
+    codes, or only the family's amendments for an amendment, a 13D or 13G only about the
+    company, and a 13G amendment with its hidden label (D-139). Without a form, `reports_only`
+    keeps the snapshot's forms: annual, quarterly and current reports and 5% stakes in the
+    company (D-098; the MCP tool's default, D-110). A blank form is no form."""
     if not 1 <= limit <= MAX_LIMIT:
         raise InvalidParameter(f"limit must be from 1 to {MAX_LIMIT}, got {limit}")
+    matched = asked_forms(form)
     security = await resolve_ticker(conn, ticker)
-    forms: Sequence[str] | None = [form.strip().upper()] if form else None
-    subject_forms: Sequence[str] | None = None
-    if forms is None and reports_only:
+    forms: Sequence[str] | None = matched
+    subject_forms: Sequence[str] | None = None if matched is None else sorted(STAKE_CODES)
+    if matched is None and reports_only:
         forms, subject_forms = SNAPSHOT_FORMS, STAKE_FORMS
     listed, next_cursor = await filings_page(
         conn,
@@ -116,7 +128,8 @@ async def recent_filings(
             ticker=security.ticker,
             cik=security.cik,
             company=security.name,
-            filings=tuple(filing_view(row) for row in listed),
+            matched_forms=matched,
+            filings=tuple(filing_view(row, form_asked=matched is not None) for row in listed),
             next_cursor=next_cursor,
         ),
         sources=await sources_of(conn, ((row.cik, row.accession_no) for row in listed)),
@@ -167,7 +180,19 @@ async def filings_page(
     )
 
 
-def filing_view(row: Filing) -> FilingView:
+def asked_forms(form: str | None) -> tuple[str, ...] | None:
+    """The codes a requested form matches (D-139); none for no form or a blank one."""
+    if form is None or not form.strip():
+        return None
+    try:
+        return form_family(form)
+    except ValueError as exc:
+        raise InvalidParameter(str(exc)) from None
+
+
+def filing_view(row: Filing, *, form_asked: bool = False) -> FilingView:
+    """A listing with its events; `form_asked`: listed because its form was asked for, so a
+    hidden form label (a 13G amendment's) is shown, as hidden (D-139)."""
     return FilingView(
         accession_no=row.accession_no,
         cik=row.cik,
@@ -182,7 +207,9 @@ def filing_view(row: Filing) -> FilingView:
                 label=event.label,
                 importance=event.importance,
             )
-            for event in filing_events(row.form, row.items_8k, row.file_number)
+            for event in filing_events(
+                row.form, row.items_8k, row.file_number, form_asked=form_asked
+            )
         ),
     )
 

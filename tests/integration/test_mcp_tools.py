@@ -284,6 +284,117 @@ async def test_recent_filings_stop_at_20(
     assert answer["data"]["more"] is True
 
 
+async def test_recent_filings_drop_their_oldest_to_stay_under_8_kb(
+    api_app: FastAPI, api_key: str, conn: Conn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-139: twenty 8-Ks with ten labelled items each would pass 8 KB (CoreWeave's year of
+    8-Ks came to 8,258 bytes): the oldest are left out and `more` says so."""
+    await seed(conn)
+    monkeypatch.setattr("marketdata.mcp_server.tools.today", lambda: date(2026, 10, 31))
+    items = "{1.01,1.02,2.01,2.03,2.04,3.02,3.03,5.01,5.02,5.03}"
+    for day in range(1, 21):
+        await conn.execute(
+            "insert into filings (accession_no, cik, form, filed_at, items_8k) values "
+            "(%s, %s, '8-K', %s, %s)",
+            [f"0002002000-26-2000{day:02d}", BETA, date(2026, 10, day), items],
+        )
+
+    async with connected(api_app, api_key) as client:
+        result = await client.call_tool("recent_filings", {"ticker": "BETA", "form": "8-K"})
+
+    text = text_of(result)
+    assert len(text.encode()) <= MAX_ANSWER
+    answer = parsed(result)["data"]
+    assert 5 < len(answer["filings"]) < 20
+    assert answer["filings"][0]["filed_at"] == "2026-10-20"  # the newest kept
+    assert len(answer["filings"][0]["events"]) == 10
+    assert answer["more"] is True
+
+
+# D-139: 5% stakes about ACME under both codes, ACME's own stake in another company (no file
+# number) and an amended 8-K.
+STAKE_13G, STAKE_13G_A, OLD_13G_A = (
+    "0009000001-26-000001",
+    "0009000002-26-000002",
+    "0009000003-24-000003",
+)
+ACMES_OWN_13G_A, AMENDED_8K = "0001001000-26-000060", "0001001000-26-000070"
+NEW_13G_FIRST = ["SCHEDULE 13G", "SCHEDULE 13G/A", "SC 13G", "SC 13G/A"]
+
+
+async def test_recent_filings_match_a_forms_family_as_the_api_does(
+    api_app: FastAPI,
+    api: httpx2.AsyncClient,
+    api_key: str,
+    conn: Conn,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await seed(conn)
+    monkeypatch.setattr("marketdata.mcp_server.tools.today", lambda: date(2026, 10, 31))
+    await conn.execute(
+        "insert into filings (accession_no, cik, form, filed_at, items_8k, file_number) values "
+        "(%(a)s, %(cik)s, 'SCHEDULE 13G', '2026-04-29', null, '005-12345'), "
+        "(%(b)s, %(cik)s, 'SCHEDULE 13G/A', '2026-03-26', null, '005-12345'), "
+        "(%(c)s, %(cik)s, 'SC 13G/A', '2024-02-13', null, '005-12345'), "
+        "(%(own)s, %(cik)s, 'SCHEDULE 13G/A', '2026-10-01', null, null), "
+        "(%(amended)s, %(cik)s, '8-K/A', '2026-10-29', '{5.02}', '001-00001')",
+        {
+            "cik": ACME,
+            "a": STAKE_13G,
+            "b": STAKE_13G_A,
+            "c": OLD_13G_A,
+            "own": ACMES_OWN_13G_A,
+            "amended": AMENDED_8K,
+        },
+    )
+
+    async with connected(api_app, api_key) as client:
+        year = {"ticker": "ACME", "days": 365}
+        stakes = await _call(client, "recent_filings", {**year, "form": "SCHEDULE 13G"})
+        old_code = await _call(client, "recent_filings", {**year, "form": "sc 13g"})
+        amendments = await _call(client, "recent_filings", {**year, "form": "Schedule 13G/A"})
+        reports = await _call(client, "recent_filings", {"ticker": "ACME", "form": "8-K"})
+        default = await _call(client, "recent_filings", {"ticker": "ACME"})
+    rest = await _rest(api, api_key, "/v1/companies/ACME/filings", form="13g")
+
+    assert [each["accession_no"] for each in stakes["data"]["filings"]] == [STAKE_13G, STAKE_13G_A]
+    assert stakes["data"]["form"] == "SCHEDULE 13G"
+    assert stakes["data"]["matched_forms"] == NEW_13G_FIRST
+    assert stakes["data"]["filings"][1]["events"] == [
+        {
+            "item_or_form": "SCHEDULE 13G/A",
+            "label": "A passive 5% holder changed its stake",
+            "importance": "hidden",
+        }
+    ]
+    assert old_code["data"]["filings"] == stakes["data"]["filings"]
+    assert old_code["data"]["matched_forms"] == [
+        "SC 13G",
+        "SC 13G/A",
+        "SCHEDULE 13G",
+        "SCHEDULE 13G/A",
+    ]
+    assert [each["accession_no"] for each in amendments["data"]["filings"]] == [STAKE_13G_A]
+    assert amendments["data"]["matched_forms"] == ["SCHEDULE 13G/A", "SC 13G/A"]
+    # 90 days: the amended 8-K with ACME's third-quarter release.
+    assert [each["accession_no"] for each in reports["data"]["filings"]] == [AMENDED_8K, Q3_RELEASE]
+    assert reports["data"]["matched_forms"][:2] == ["8-K", "8-K/A"]
+    assert (default["data"]["form"], default["data"]["matched_forms"]) == (None, None)
+    # REST has no window: the old code's amendment too; never ACME's own stake.
+    assert [each["accession_no"] for each in rest["data"]["filings"]] == [
+        STAKE_13G,
+        STAKE_13G_A,
+        OLD_13G_A,
+    ]
+    assert rest["data"]["matched_forms"] == NEW_13G_FIRST
+    refused = await api.get(
+        "/v1/companies/ACME/filings", params={"form": "8-K, 10-Q"}, headers={"X-API-Key": api_key}
+    )
+    assert refused.status_code == 400
+    assert refused.json()["error"]["code"] == "invalid_parameter"
+    assert "one form at a time" in refused.json()["error"]["message"]
+
+
 async def test_compare_companies_is_the_apis_with_short_proofs(
     api_app: FastAPI, api: httpx2.AsyncClient, api_key: str, conn: Conn
 ) -> None:
@@ -363,6 +474,7 @@ async def test_latest_earnings_is_the_apis_release_with_its_full_proof(
             "5 companies x 6 metrics is 30 values; one call answers at most 25",
         ),
         ("recent_filings", {"ticker": "ACME", "days": 366}, "days: Input should be less than"),
+        ("recent_filings", {"ticker": "ACME", "form": "13D, 13G"}, "one form at a time"),
         ("company_snapshot", {}, "ticker: Field required"),
     ],
 )

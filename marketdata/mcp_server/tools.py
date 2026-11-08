@@ -61,6 +61,7 @@ MAX_METRICS = 16  # metrics get_financials answers: as many as the core set
 MAX_COMPARED = 25  # values compare_companies answers: companies x metrics
 MAX_PERIODS = 12
 FILINGS_LIMIT = 20
+MAX_ANSWER = 8 * 1024  # bytes: §10.3's target for one answer
 MAX_DAYS = 365
 MAX_TICKER = 20
 MAX_FORM = 20
@@ -273,9 +274,13 @@ class Tools:
         form: Annotated[
             str | None,
             Field(
-                description="One form, e.g. 8-K, 10-Q, 10-K, 4 or 'SCHEDULE 13D'. Without it: "
-                "annual, quarterly and current reports (10-K, 10-Q, 8-K, 20-F, 40-F, 6-K and "
-                "their amendments) and 5% stakes in the company (13D, 13G).",
+                description="One form, e.g. 8-K, 10-Q, 10-K, 4, 13D or 13G. It matches the "
+                "form's family: its amendments and its other SEC codes (13G, SC 13G and "
+                "SCHEDULE 13G each match SC 13G, SC 13G/A, SCHEDULE 13G and SCHEDULE 13G/A; "
+                "10-K takes in the transition report 10-KT). An amendment, e.g. 8-K/A or "
+                "13G/A, matches amendments only. Without it: annual, quarterly and current "
+                "reports (10-K, 10-Q, 8-K, 20-F, 40-F, 6-K and their amendments) and 5% stakes "
+                "in the company (13D, 13G).",
                 max_length=MAX_FORM,
             ),
         ] = None,
@@ -284,12 +289,16 @@ class Tools:
             Field(description="Filings of the last this many days (1 to 365).", ge=1, le=MAX_DAYS),
         ] = 90,
     ) -> str:
-        """A company's recent SEC filings, newest first, at most 20, each with its form,
-        filing date, period, SEC link and plain-language event labels (e.g. "Quarterly or
-        annual results", "Director or executive change", "An investor crossed 5% and may seek
-        to influence the company") with their importance. Use it for "what has <company> filed
-        or announced lately" questions. `more` says that more filings match than are shown:
-        ask for fewer days or one form. Works for every filer, funds and foreign issuers too.
+        """A company's recent SEC filings, newest first, at most 20 (fewer when their labels
+        would make the answer too long), each with its form, filing date, period, SEC link and
+        plain-language event labels (e.g. "Quarterly or annual results", "Director or
+        executive change", "An investor crossed 5% and may seek to influence the company")
+        with their importance. Use it for "what has <company> filed or announced lately"
+        questions. With `form`, `matched_forms` lists the form codes it matched. 13D and 13G
+        filings are those about the company, never the company's own stakes in others; a 13G
+        amendment, which the list without `form` leaves out, comes with its label at
+        importance hidden. `more` says that more filings match than are shown: ask for fewer
+        days or one form. Works for every filer, funds and foreign issuers too.
 
         `checked_at` is when the company's filings were last checked on the SEC; with
         `check_overdue` true (more than a day ago, or never) newer filings may be missing.
@@ -302,11 +311,16 @@ class Tools:
                 conn,
                 ticker,
                 form=form,
-                reports_only=not form,
+                reports_only=True,  # without a form (a blank one is none): D-110's default list
                 since=since,
                 limit=FILINGS_LIMIT,
             )
-        return answer(answers.filings(served, form=form or None, since=since))
+        built = answers.filings(served, form=form, since=since)
+        text = answer(built)
+        while len(text.encode()) > MAX_ANSWER and built.data.filings:
+            built = answers.without_oldest(built)  # labels of many 8-K items (D-139)
+            text = answer(built)
+        return text
 
     async def compare_companies(
         self,

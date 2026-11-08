@@ -128,7 +128,13 @@ async def filings(
     ticker: TickerPath,
     form: Annotated[
         str | None,
-        Query(description="Only this form, e.g. `8-K`, `10-Q` or `SCHEDULE 13D`."),
+        Query(
+            description="Only this form and its family, e.g. `8-K`, `10-Q`, `4`, `13D` or "
+            "`13G`: its amendments and its other SEC codes (`13G`, `SC 13G` and "
+            "`SCHEDULE 13G` each match `SC 13G`, `SC 13G/A`, `SCHEDULE 13G` and "
+            "`SCHEDULE 13G/A`; `10-K` takes in `10-KT`). An amendment (`8-K/A`, `13G/A`) "
+            "matches amendments only. `data.matched_forms` lists the codes matched."
+        ),
     ] = None,
     since: Annotated[date | None, Query(description="Filed on or after this day.")] = None,
     limit: Limit = DEFAULT_LIMIT,
@@ -136,7 +142,9 @@ async def filings(
 ) -> EnvelopeResponse:
     """The company's filings (its predecessors' too), newest first, each with its index page on
     sec.gov and its 8-K items and 5% stakes in plain words. Funds and foreign issuers have
-    filings too."""
+    filings too. Asked for by `form`, a 13D or 13G is listed only for the company it is about,
+    not as the company's own stake in another, and a 13G amendment keeps its label at
+    importance `hidden` (D-139)."""
     return respond(
         await recent_filings(conn, ticker, form=form, since=since, limit=limit, cursor=cursor)
     )

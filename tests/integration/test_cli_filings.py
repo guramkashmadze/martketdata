@@ -54,6 +54,26 @@ def test_filings_list_shows_event_labels(fubo: None) -> None:
     ]
 
 
+def test_a_form_lists_its_family_and_names_the_codes(fubo: None) -> None:
+    """D-139: 13d matches both 13D codes and their amendments."""
+    result = CliRunner().invoke(cli.app, ["filings", "list", "FUBO", "--form", "13d"])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines()[:2] == [
+        "FuboTV Inc. (FUBO, CIK 1484769): the 1 latest 13d filings "
+        "(SCHEDULE 13D, SCHEDULE 13D/A, SC 13D, SC 13D/A)",
+        "  2025-11-05  SCHEDULE 13D     0000950157-25-000917  "
+        "An investor crossed 5% and may seek to influence the company [high]",
+    ]
+
+
+def test_text_that_isnt_one_form_is_refused(fubo: None) -> None:
+    result = CliRunner().invoke(cli.app, ["filings", "list", "FUBO", "--form", "8-K,10-Q"])
+
+    assert result.exit_code == 2
+    assert "one form at a time" in result.output
+
+
 def test_an_unknown_ticker_is_an_error(fubo: None) -> None:
     result = CliRunner().invoke(cli.app, ["filings", "list", "NOPE"])
 
