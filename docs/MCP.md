@@ -15,7 +15,10 @@ Information from public filings. Not investment advice.
   terminal, run the API in Docker: `docker compose up -d api` (D-134) starts it again after a
   crash and whenever Docker Desktop starts; for a PostgreSQL on this machine, set
   `CONTAINER_DATABASE_URL` in `.env` (`.env.example` shows it), and after a code change rebuild it
-  with `docker compose up -d --build api`. On the live VM (OD-1) it is `https://<live host>/mcp`;
+  with `docker compose up -d --build api`. The answers are only as fresh as the last watch of the
+  SEC's filing lists: run the worker and the scheduler too, `docker compose up -d --build api
+  worker scheduler` (D-137), and each answer says when its data was last checked (`checked_at`,
+  below). On the live VM (OD-1) it is `https://<live host>/mcp`;
   set `PUBLIC_BASE_URL` to that address, as the server accepts only this machine's host name and
   the public one (DNS rebinding protection, D-107).
 - **An API key** with the `api` scope, sent in the `X-API-Key` header, the same key as `/v1`:
@@ -157,7 +160,15 @@ headers in plain text in `~/.mcp-inspector/mcp.json`.
 
 Every answer is JSON text: `data`, `sources` (the filings the values read, each with its form,
 filing date and SEC link), `as_of` (when the newest row used last changed) and the disclaimer.
-Numbers keep every digit. A metric value carries a short proof: the filing it came from
+An answer about a company or an investor (all but `lookup_company`) also carries `checked_at`,
+when the SEC was last checked for the filings it depends on, and `check_overdue`, true when that
+check is more than a day old or never ran: filings newer than it may be missing, and the client
+should say how old the data is (D-135). Filings, Forms 4 and releases go by the company's watch
+of its SEC filing list, every 10 minutes while the worker and the scheduler run; financials by
+that watch too, unless the newest 10-Q or 10-K it found isn't in the facts yet (then since it was
+found); 13F answers by the investors' own watches; a comparison by the oldest of its companies'.
+`check_overdue` is not `stale_data`: that flag, on a value, says the company's latest 10-Q or
+10-K is older than 120 days, however recently we checked. Numbers keep every digit. A metric value carries a short proof: the filing it came from
 (`accession_no`; for a derived, trailing or computed value the latest filing it reads), the
 method and the XBRL concept, named once for a series whose values share it, and its quality
 flags. The full proof of any value is one `/v1` call or proof page away (D-108). With
@@ -214,7 +225,9 @@ unverified value is `null` with its flag or reasons, never an estimate.
 
 `get_financials` for Apple's revenue and free cash flow, two quarters (dev database,
 2026-10-31; the second source is the first quarter's 10-Q, which the year-to-date free cash
-flow of the second quarter reads):
+flow of the second quarter reads). Its check is Apple's watch of 2026-10-25, the last before the
+worker and the scheduler ran in Docker: six days old that day, so `check_overdue` is true (the
+two fields were added on 2026-11-08, D-135):
 
 ```json
 {"data": {"ticker": "AAPL", "cik": 320193, "company": "Apple Inc.", "period_type": "Q",
@@ -239,6 +252,8 @@ flow of the second quarter reads):
    {"accession_no": "0000320193-26-000006", "form": "10-Q", "filed_at": "2026-01-30",
     "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000006/"}],
  "as_of": "2026-10-29T17:18:53.249611Z",
+ "checked_at": "2026-10-25T21:25:29.532253Z",
+ "check_overdue": true,
  "disclaimer": "Information from public filings. Not investment advice."}
 ```
 

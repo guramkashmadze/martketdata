@@ -13,6 +13,7 @@ The full plan, rules and epics are in docs/PLAN.md. Before writing code, read §
 - Format: pdm run fmt
 - API: pdm run uvicorn marketdata.api.app:app --reload
 - API in Docker, kept running (D-134): docker compose up -d api; after a code change, docker compose up -d --build api (CONTAINER_DATABASE_URL in .env points it at a local PostgreSQL)
+- API, worker and scheduler in Docker, kept running (D-137): docker compose up -d --build api worker scheduler, again after a code change (the api service builds the one image the three run; a --build without api builds nothing). The worker uses this checkout's var/raw and data/; docker compose stop worker before running a worker with pdm run, which refuses while the Docker one holds the SEC slot (D-062)
 - Worker: pdm run marketdata worker
 - Scheduler: pdm run marketdata scheduler
 - Extraction hit rate: pdm run marketdata extract report
