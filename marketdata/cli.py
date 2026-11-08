@@ -1056,7 +1056,11 @@ def filings_list(
     ticker: Annotated[str, typer.Argument(help="A ticker as people write it: AAPL, brk.b, BRK/B.")],
     limit: Annotated[int, typer.Option(min=1, max=100, help="How many filings to list.")] = 20,
     form: Annotated[
-        str | None, typer.Option(help="Only this form, e.g. 8-K or 'SCHEDULE 13D'.")
+        str | None,
+        typer.Option(
+            help="Only this form and its family (D-139), e.g. 8-K (8-K/A too) or 13G (SC 13G and "
+            "SCHEDULE 13G, amendments included); 8-K/A asks for amendments only."
+        ),
     ] = None,
 ) -> None:
     """A company's most recent filings with plain-language event labels.
@@ -1080,7 +1084,8 @@ def filings_list(
 
 def _filing_lines(listed: CompanyFilings, form: str | None) -> list[str]:
     name = listed.company or "(no name)"
-    what = f"{form} filings" if form else "filings"
+    matched = listed.matched_forms
+    what = f"{form} filings ({', '.join(matched)})" if form and matched else "filings"
     if not listed.filings:
         return [
             f"{name} ({listed.ticker}, CIK {listed.cik}): no {what} stored yet. The watcher "

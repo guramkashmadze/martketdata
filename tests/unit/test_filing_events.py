@@ -1,5 +1,6 @@
 """E3-S6: §9.6 labels in code, hidden events left out, 13D and 13G only on the listing of the
-company they are about (D-061), unknown 8-K items kept with their code (D-064)."""
+company they are about (D-061), unknown 8-K items kept with their code (D-064), a 13G
+amendment's hidden label shown when its form was asked for (D-139)."""
 
 import pytest
 
@@ -83,3 +84,18 @@ def test_other_stake_filings(form: str, label: str, importance: Importance) -> N
 @pytest.mark.parametrize("form", ["SC 13G/A", "SCHEDULE 13G/A", "10-Q", "4"])
 def test_hidden_forms_and_forms_without_events(form: str) -> None:
     assert filing_events(form, None, "005-33632") == []
+
+
+@pytest.mark.parametrize("form", ["SC 13G/A", "SCHEDULE 13G/A"])
+def test_a_13g_amendment_asked_for_keeps_its_label_as_hidden(form: str) -> None:
+    """D-139: listed because its form was asked for, a 13G amendment says what it is."""
+    assert filing_events(form, None, "005-07443", form_asked=True) == [
+        FilingEvent(form, "A passive 5% holder changed its stake", "hidden")
+    ]
+    assert filing_events(form, None, None, form_asked=True) == []  # the filer's own listing
+
+
+def test_asking_for_a_form_never_shows_hidden_items() -> None:
+    events = filing_events("8-K", ("5.02", "9.01"), "001-07882", form_asked=True)
+
+    assert events == [FilingEvent("5.02", "Director or executive change", "normal")]
