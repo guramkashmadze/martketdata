@@ -52,8 +52,10 @@ the server, Reconnect).
 
 Keep the key out of files you commit: each client below can read it from an environment variable
 or a prompt. Checked on 2026-10-31: the server with the official Python SDK's client over HTTP
-(both protocol generations) and with curl; Claude Code's flags from `claude mcp add --help`. The
-other clients' settings come from their own documentation of that date and weren't run here.
+(both protocol generations) and with curl. Since then Claude Code (2026-11-03) and Claude
+Desktop through mcp-remote 0.15.2 (2026-11-08) have connected to the API in Docker and listed its
+tools. The settings for Cursor, VS Code and MCP Inspector come from their own documentation and
+weren't run here.
 
 ### Claude Code
 
@@ -81,7 +83,7 @@ to `/mcp` and passes the header. In `~/Library/Application Support/Claude/claude
     "marketdata": {
       "command": "npx",
       "args": [
-        "-y", "mcp-remote", "http://localhost:8000/mcp",
+        "-y", "mcp-remote@0.15.2", "http://localhost:8000/mcp",
         "--transport", "http-only",
         "--header", "X-API-Key:${MARKETDATA_API_KEY}"
       ],
@@ -92,9 +94,16 @@ to `/mcp` and passes the header. In `~/Library/Application Support/Claude/claude
 ```
 
 The header is written without a space after the colon and the key comes from `env`, because
-Claude Desktop on Windows splits arguments at spaces (mcp-remote's README). If mcp-remote refuses
-the plain `http` address, add `"--allow-http"` to `args`. Restart Claude Desktop after editing;
-its logs are in `~/Library/Logs/Claude/mcp*.log`.
+Claude Desktop on Windows splits arguments at spaces (mcp-remote's README); mcp-remote fills in
+`${MARKETDATA_API_KEY}` itself. The version is pinned: on 2026-11-08, 0.15.2 was the newest
+release at least two weeks old (0.16.0 to 0.16.5 came out within that week), and it takes the
+plain `http` address on localhost as it is. Settings, Developer, Edit Config opens the file; quit
+Claude Desktop (Cmd-Q) and reopen it after editing. The bridge logs to
+`~/Library/Logs/Claude/mcp-server-marketdata.log`.
+
+The desktop app's Code sessions load these servers too, beside Claude Code's own. When both have
+a server of the same name, Claude Code's wins there: naming both `marketdata` keeps one copy in a
+Code session, which talks to `/mcp` directly, while the Chat tab goes through mcp-remote.
 
 ### Cursor
 
