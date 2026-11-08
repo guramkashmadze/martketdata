@@ -12,6 +12,7 @@ AMJB an ETN); data/security_overrides.csv corrects those, each with the cover pa
 """
 
 import re
+from collections.abc import Iterable
 from typing import Literal
 
 SecurityType = Literal["common", "preferred", "fund", "adr", "other"]
@@ -65,3 +66,11 @@ def ticker_type(ticker: str) -> tuple[SecurityType, str | None]:
     if len(suffix) == 1:
         return "common", suffix
     return "other", None
+
+
+def primary_of(listed: Iterable[tuple[str, str]]) -> str | None:
+    """The ticker a company is shown under when none was asked for, of its (ticker, security
+    type) pairs: common stock first, then the shortest, then the first in order (GOOG before
+    GOOGL, BRK-A before BRK-B)."""
+    ranked = sorted(listed, key=lambda row: (row[1] != "common", len(row[0]), row[0]))
+    return ranked[0][0] if ranked else None

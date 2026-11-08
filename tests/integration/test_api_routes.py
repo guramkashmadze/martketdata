@@ -31,6 +31,7 @@ ROUTES: list[tuple[str, str, dict[str, str]]] = [
     ("/v1/funds", "/v1/funds", {}),
     ("/v1/funds/{manager_cik}/holdings", f"/v1/funds/{MANAGER}/holdings", {"quarter": "2026Q2"}),
     ("/v1/companies/{ticker}/funds", "/v1/companies/ACME/funds", {}),
+    ("/v1/companies/{ticker}/stakes", "/v1/companies/ACME/stakes", {}),
 ]
 
 
@@ -44,6 +45,7 @@ CHECKED_ROUTES = {
     "/v1/funds",
     "/v1/funds/{manager_cik}/holdings",
     "/v1/companies/{ticker}/funds",
+    "/v1/companies/{ticker}/stakes",  # E16: the company's watch finds its 13D and 13G filings
 }
 
 

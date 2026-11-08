@@ -11,7 +11,7 @@ from typing import Any
 import httpx2
 import psycopg
 import pytest
-from api_seed import ACME_CUSIP, INSIDER_FORM4, MANAGER, Q2_RELEASE, seed
+from api_seed import ACME_CUSIP, INSIDER_FORM4, MANAGER, Q2_RELEASE, STAKE_13D, STAKE_13G, seed
 from lxml import html
 from web_pages import DISCLAIMER, basic, document, inline_scripts, loaded
 
@@ -32,6 +32,8 @@ PAGES = [
     "/proof/metrics/ACME/revenue/Q/2026-06-30",
     f"/proof/insiders/{INSIDER_FORM4}",
     f"/proof/funds/{MANAGER}/2026Q2/{ACME_CUSIP}",
+    f"/proof/stakes/{STAKE_13G}",
+    f"/proof/stakes/{STAKE_13D}",
     "/nothing/here",
 ]
 # Pages whose numbers are served values: each links to its proof page, to the rows it sums on

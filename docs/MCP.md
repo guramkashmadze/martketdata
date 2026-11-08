@@ -189,6 +189,7 @@ as the password of HTTP Basic auth while the web UI is private.
 | `insider_activity` | Whether directors, officers and 10% owners bought or sold, from their Forms 4 | `ticker`, `days` (90 by default), `codes` (P and S by default; `["all"]`) | 12 trades, 8 insiders, 365 days |
 | `investor_portfolio` | What a well-known investor held at a quarter end and what it bought and sold, from its 13F | `manager` (a name such as "Berkshire" or "Pabrai", or a CIK), `quarter` (2026Q2; the latest by default) | 20 largest positions, 6 of each change type |
 | `fund_holders` | Which well-known investors held a company in their latest 13F, by name | `ticker` | 20 investors |
+| `major_holders` | Who reported owning more than 5% of a company's shares in a Schedule 13D or 13G, by name, with those that exited | `ticker` | 12 holders, 6 exits, 4 older filings |
 
 Without `metrics`, `get_financials` and `compare_companies` use revenue, operating income, net
 income, diluted EPS and free cash flow. Without `form`, `recent_filings` lists annual,
@@ -227,6 +228,23 @@ for the quarter before; without one they are left out and flagged `no_prior_repo
 `fund_holders` lists the investors by name, never by size, each with its positions in the
 company's share classes and its report's link; one that sold all of it that quarter is listed
 as exited. Nothing ranks investors.
+
+`major_holders` (E16) reads the Schedule 13D and 13G filings about a company: whoever owns more
+than 5% of a class of its shares files one (a 13D when it may seek to influence the company, a
+13G when it is a passive investor or a qualified institution) and amends it as the stake
+changes. It answers each holder's latest filing about each class, however old, read from the
+SEC's structured format (from 2024, required since 2024-12-18): the form, the filing date, the
+date of the event that required it, the class (its ticker), the shares and the percent of the
+class as filed, how many reporting persons joined the filing, and its link. The shares are the
+largest amount one reporting person states: joint filers (a parent and its advisers, a family
+and its trusts) report overlapping amounts that are never added. Holders are listed by name,
+never by size; those whose latest filing reports below 5%, or says they no longer own more than
+5%, are listed apart as exited. Filings in the older format (SC 13D, SC 13G, before December
+2024) aren't read: the newest are linked, and a holder whose last filing is one of them isn't
+among the holders. With `PUBLIC_BASE_URL` set, `proof_url` is each holder's proof page
+(`/proof/stakes/{accession_no}`): every reporting person, a 13D's purpose word for word, the
+checks and the holder's other filings. `fund_holders` answers the other question, which curated
+13F managers hold a company.
 
 A tool that can't answer says why, as the API does: `invalid_parameter` (with what to change),
 `not_found`, or `not_applicable` for a fund, a foreign private issuer or a company outside the
@@ -269,7 +287,7 @@ two fields were added on 2026-11-08, D-135):
 
 ## Example questions
 
-Eight questions and the tool calls they should lead to. The client chooses the calls; a client
+Nine questions and the tool calls they should lead to. The client chooses the calls; a client
 that already knows a ticker skips `lookup_company`. The answers are numbers with their SEC
 links, never a view on what to do with them.
 
@@ -311,6 +329,12 @@ links, never a view on what to do with them.
 8. "Which famous investors own Apple?"
    `fund_holders(ticker="AAPL")`: the curated investors holding it in their latest report, by
    name, each with its shares, value, weight, change and the 13F's link. 3.0 KB.
+9. "Who owns more than 5% of AMD?" (the E16 demo)
+   `major_holders(ticker="AMD")`: on the dev database Vanguard Capital Management, 122,092,206
+   shares, 7.48% of the common stock, from its SCHEDULE 13G filed 2026-04-29 for 2026-03-31;
+   The Vanguard Group listed as exited, at 0 shares after Vanguard reorganized its filings in
+   March 2026; the newest older-format filings as links (BlackRock's last AMD filing, of
+   2024-02-01, is one). 2.1 KB.
 
 Questions about a fund ("What is SPY's revenue?") get `not_applicable` with the reason. The
 tools answer with filed numbers only: none ranks, scores or recommends.

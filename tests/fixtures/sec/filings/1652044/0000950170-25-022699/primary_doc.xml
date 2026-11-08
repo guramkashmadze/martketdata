@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13g" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <headerData>
+    <submissionType>SCHEDULE 13G/A</submissionType>
+    <previousAccessionNumber>0001193125-16-460514</previousAccessionNumber>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <cik>0001242463</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>20</amendmentNo>
+      <securitiesClassTitle>Class A Common Stock</securitiesClassTitle>
+      <eventDateRequiresFilingThisStatement>12/31/2024</eventDateRequiresFilingThisStatement>
+      <issuerInfo>
+        <issuerCik>0001652044</issuerCik>
+        <issuerName>Alphabet Inc.</issuerName>
+        <issuerCusip>02079K305</issuerCusip>
+        <issuerPrincipalExecutiveOfficeAddress>
+          <street1 xmlns="http://www.sec.gov/edgar/common">1600 Amphitheatre Parkway</street1>
+          <city xmlns="http://www.sec.gov/edgar/common">Mountain View</city>
+          <stateOrCountry xmlns="http://www.sec.gov/edgar/common">CA</stateOrCountry>
+          <zipCode xmlns="http://www.sec.gov/edgar/common">94043</zipCode>
+        </issuerPrincipalExecutiveOfficeAddress>
+      </issuerInfo>
+      <designateRulesPursuantThisScheduleFiled>
+        <designateRulePursuantThisScheduleFiled>Rule 13d-1(d)</designateRulePursuantThisScheduleFiled>
+      </designateRulesPursuantThisScheduleFiled>
+    </coverPageHeader>
+    <coverPageHeaderReportingPersonDetails>
+
+
+      <reportingPersonName>Eric E. Schmidt</reportingPersonName>
+      <citizenshipOrOrganization>X1</citizenshipOrOrganization>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>467507</soleVotingPower>
+        <sharedVotingPower>56454452</sharedVotingPower>
+        <soleDispositivePower>467507</soleDispositivePower>
+        <sharedDispositivePower>56454452</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>56921959</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.97</classPercent>
+      <typeOfReportingPerson>IN</typeOfReportingPerson>
+      <comments>This Schedule 13G relates to the following classes of securities:  Class A Common Stock with CUSIP No. 02079K305 and Class B Common Stock with CUSIP No. 02079K206.  Due to the new Edgar filing requirements, cover pages are limited to one class of security.  The cover page of this Schedule 13G filing relates to the Class A Common Stock, and this comment and the notes below shall serve as full disclosure of the beneficial ownership of all classes of securities of the Issuer.
+
+Each share of Class B Common Stock is convertible at the option of the holder into one share of Class A Common Stock.  The rights of the holders of Class A Common Stock and Class B Common Stock are identical, except with respect to conversion rights (noted above) and voting rights.  Each share of Class B Common Stock is entitled to ten votes per share, whereas each share of Class A Common Stock is entitled to one vote per share.  Ownership of Class A Common Stock assumes conversion of all such reporting person's shares of Class B Common Stock into shares of Class A Common Stock.
+
+Sole Voting Power and Sole Dispositive Power shown in Boxes 5 and 7 consists of (i) 464,735 shares of Class A Common Stock held directly by Mr. Schmidt and (ii) 2,772 shares of Class B Common Stock held directly by Mr. Schmidt.
+
+Shared Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of (i) 42,053,405 shares of Class B Common Stock held by The Schmidt Family Living Trust, of which Mr. Schmidt is the co-trustee, (ii) 5,416,500 shares of Class B Common Stock held by Schmidt Investments, L.P. of which The Schmidt Family Living Trust is the sole general partner, (iii) 2,511,602 shares of Class A Common Stock held by The Schmidt Family Foundation, of which Mr. Schmidt is a member of the board of directors and vice president, (iv) 2,830,845 shares of Class A Common Stock held by The Eric and Wendy Schmidt Fund for Strategic Innovation, of which Mr. Schmidt is a member of the board of directors and president, (v) 27,100 shares of Class A Common Stock held by the Schmidt Ocean Institute, of which Mr. Schmidt is a member of the board of directors and vice president, (vi) 70,000 shares of Class A Common Stock held by Special Strategies, LLC, of which Mr. Schmidt is the co-trustee of The Schmidt Equities Revocable Trust, its sole member, (vii) 1,860,000 shares of Class A Common Stock held by Special Strategies II,LLC, of which Mr. Schmidt is the co-trustee of The Schmidt Equities Revocable Trust, its sole member, (viii) 405,000 shares of Class A Common Stock held by Hillspire Holdings, LLC, of which Mr. Schmidt is a co-manager, and (ix) 1,280,000 shares of Class A Common Stock held by Big Hen Group I, LLC, of which The Schmidt Family Living Trust is a member.
+
+Aggregate Amount Beneficially Owned shown in Box 9 consists of the shares reported in Boxes 5, 6, 7 and 8 and consists of 56,921,969 shares of Class A Common Stock and 47,472,677 shares of Class B Common Stock.
+
+The Percent of Class Represented by Amount shown in Box 11 consists of 0.97% of the outstanding Class A Common Stock (assuming conversion of Class B Common Stock into Class A Common Stock).  The reporting person beneficially owns 5.52% of the outstanding Class B Common Stock on an unconverted basis.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>The Schmidt Family Living Trust</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>47469905</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>47469905</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>47469905</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.81</classPercent>
+      <typeOfReportingPerson>OO</typeOfReportingPerson>
+      <comments>This Schedule 13G relates to the following classes of securities:  Class A Common Stock with CUSIP No. 02079K305 and Class B Common Stock with CUSIP No. 02079K206.  Due to the new Edgar filing requirements, cover pages are limited to one class of security.  The cover page of this Schedule 13G filing related to the Class A Common Stock, and this comment and notes below shall serve as full disclosure of the beneficial ownership of all classes of securities of the Issuer.
+
+Each share of Class B Common Stock is convertible at the option of the holder into one share of Class A Common Stock.  The rights of the holders of Class A Common Stock and Class B Common Stock are identical, except with respect to conversion rights (noted above) and voting rights.  Each share of Class B Common Stock is entitled to ten votes per share, whereas each share of Class A Common Stock is entitled to one vote per share.  Ownership of Class A Common Stock assumes conversion of all such reporting person's shares of Class B Common Stock into shares of Class A Common Stock.
+Shared Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of (i) 42,053,405 shares of Class B Common Stock held by The Schmidt Family Living Trust and (ii) 5,416,500 shares of Class B Common Stock held by Schmidt Investments, L.P. of which The Schmidt Family Living Trust is the sole general partner
+The Percent of Class Represented by Amount in shown Box 11 consists of 0.81% of the outstanding Class A Common Stock (assuming conversion of Class B Common Stock into Class A Common Stock). The reporting person beneficially owns 5.52% of the outstanding Class B Common Stock on an unconverted basis.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>The Schmidt Family Foundation</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>2511602</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>2511602</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>2511602</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.04</classPercent>
+      <comments>This Schedule 13G relates to Class A Common Stock with CUSIP No. 02079K305.
+
+Shared Voting Power and Shared Dispostive Power shown in Boxes 6 and 8 consists of 2,511,602 shares of Class A Common Stock held by The Schmidt Family Foundation, of which Mr. Schmidt is a member of the board of directors and vice president.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>The Eric and Wendy Schmidt Fund for Strategic Innovation</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>2830845</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>2830845</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>2830845</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.05</classPercent>
+      <typeOfReportingPerson>OO</typeOfReportingPerson>
+      <comments>This Schedule 13G relates to Class A Common Stock with CUSIP No. 02079K305.
+
+Shared Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of 2,830,845 shares of Class A Common Stock held by The Eric and Wendy Schmidt Fund for Strategic Innovation, of which Mr. Schmidt is a member of the board of directors and president.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>Schmidt Ocean Institute</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>27100</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>27100</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>27100</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0</classPercent>
+      <typeOfReportingPerson>OO</typeOfReportingPerson>
+      <comments>This Schedule 13G relates Class A Common Stock with CUSIP No. 02079K305.
+
+The Shares Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of 27,100 shares of Class A Common Stock held by the Schmidt Ocean Institute, of which Mr. Schmidt is a member of the board of directors and vice president.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>Special Strategies, LLC</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>70000</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>70000</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>70000</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0</classPercent>
+      <typeOfReportingPerson>OO</typeOfReportingPerson>
+      <comments>This Schedule 13G relates Class A Common Stock with CUSIP No. 02079K305.
+
+Shared Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of 70,000 shares of Class A Common Stock held by the Special Strategies, LLC, of which of Mr. Schmidt is co-trustee of The Schmidt Equities Revocable Trust, its sole member.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>Special Strategies II, LLC</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>1860000</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>1860000</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>1860000</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.03</classPercent>
+      <typeOfReportingPerson>OO</typeOfReportingPerson>
+      <comments>This Schedule 13G relates to Class A Common Stock with CUSIP No. 02079K305.
+
+Shared Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consist of 1,860,000 shares of Class A Common Stock held by the Special Strategies II, LLC, of which of Mr. Schmidt is co-trustee of The Schmidt Equities Revocable Trust, its sole member.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>Hillspire Holdings, LLC</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>405000</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>405000</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>405000</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.01</classPercent>
+      <comments>This Schedule 13G relates to Class A Common Stock with CUSIP No. 02079K305.
+
+Shared Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of 405,000 shares of Class A Common Stock held by Hillspire Holdings, LLC, of which of The Schmidt Family Living Trust is a member.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>Big Hen Group I, LLC</reportingPersonName>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0</soleVotingPower>
+        <sharedVotingPower>1280000</sharedVotingPower>
+        <soleDispositivePower>0</soleDispositivePower>
+        <sharedDispositivePower>1280000</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>1280000</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <aggregateAmountExcludesCertainSharesFlag>N</aggregateAmountExcludesCertainSharesFlag>
+      <classPercent>0.02</classPercent>
+      <comments>This Schedule 13G relates to Class A Common Stock with CUSIP No. 02079K305.
+
+Shares Voting Power and Shared Dispositive Power shown in Boxes 6 and 8 consists of 1,280,000 shares of Class A Common Stock held by Big Hen Group I, LLC, of which of The Schmidt Family Living Trust is a member.</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <items>
+      <item1>
+        <issuerName>Alphabet Inc.</issuerName>
+        <issuerPrincipalExecutiveOfficeAddress>1600 Amphitheatre Parkway, Mountain View, CA  94043</issuerPrincipalExecutiveOfficeAddress>
+      </item1>
+      <item2>
+        <filingPersonName>(a)	Name of Person Filing
+	Eric E. Schmidt
+The Schmidt Family Living Trust
+The Schmidt Family Foundation
+The Eric and Wendy Schmidt Fund for Strategic Innovation
+Schmidt Ocean Institute
+Special Strategies, LLC
+Special Strategies II, LLC
+Hillspire Holdings, LLC
+Big Hen Group I, LLC</filingPersonName>
+        <principalBusinessOfficeOrResidenceAddress>1010 Alma Street, Menlo Park, CA 94025</principalBusinessOfficeOrResidenceAddress>
+        <citizenship>Eric E. Schmidt				United States of America
+The Schmidt Family Living Trust	N/A
+The Schmidt Family Foundation	N/A
+The Eric and Wendy Schmidt Fund
+for Strategic Innovation		N/A
+Schmidt Ocean Institute		N/A
+Special Strategies, LLC		N/A
+Special Strategies II, LLC		N/A
+Hillspire Holdings, LLC		N/A
+Big Hen Group I, LLC			N/A</citizenship>
+      </item2>
+      <item3>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item3>
+      <item4>
+        <amountBeneficiallyOwned>Information disclosed on Exhibit 99.1</amountBeneficiallyOwned>
+        <classPercent>Information disclosed on Exhibit 99.1</classPercent>
+        <numberOfSharesPersonHas>
+          <solePowerOrDirectToVote>Information disclosed on Exhibit 99.1</solePowerOrDirectToVote>
+          <sharedPowerOrDirectToVote>Information disclosed on Exhibit 99.1</sharedPowerOrDirectToVote>
+          <solePowerOrDirectToDispose>Information disclosed on Exhibit 99.1</solePowerOrDirectToDispose>
+          <sharedPowerOrDirectToDispose>Information disclosed on Exhibit 99.1</sharedPowerOrDirectToDispose>
+        </numberOfSharesPersonHas>
+      </item4>
+      <item5>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item5>
+      <item6>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item6>
+      <item7>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item7>
+      <item8>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item8>
+      <item9>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item9>
+      <item10>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item10>
+    </items>
+    <signatureInformation>
+      <reportingPersonName>Eric E. Schmidt</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Eric. E. Schmidt</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>The Schmidt Family Living Trust</reportingPersonName>
+      <signatureDetails>
+        <signature>/S/ Eric E. Schmidt</signature>
+        <title>Co-Trustee</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>The Schmidt Family Foundation</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Director and Vice President</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>The Eric and Wendy Schmidt Fund for Strategic Innovation</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Director and President</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>Schmidt Ocean Institute</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Director and Vice President</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>Special Strategies, LLC</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>by Hillspire, LLC, its manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Co-manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>Special Strategies II, LLC</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>by Hillspire, LLC, its manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Co-manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>Hillspire Holdings, LLC</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Co-manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureInformation>
+      <reportingPersonName>Big Hen Group I, LLC</reportingPersonName>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Hillspire, LLC, its manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+      <signatureDetails>
+        <signature>/s/ Eric E. Schmidt</signature>
+        <title>Co-manager</title>
+        <date>02/18/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+    <signatureComments>Exhibit 99.2  Agreement Pursuant to Rule 13d-1(k)(1)(iii)</signatureComments>
+  </formData>
+
+</edgarSubmission>

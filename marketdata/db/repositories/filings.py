@@ -104,6 +104,14 @@ _ISSUER_LISTINGS = f"""
     order by accession_no, cik
 """
 
+# E16: the 13D and 13G filings about these companies, from the subject's listing: its file
+# number starts with 005- (D-061); the filer's own listing has none.
+_SUBJECT_LISTINGS = f"""
+    select {_COLUMNS} from filings
+    where cik = any(%(ciks)s) and form = any(%(forms)s) and file_number like %(prefix)s
+    order by filed_at, accession_no, cik
+"""
+
 # E9: a filer's listings of these forms, whatever their file number (a 13F carries the
 # manager's 028- number).
 _FILER_LISTINGS = f"""
@@ -254,6 +262,17 @@ async def issuer_listings(
         await cur.execute(_ISSUER_LISTINGS, params)
         listed = await cur.fetchall()
     return sorted(listed, key=lambda filing: (filing.filed_at, filing.accession_no))
+
+
+async def subject_listings(
+    conn: AsyncConnection[Any], ciks: Sequence[int], forms: Sequence[str], file_number_prefix: str
+) -> list[Filing]:
+    """These companies' listings of these forms as the company the filing is about (a file
+    number starting with `file_number_prefix`, D-061), oldest first (E16)."""
+    params = {"ciks": list(ciks), "forms": list(forms), "prefix": f"{file_number_prefix}%"}
+    async with conn.cursor(row_factory=class_row(Filing)) as cur:
+        await cur.execute(_SUBJECT_LISTINGS, params)
+        return await cur.fetchall()
 
 
 async def filer_listings(

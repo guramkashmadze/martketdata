@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+<headerData>
+<submissionType>SCHEDULE 13D</submissionType>
+<filerInfo>
+<filer>
+<filerCredentials>
+<cik>0001535243</cik>
+<ccc>XXXXXXXX</ccc>
+</filerCredentials>
+</filer>
+<liveTestFlag>LIVE</liveTestFlag>
+
+
+
+</filerInfo>
+</headerData>
+<formData>
+<coverPageHeader>
+<securitiesClassTitle>Common Stock</securitiesClassTitle>
+<dateOfEvent>12/18/2024</dateOfEvent>
+<previouslyFiledFlag>false</previouslyFiledFlag>
+<issuerInfo>
+<issuerCIK>0000104169</issuerCIK>
+<issuerCUSIP>931142103</issuerCUSIP>
+<issuerName>Walmart Inc.</issuerName>
+<address>
+<com:street1>702 S.W. 8th Street</com:street1>
+<com:city>Bentonville</com:city>
+<com:stateOrCountry>AR</com:stateOrCountry>
+<com:zipCode>72716</com:zipCode>
+</address>
+</issuerInfo>
+<authorizedPersons>
+<notificationInfo>
+<personName>Erron W. Smith</personName>
+<personPhoneNum>(479) 464-1500</personPhoneNum>
+<personAddress>
+<com:street1>P.O. Box 1508</com:street1>
+<com:city>Bentonville</com:city>
+<com:stateOrCountry>AR</com:stateOrCountry>
+<com:zipCode>72712</com:zipCode>
+</personAddress>
+</notificationInfo>
+</authorizedPersons>
+</coverPageHeader>
+<reportingPersons>
+<reportingPersonInfo>
+<reportingPersonCIK>0001535243</reportingPersonCIK>
+<reportingPersonName>Walton Enterprises, LLC</reportingPersonName>
+<memberOfGroup>a</memberOfGroup>
+<fundType>OO</fundType>
+<citizenshipOrOrganization>DE</citizenshipOrOrganization>
+<soleVotingPower>3606663095</soleVotingPower>
+<sharedVotingPower>0</sharedVotingPower>
+<soleDispositivePower>3002673393</soleDispositivePower>
+<sharedDispositivePower>0</sharedDispositivePower>
+<aggregateAmountOwned>3606663095</aggregateAmountOwned>
+<isAggregateExcludeShares>N</isAggregateExcludeShares>
+<percentOfClass>44.9</percentOfClass>
+<typeOfReportingPerson>OO</typeOfReportingPerson>
+<commentContent>Regarding row 4, the transactions described in Item 4 hereto do not entail the use of funds. For additional information regarding rows 7 through 11, see Item 5 hereto.</commentContent>
+</reportingPersonInfo>
+<reportingPersonInfo>
+<reportingPersonNoCIK>Y</reportingPersonNoCIK>
+<reportingPersonName>Walton Family Holdings Trust</reportingPersonName>
+<memberOfGroup>a</memberOfGroup>
+<fundType>OO</fundType>
+<citizenshipOrOrganization>AZ</citizenshipOrOrganization>
+<soleVotingPower>0</soleVotingPower>
+<sharedVotingPower>0</sharedVotingPower>
+<soleDispositivePower>603989702</soleDispositivePower>
+<sharedDispositivePower>0</sharedDispositivePower>
+<aggregateAmountOwned>603989702</aggregateAmountOwned>
+<isAggregateExcludeShares>N</isAggregateExcludeShares>
+<percentOfClass>7.52</percentOfClass>
+<typeOfReportingPerson>OO</typeOfReportingPerson>
+<commentContent>Regarding row 4, the transactions described in Item 4 hereto do not entail the use of funds. For additional information regarding rows 7 through 11, see Item 5 hereto.</commentContent>
+</reportingPersonInfo>
+</reportingPersons>
+<items1To7>
+<item1>
+<securityTitle>Common Stock</securityTitle>
+<issuerName>Walmart Inc.</issuerName>
+<issuerPrincipalAddress>
+<com:street1>702 S.W. 8th Street</com:street1>
+<com:city>Bentonville</com:city>
+<com:stateOrCountry>AR</com:stateOrCountry>
+<com:zipCode>72716</com:zipCode>
+</issuerPrincipalAddress>
+<commentText>This statement relates to the common stock (the "Common Stock"), $0.10 par value per share, of Walmart Inc. (the "Issuer"), a Delaware corporation, with its principal executive offices at 702 S.W. 8th Street, Bentonville, Arkansas, 72716.</commentText>
+</item1>
+<item2>
+<filingPersonName>This statement is being filed by Walton Enterprises, LLC ("Walton Enterprises") and Walton Family Holdings Trust ("WFHT" and together with Walton Enterprises, the "Reporting Entities"). The managing members of Walton Enterprises are WELLCO Mgmt Trust #1, WELLCO Mgmt Trust #2, WELLCO Mgmt Trust #3, and WELLCO Mgmt Trust #4 (the "Walton Enterprises Managing Member Trusts"). Carrie Walton Penner, Benjamin S. Walton, S. Robson Walton, and Samuel R. Walton are trustees of WELLCO Mgmt Trust #1 (the "WELLCO Mgmt Trust #1 Trustees"). Alice Proietti, James M. Walton, Jim C. Walton, Steuart L. Walton, and Thomas L. Walton are trustees of WELLCO Mgmt Trust #2 (the "WELLCO Mgmt Trust #2 Trustees"). Alice L. Walton is trustee of WELLCO Mgmt Trust #3. Lukas T. Walton is trustee of WELLCO Mgmt Trust #4. The trustees of WFHT are Carrie Walton Penner, Alice Proietti, Alice L. Walton, Benjamin S. Walton, James M. Walton, Jim C. Walton, Lukas T. Walton, S. Robson Walton, Samuel R. Walton, Steuart L. Walton, and Thomas L. Walton (the "WFHT Trustees" and, together with the trustees of the Walton Enterprises Managing Member Trusts set forth in this Item 2(a), the "Trustees"). Each Reporting Entity, Walton Enterprises Managing Member Trust, and Trustee is referred to as a "Schedule 13D Entity and Person" and together are referred to as the "Schedule 13D Entities and Persons".</filingPersonName>
+<principalBusinessAddress>The address of the principal office of Walton Enterprises and each Walton Enterprises Managing Member Trust is 8805 Tamiami Trail N., Suite 108, Naples, Florida, 34108. The address of the principal office of WFHT is P.O. Box 1508, Bentonville, Arkansas, 72712. The business address for each Trustee is P.O. Box 1508, Bentonville, Arkansas, 72712.</principalBusinessAddress>
+<principalJob>The principal business of Walton Enterprises is holding, managing, investing, and distributing the limited liability company property and the proceeds therefrom. The principal business of WFHT is holding, managing, investing, and distributing the trust property and the proceeds therefrom.&#13;
+&#13;
+With respect to the managing members of Walton Enterprises: WELLCO Mgmt Trust #1 is an irrevocable trust of which the WELLCO Mgmt Trust #1 Trustees are trustees and of which S. Robson Walton is sole current beneficiary. The principal business of WELLCO Mgmt Trust #1 is holding, managing, investing, and distributing the trust property and the proceeds therefrom. WELLCO Mgmt Trust #2 is an irrevocable trust of which the WELLCO Mgmt Trust #2 Trustees are trustees and of which Jim C. Walton is sole current beneficiary. The principal business of WELLCO Mgmt Trust #2 is holding, managing, investing, and distributing the trust property and the proceeds therefrom. WELLCO Mgmt Trust #3 is an irrevocable trust of which Alice L. Walton is trustee and current beneficiary. The principal business of WELLCO Mgmt Trust #3 is holding, managing, investing and distributing the trust property and the proceeds therefrom. WELLCO Mgmt Trust #4 is an irrevocable trust of which Lukas T. Walton is trustee and current beneficiary. The principal business of WELLCO Mgmt Trust #4 is holding, managing, investing and distributing the trust property and the proceeds therefrom.&#13;
+&#13;
+With respect to the Trustees: Carrie Walton Penner is owner of the Denver Broncos, a professional sports team, with a principal business address of 1701 Bryant St., Denver, CO 80204. Alice Proietti is a self-employed philanthropist with a principal business address of P.O. Box 1508, Bentonville, AR 72712. Alice L. Walton is a self-employed philanthropist with a principal business address of P.O. Box 1508, Bentonville, AR 72712. Benjamin S. Walton is a self-employed investor with a principal business address of P.O. Box 1508, Bentonville, AR 72712. James M. Walton is a self-employed philanthropist with a principal business address of P.O. Box 1508, Bentonville, AR 72712. Jim C. Walton is Chairman of Arvest Bank Group, Inc., a bank holding company, with a principal business address of 75 North East Avenue, Fayetteville, AR 72701. Lukas T. Walton is a self-employed philanthropist and investor with a principal business address of P.O. Box 1508, Bentonville, AR 72712. S. Robson Walton is the retired Chairman of the Issuer with a principal business address of P.O. Box 1508, Bentonville, AR 72712. Samuel R. Walton is the owner of Restoration Works, LLC, a natural resources holding company, with a principal business address of P.O. Box 1508, Bentonville, AR 72712. Steuart L. Walton is Co-Founder of Game Composites, LLC, a manufacturer of carbon fiber aircraft and aircraft parts, and Co-Founder of Runway Group, LLC, a holding company that makes investments in real estate, outdoor initiatives, and hospitality. The principal business address of Game Composites, LLC and Runway Group, LLC is 125 W. Central Ave., Suite 300, Bentonville, AR 72712. Steuart L. Walton is also a director of the Issuer. Thomas L. Walton is Co-Founder of Runway Group, LLC, a holding company that makes investments in real estate, outdoor initiatives, and hospitality, with a principal business address of 125 W. Central Ave., Suite 300, Bentonville, AR 72712.&#13;
+&#13;
+The Reporting Entities have entered into a joint filing agreement, dated as of December 18, 2024, a copy of which is attached hereto as Exhibit 1.</principalJob>
+<hasBeenConvicted>No Schedule 13D Entity and Person has, during the last five years, been convicted in any criminal proceeding (excluding traffic violations or similar misdemeanors).</hasBeenConvicted>
+<convictionDescription>No Schedule 13D Entity and Person has, during the last five years, been party to a civil proceeding of a judicial or administrative body of competent jurisdiction and as a result of such proceeding was or is subject to a judgment, decree, or final order enjoining future violations of, or prohibiting or mandating activities subject to, federal or state securities laws or finding any violation with respect to such laws.</convictionDescription>
+<citizenship>Walton Enterprises is a Delaware limited liability company. WFHT is organized under Arizona law. Each Walton Enterprises Managing Member Trust is organized under Florida law. Each Trustee is a citizen of the United States.</citizenship>
+</item2>
+<item3>
+<fundsSource>Item 4 hereof is incorporated herein by reference.</fundsSource>
+</item3>
+<item4>
+<transactionPurpose>Prior to December 18, 2024, Alice L. Walton, Jim C. Walton, S. Robson Walton, and the John T. Walton Estate Trust (of which Alice L. Walton, Jim C. Walton, and S. Robson Walton were the trustees) were the managing members of Walton Enterprises, and Alice L. Walton, Jim C. Walton, and S. Robson Walton were the trustees of WFHT and jointly filed beneficial ownership reports on Schedule 13G with respect to the Common Stock. With respect to Walton Enterprises, voting and dispositive power over all of the Common Stock held thereby was and is exercised by the managing members thereof. With respect to WFHT, voting and dispositive power over all of the Common Stock held thereby was exercised by the trustees thereof. As of December 17, 2024, Walton Enterprises held 3,002,673,393 shares of Common Stock and the Walton Family Holdings Trust held 603,989,702 shares of Common Stock.&#13;
+&#13;
+On December 18, 2024, (i) S. Robson Walton's managing membership interests in Walton Enterprises were transferred, for no consideration, to WELLCO Mgmt Trust #1, (ii) Jim C. Walton's managing membership interests in Walton Enterprises were transferred, for no consideration, to WELLCO Mgmt Trust #2, (iii) Alice L. Walton's managing membership interests in Walton Enterprises were transferred, for no consideration, to WELLCO Mgmt Trust #3, (iv) the John T. Walton Estate Trust was amended to become WELLCO Mgmt Trust #4, and (v) Carrie Walton Penner, Alice Proietti, Benjamin S. Walton, James M. Walton, Lukas T. Walton, Samuel R. Walton, Steuart L. Walton, and Thomas L. Walton became additional trustees of WFHT.&#13;
+&#13;
+As a result of these events, the Walton Enterprises Managing Member Trusts are the managing members of Walton Enterprises and the WFHT Trustees are the trustees of WFHT. WFHT has also granted Walton Enterprises an irrevocable proxy to vote its shares of Common Stock. The managing members of Walton Enterprises act by majority vote with respect to voting and investment power over shares of Common Stock held by Walton Enterprises. The WFHT Trustees act by majority vote with respect to investment power over shares of Common Stock held by WFHT. As of December 18, 2024, Walton Enterprises held 3,002,673,393 shares of Common Stock and the Walton Family Holdings Trust held 603,989,702 shares of Common Stock.&#13;
+&#13;
+The Schedule 13D Entities and Persons hold the Common Stock as an investment and currently have no plans or proposals which relate to or would result in any of the actions enumerated in paragraphs (a) through (j) of Item 4 of the form of Schedule 13D promulgated under the Securities Exchange Act of 1934, as amended. The Schedule 13D Entities and Persons contemplate distributions of shares of Common Stock from WFHT to beneficiaries of WFHT and sales of shares of Common Stock by WFHT in order to meet investment, personal, and charitable objectives of the beneficiaries of WFHT. However, the Schedule 13D Entities and Persons reserve the right to change their plans at any time, as they deem appropriate, and accordingly the Schedule 13D Entities and Persons may acquire additional shares of Common Stock in open market or private transactions for investment purposes, and may sell, donate, distribute, or otherwise dispose of shares of Common Stock in open market or private transactions, to their respective members or beneficiaries, or otherwise.</transactionPurpose>
+</item4>
+<item5>
+<percentageOfClassSecurities>In the table set forth in Exhibit 2, each reference to the percentage of Common Stock beneficially owned by a Schedule 13D Entity and Person is calculated using the 8,033,386,215 shares of Common Stock outstanding on December 4, 2024, as shown by the Issuer's Quarterly Report on Form 10-Q for the quarter ended October 31, 2024, filed on December 6, 2024.</percentageOfClassSecurities>
+<numberOfShares>See Exhibit 2 hereto.</numberOfShares>
+<transactionDesc>No transactions in Common Stock have been effected by any Schedule 13D Entity and Person in the last 60 days.</transactionDesc>
+<listOfShareholders>The information set forth in the third and fourth sentences of the second paragraph of Item 6 and the third and fourth sentences of the third paragraph of Item 6 is incorporated herein by reference. No other person is known to have the right to receive or the power to direct the receipt of dividends from, or any proceeds from the sale of, the shares beneficially owned by either of the Reporting Entities.</listOfShareholders>
+<date5PercentOwnership>Not applicable.</date5PercentOwnership>
+</item5>
+<item6>
+<contractDescription>S. Robson Walton is the father of Carrie Walton Penner, Benjamin S. Walton, and Samuel R. Walton and the brother of Jim C. Walton and Alice L. Walton. Jim C. Walton is the father of Alice Proietti, James M. Walton, Steuart L. Walton, and Thomas L. Walton and the brother of S. Robson Walton and Alice L. Walton. Alice L. Walton is the sister of S. Robson Walton and Jim C. Walton. Steuart L. Walton and Carrie Walton Penner's spouse are directors of the Issuer.&#13;
+&#13;
+Walton Enterprises is governed by a limited liability company agreement (the "LLC Agreement") that governs its affairs, including the rights of its managing members (the Walton Enterprises Managing Member Trusts) and non-managing members (the individuals who are serving as the Trustees as well as other family entities). Pursuant to the LLC Agreement, management and control of Walton Enterprises is vested in the managing members, and the managing members manage, conduct, and operate the business of Walton Enterprises. Other than certain mandatory tax-related distributions, distributions from Walton Enterprises may be made from time to time at the discretion of the managing members. Distributions from Walton Enterprises are made to its members based on their relative ownership interests.&#13;
+&#13;
+The trust instrument for WFHT confers and governs the authority of the WFHT Trustees to vote or to direct the vote, and the power to dispose or to direct the disposition of, shares of Common Stock held by WFHT. WFHT has granted Walton Enterprises an irrevocable proxy to vote its shares of Common Stock, a copy of which is attached as Exhibit 3. The individuals who are serving as Trustees as well as other family entities are beneficiaries of WFHT. Cash dividends received with respect to the Common Stock and proceeds received from the sale of shares of Common Stock are distributed to beneficiaries based on beneficial interests.&#13;
+&#13;
+Jim C. Walton has pledged 4,464,286 shares of Common Stock directly owned by him as security for certain lines of credit extended to a company not affiliated with the Issuer.&#13;
+&#13;
+As set forth in Item 2, the Reporting Entities have entered into a Joint Filing Agreement, a copy of which is attached as Exhibit 1 hereto and is incorporated herein by reference.</contractDescription>
+</item6>
+<item7>
+<filedExhibits>Exhibit 1 - Joint Filing Agreement&#13;
+Exhibit 2 - Interest in Securities of the Issuer Table&#13;
+Exhibit 3 - Irrevocable Proxy from WFHT to Walton Enterprises&#13;
+Exhibit 4 - Power of Attorney (Walton Enterprises)&#13;
+Exhibit 5 - Power of Attorney (WFHT)</filedExhibits>
+</item7>
+</items1To7>
+<signatureInfo>
+<signaturePerson>
+<signatureReportingPerson>Walton Enterprises, LLC</signatureReportingPerson>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Carrie Walton Penner, in her capacity as trustee of WELLCO Mgmt Trust #1, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Alice Proietti, in her capacity as trustee of WELLCO Mgmt Trust #2, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Alice L. Walton, in her capacity as trustee of WELLCO Mgmt Trust #3, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Benjamin S. Walton, in his capacity as trustee of WELLCO Mgmt Trust #1, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>James M. Walton, in his capacity as trustee of WELLCO Mgmt Trust #2, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Jim C. Walton, in his capacity as trustee of WELLCO Mgmt Trust #2, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Lukas T. Walton, in his capacity as trustee of WELLCO Mgmt Trust #4, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>S. Robson Walton, in his capacity as trustee of WELLCO Mgmt Trust #1, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Samuel R. Walton, in his capacity as trustee of WELLCO Mgmt Trust #1, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Steuart L. Walton, in his capacity as trustee of WELLCO Mgmt Trust #2, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Thomas L. Walton, in his capacity as trustee of WELLCO Mgmt Trust #2, a managing member of Walton Enterprises, LLC</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ Erron W. Smith</signature>
+<title>Erron W. Smith, Attorney-in-Fact*</title>
+<date>12/19/2024</date>
+</signatureDetails>
+</signaturePerson>
+<signaturePerson>
+<signatureReportingPerson>Walton Family Holdings Trust</signatureReportingPerson>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Carrie Walton Penner, in her capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Alice Proietti, in her capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Alice L. Walton, in her capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Benjamin S. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>James M. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Jim C. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Lukas T. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>S. Robson Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Samuel R. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Steuart L. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ *</signature>
+<title>Thomas L. Walton, in his capacity as trustee of Walton Family Holdings Trust</title>
+<date>12/19/2024</date>
+</signatureDetails>
+<signatureDetails>
+<signature>/s/ Erron W. Smith</signature>
+<title>Erron W. Smith, Attorney-in-Fact*</title>
+<date>12/19/2024</date>
+</signatureDetails>
+</signaturePerson>
+<commentText>Asterisk: By Erron W. Smith, Attorney-in-Fact, pursuant to a Power of Attorney dated December 18, 2024, attached as Exhibit 4 hereto and a Power of Attorney dated December 18, 2024, attached as Exhibit 5 hereto.</commentText>
+</signatureInfo>
+</formData>
+
+</edgarSubmission>

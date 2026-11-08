@@ -19,6 +19,7 @@ from api_seed import (
     BETA,
     BETA_10Q,
     OLD,
+    OLD_13G,
     OLD_Q1_10Q,
     OLD_Q1_RELEASE,
     PROSPECTUS,
@@ -49,6 +50,7 @@ TOOLS = {
     "insider_activity",  # E8 (test_mcp_insiders.py)
     "investor_portfolio",  # E9 (test_mcp_funds.py)
     "fund_holders",
+    "major_holders",  # E16 (test_mcp_stakes.py)
 }
 MAX_ANSWER = 8 * 1024  # bytes (§10.3)
 
@@ -380,11 +382,13 @@ async def test_recent_filings_match_a_forms_family_as_the_api_does(
     assert [each["accession_no"] for each in reports["data"]["filings"]] == [AMENDED_8K, Q3_RELEASE]
     assert reports["data"]["matched_forms"][:2] == ["8-K", "8-K/A"]
     assert (default["data"]["form"], default["data"]["matched_forms"]) == (None, None)
-    # REST has no window: the old code's amendment too; never ACME's own stake.
+    # REST has no window: the old code's amendment and the seed's old SC 13G (E16) too; never
+    # ACME's own stake.
     assert [each["accession_no"] for each in rest["data"]["filings"]] == [
         STAKE_13G,
         STAKE_13G_A,
         OLD_13G_A,
+        OLD_13G,
     ]
     assert rest["data"]["matched_forms"] == NEW_13G_FIRST
     refused = await api.get(

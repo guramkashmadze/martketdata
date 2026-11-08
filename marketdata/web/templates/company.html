@@ -91,5 +91,9 @@ for that quarter.</p>
 {% include "partials/insiders.html" %}
 {% endif %}
 
+{% if stakes %}
+{{ parts.stakes(stakes) }}
+{% endif %}
+
 {{ parts.holders(holders) }}
 {% endblock %}

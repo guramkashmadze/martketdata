@@ -3,10 +3,10 @@
 A company page shows the company's identity and class, what applies to it and why, its latest
 earnings release with the changes from a year earlier, eight quarters of the core metrics with a
 chart, its recent filings with their plain-language labels and when the SEC was last checked for
-them (D-135), its insiders' trades (E8, D-111) and the curated managers holding it (E9, D-120).
-Every number links to its proof page. A fund, a foreign issuer or a company outside the universe
-gets the same page with the parts that apply and the reasons the others don't, never an error.
-Prices come with E10.
+them (D-135), its insiders' trades (E8, D-111), its 5% holders from their Schedules 13D and 13G
+(E16, D-138) and the curated managers holding it (E9, D-120). Every number links to its proof
+page. A fund, a foreign issuer or a company outside the universe gets the same page with the
+parts that apply and the reasons the others don't, never an error. Prices come with E10.
 
 Everything is read through the service functions the API and the MCP server use.
 """
@@ -37,6 +37,7 @@ from marketdata.service.funds import company_funds
 from marketdata.service.insiders import insider_activity
 from marketdata.service.pages import MAX_LIMIT
 from marketdata.service.snapshot import company_snapshot
+from marketdata.service.stakes import major_holders
 from marketdata.web.access import require_ui_access
 from marketdata.web.render import METRIC_NAMES, metric_url, page, scale_name, scaled
 
@@ -237,6 +238,7 @@ async def company(
         activity=activity,
         codes=codes,
         windows=INSIDER_WINDOWS,
+        stakes=(await major_holders(conn, ticker)).data if applies["stakes"] else None,
         holders=(await company_funds(conn, ticker)).data,
     )
 

@@ -15,19 +15,27 @@ functions, so a page and the API never disagree.
 - A fund position (`/proof/funds/{manager_cik}/{quarter}/{cusip}`, E15): the position as
   `fund_holdings` serves it, the 13F reports and information-table lines it adds up, their unit
   and summary-page totals, its flags and its change history.
+- A 5% stake (`/proof/stakes/{accession_no}`, E16): a structured Schedule 13D or 13G as parsed,
+  every reporting person as filed, a 13D's Item 4 word for word, its checks, whether it is its
+  holder's latest filing about the class (served) or which later filing replaced it, the
+  holder's filings about the class and the change history.
 """
 
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any
 
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict
 
-from marketdata.db.repositories import financial_metrics, holdings, insiders, value_changes
+from marketdata.db.repositories import financial_metrics, holdings, insiders, stakes, value_changes
 from marketdata.db.repositories.insiders import StoredFiling, StoredLine
+from marketdata.db.repositories.stakes import StoredStakeFiling, StoredStakePerson
 from marketdata.db.repositories.value_changes import StoredChange
 from marketdata.normalize.insiders import CODE_LABELS, FiledTrade, group_trades
 from marketdata.normalize.quality import DESCRIPTIONS
+from marketdata.normalize.schedule13 import Schedule, schedule_of
+from marketdata.normalize.stakes import headline, is_exited
 from marketdata.sec import urls
 from marketdata.service.companies import CompanyRef, company_refs, group_of, require, resolve_ticker
 from marketdata.service.earnings import EarningsRelease, get_earnings
@@ -42,6 +50,7 @@ from marketdata.service.financials import (
 from marketdata.service.funds import FundFiling, FundPosition, fund_filing, fund_holdings
 from marketdata.service.insiders import Insider, insider_of
 from marketdata.service.served import Number, Source, sources_of
+from marketdata.service.stakes import StakePerson, company_filings, group_of_listing, person_of
 
 SLOT_NAMES = {
     "revenue": "Revenue",
@@ -102,6 +111,31 @@ POSITION_FLAGS = {
     ),
     "split_adjusted": "the shares a quarter earlier are compared after the security's split",
     "no_prior_report": "no report for the quarter before, so no change is shown",
+}
+# E16: what a stake filing's checks and flags mean (§9.15, normalize/stakes.py).
+STAKE_CHECKS = {
+    "issuer_matches_listing": (
+        "the filing's issuer is the company whose listing it is on, the subject's (file number "
+        "005-)"
+    ),
+    "form_matches_listing": "the form in the XML is the form the SEC lists",
+    "percent_in_range": "every reporting person's percent of the class is from 0 to 100",
+    "powers_within_amount": (
+        "each person's sole and shared voting powers, and its dispositive powers, add up to at "
+        "most the amount it owns"
+    ),
+}
+STAKE_FLAGS = {
+    "form_differs_from_listing": "the form in the XML differs from the form the SEC lists",
+    "percent_out_of_range": "a percent of the class below 0 or above 100, as filed",
+    "powers_exceed_amount": (
+        "a person's sole and shared powers add up to more than the amount it owns, as filed: "
+        "the same shares stated as both"
+    ),
+}
+STAKE_REASONS = {
+    "amendment": "a later filing of the same holder about the class replaced the stake",
+    "correction": "a new parser version reads the filing otherwise",
 }
 SUPERSEDED = {
     "amendment": "a later 4/A restates or corrects it",
@@ -211,6 +245,10 @@ def _entry(change: StoredChange) -> HistoryEntry:
     elif change.entity == "fund_position":
         option = f" {key['put_call']}" if key.get("put_call") else ""
         what = f"{key.get('cusip')}{option}, {key.get('field')}"
+    elif change.entity == "stake_holding":
+        what = f"the stake of {key.get('accession_no')}, shares"
+        if key.get("served_from") and key.get("served_from") != key.get("accession_no"):
+            what += f" (served from {key.get('served_from')})"
     else:
         what = f"{key.get('metric')}, {key.get('period_type')} {key.get('period_end')}"
     return HistoryEntry(
@@ -470,4 +508,132 @@ async def fund_position_proof(
         ),
         history=tuple(_entry(change) for change in changed),
         flags={code: POSITION_FLAGS.get(code, code) for code in position.quality_flags},
+    )
+
+
+# --- E16: a 5% stake's proof page.
+
+
+class StakeRef(BaseModel):
+    """One of a holder's filings about a class."""
+
+    model_config = ConfigDict(frozen=True)
+
+    accession_no: str
+    form: str
+    filed_at: date
+    event_date: date
+    shares: Number
+    percent: Number
+    exited: bool
+
+
+class StakeFilingProof(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    accession_no: str
+    form: str
+    schedule: Schedule
+    filed_at: date
+    event_date: date
+    issuer: CompanyRef  # the company the filing is about, as known now
+    issuer_name: str | None  # as filed
+    filer_cik: int
+    previous_accession: str | None
+    amendment_no: int | None
+    cusips: tuple[str, ...]  # as filed
+    class_title: str | None
+    ticker: str | None  # our ticker of the class, when the CUSIP map links its CUSIP
+    rules: tuple[str, ...]
+    ceased_5pct: bool | None
+    purpose: str | None  # a 13D's Item 4, word for word
+    persons: tuple[StakePerson, ...]
+    shares: Number  # the largest amount one reporting person states
+    percent: Number
+    exited: bool
+    served: bool  # the holder's latest filing about the class
+    served_by: StakeRef | None  # the later filing that serves the holder's stake now
+    holder_filings: tuple[StakeRef, ...]  # the holder's filings about the class, newest first
+    filing_url: str  # the filing's folder on sec.gov
+    index_url: str
+    document_url: str  # the XML read
+    schema_version: str | None
+    method: str
+    extractor_version: str
+    parsed_at: datetime
+    checks: dict[str, str]
+    flags: dict[str, str]
+    history: tuple[HistoryEntry, ...]
+
+
+async def stake_filing_proof(conn: AsyncConnection[Any], accession_no: str) -> StakeFilingProof:
+    """A structured 13D or 13G as parsed, with its place among its holder's filings."""
+    try:
+        accession = urls.accession_no(accession_no)
+    except ValueError:
+        raise InvalidParameter(
+            f"{accession_no!r} is not an accession number like 0002100119-26-000052"
+        )
+    filing = await stakes.get_filing(conn, accession)
+    if filing is None:
+        raise NotFound(f"No structured Schedule 13D or 13G has the accession number {accession}.")
+    found = await company_filings(conn, await group_of_listing(conn, filing.issuer_cik))
+    serving = found.holdings.serving[accession]
+    holding = next(h for h in found.holdings.holdings if h.accession_no == serving)
+    refs = {
+        number: _stake_ref(found.filings[number], found.persons.get(number, []))
+        for number in (holding.accession_no, *holding.superseded)
+    }
+    people = sorted(found.persons.get(accession, []), key=lambda person: person.position)
+    top = headline(people)
+    company = await company_refs(conn, [filing.issuer_cik])
+    return StakeFilingProof(
+        accession_no=filing.accession_no,
+        form=filing.form,
+        schedule=schedule_of(filing.form),
+        filed_at=filing.filed_at,
+        event_date=filing.event_date,
+        issuer=company[filing.issuer_cik],
+        issuer_name=filing.issuer_name,
+        filer_cik=filing.filer_cik,
+        previous_accession=filing.previous_accession,
+        amendment_no=filing.amendment_no,
+        cusips=tuple(filing.cusips),
+        class_title=filing.class_title,
+        ticker=holding.class_key,
+        rules=tuple(filing.rules),
+        ceased_5pct=filing.ceased_5pct,
+        purpose=filing.purpose,
+        persons=tuple(person_of(person) for person in people),
+        shares=top.amount,
+        percent=top.percent,
+        exited=is_exited(filing.ceased_5pct, people),
+        served=serving == accession,
+        served_by=refs[serving] if serving != accession else None,
+        holder_filings=tuple(refs.values()),
+        filing_url=urls.filing_folder(filing.issuer_cik, filing.accession_no),
+        index_url=urls.filing_index_page(filing.issuer_cik, filing.accession_no),
+        document_url=urls.filing_document(filing.issuer_cik, filing.accession_no, filing.doc_name),
+        schema_version=filing.schema_version,
+        method=filing.method,
+        extractor_version=filing.extractor_version,
+        parsed_at=filing.parsed_at,
+        checks={code: STAKE_CHECKS.get(code, code) for code in filing.checks},
+        flags={code: STAKE_FLAGS.get(code, code) for code in filing.quality_flags},
+        history=tuple(
+            _entry(change) for change in await value_changes.for_stake_filing(conn, accession)
+        ),
+    )
+
+
+def _stake_ref(filing: StoredStakeFiling, people: Sequence[StoredStakePerson]) -> StakeRef:
+    top = headline(people)
+    return StakeRef(
+        accession_no=filing.accession_no,
+        form=filing.form,
+        filed_at=filing.filed_at,
+        event_date=filing.event_date,
+        shares=top.amount,
+        percent=top.percent,
+        exited=is_exited(filing.ceased_5pct, people),
     )

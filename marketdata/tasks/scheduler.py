@@ -40,6 +40,7 @@ from marketdata.tasks.kinds import (
     INSIDERS_BACKFILL,
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
+    STAKES_BACKFILL,
 )
 
 WATCH_EVERY = timedelta(minutes=10)
@@ -160,6 +161,30 @@ async def enqueue_insiders_backfills(
         for company in universe
         if company.filer_type in ("domestic", "foreign_private_issuer")
         and (ciks is None or company.cik in ciks)
+    ]
+
+
+async def enqueue_stakes_backfills(
+    conn: AsyncConnection[Any],
+    *,
+    force: bool = False,
+    ciks: Collection[int] | None = None,
+) -> list[Task]:
+    """On demand (`marketdata backfill stakes`): one stakes_backfill per universe company of
+    any class (E16), or per one of `ciks`, behind live and periodic work (D-067). `force` reads
+    filings parsed before again."""
+    universe = await companies.list_in_universe(conn)
+    return [
+        await queue.enqueue(
+            conn,
+            STAKES_BACKFILL,
+            str(company.cik),
+            {"cik": company.cik, "force": force},
+            force=True,
+            priority=queue.PRIORITY_BACKFILL,
+        )
+        for company in universe
+        if ciks is None or company.cik in ciks
     ]
 
 

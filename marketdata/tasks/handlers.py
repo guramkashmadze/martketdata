@@ -23,9 +23,16 @@ from marketdata.ingest.security_master import (
     read_data_files,
     read_predecessors,
 )
+from marketdata.ingest.stakes import StakeIngest, StakeRefused, StakesBackfill
 from marketdata.ingest.watcher import FilingsWatcher, watch_summary
 from marketdata.normalize.cusips import CUSIP_MAP, MappingError
-from marketdata.normalize.filings import EARNINGS_EXTRACT, F13_PARSE, FACTS_REFRESH, FORM4_PARSE
+from marketdata.normalize.filings import (
+    EARNINGS_EXTRACT,
+    F13_PARSE,
+    FACTS_REFRESH,
+    FORM4_PARSE,
+    STAKE_PARSE,
+)
 from marketdata.normalize.holdings import UnitOverrideError
 from marketdata.normalize.security_master import SecFileError, SnapshotRefused
 from marketdata.normalize.universe import DataFileError
@@ -40,6 +47,7 @@ from marketdata.tasks.kinds import (
     INSIDERS_BACKFILL,
     PUBLIC_FLOAT_LOAD,
     SECURITY_MASTER,
+    STAKES_BACKFILL,
 )
 from marketdata.tasks.queue import RetryPolicy
 from marketdata.tasks.registry import Handler, Registry, TaskContext, TaskRefused
@@ -140,6 +148,24 @@ async def parse_insider_filing(context: TaskContext, task: Task) -> None:
         await Form4Ingest(context.fetcher, context.connect).run(cik, accession_no)
     except (Form4Refused, SecFileError) as exc:
         raise TaskRefused(str(exc)) from exc
+
+
+async def parse_stake_filing(context: TaskContext, task: Task) -> None:
+    """One structured Schedule 13D or 13G (E16), routed from the listing of the company it is
+    about: its XML stored and parsed, and the company's holders decided again. A document that
+    isn't a structured 13D or 13G about the listing's company is refused: retrying can't help."""
+    cik, accession_no = _cik(task), _accession(task)
+    try:
+        await StakeIngest(context.fetcher, context.connect).run(cik, accession_no)
+    except (StakeRefused, SecFileError) as exc:
+        raise TaskRefused(str(exc)) from exc
+
+
+async def backfill_stakes(context: TaskContext, task: Task) -> None:
+    """One company's structured 13D and 13G filings (E16-S4), its predecessors' too, from the
+    listings already stored: parsed and stored in one transaction. It watches no company."""
+    backfill = StakesBackfill(context.fetcher, context.connect)
+    await backfill.run(_cik(task), force=task.payload.get("force") is True)
 
 
 async def parse_13f_filing(context: TaskContext, task: Task) -> None:
@@ -300,6 +326,8 @@ def build_registry(
     registry.register(FACTS_REFRESH, refresh_facts)
     registry.register(FORM4_PARSE, parse_insider_filing)
     registry.register(INSIDERS_BACKFILL, backfill_insiders)
+    registry.register(STAKE_PARSE, parse_stake_filing)
+    registry.register(STAKES_BACKFILL, backfill_stakes)
     registry.register(F13_PARSE, parse_13f_filing)
     registry.register(CUSIP_MAP, map_cusips)
     registry.register(FUNDS_BACKFILL, backfill_funds)

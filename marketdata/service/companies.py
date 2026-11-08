@@ -17,7 +17,7 @@ from marketdata.db.repositories import companies, predecessors, securities
 from marketdata.db.repositories.companies import Company
 from marketdata.db.repositories.securities import Security
 from marketdata.normalize.security_master import FilerType
-from marketdata.normalize.tickers import SecurityType, TickerError, canonical_ticker
+from marketdata.normalize.tickers import SecurityType, TickerError, canonical_ticker, primary_of
 from marketdata.service.errors import InvalidParameter, NotApplicable, NotFound
 from marketdata.service.pages import DEFAULT_LIMIT, check_limit, decode_cursor, encode_cursor
 from marketdata.service.served import Served, newest
@@ -86,7 +86,7 @@ async def _not_listed(conn: AsyncConnection[Any], ticker: str) -> str:
     )
 
 
-DataKind = Literal["earnings", "fundamentals", "insiders"]
+DataKind = Literal["earnings", "fundamentals", "insiders", "stakes"]
 
 
 class Capability(BaseModel):
@@ -141,7 +141,8 @@ class Classified(Protocol):
 
 def capabilities_for(company: Classified) -> Capabilities:
     """In the MVP, earnings and fundamentals apply to domestic filers in the universe only;
-    insider trades to domestic filers and foreign private issuers in the universe (E8)."""
+    insider trades to domestic filers and foreign private issuers in the universe (E8); 5%
+    stakes to every universe company (E16)."""
     if company.filer_type in _NOT_APPLICABLE:
         earnings, fundamentals = _NOT_APPLICABLE[company.filer_type]
         applies = False
@@ -163,6 +164,7 @@ def capabilities_for(company: Classified) -> Capabilities:
             Capability(kind="earnings", applies=applies, reason=earnings),
             Capability(kind="fundamentals", applies=applies, reason=fundamentals),
             _insiders(company),
+            _stakes(company),
         ),
     )
 
@@ -190,6 +192,22 @@ def _insiders(company: Classified) -> Capability:
 
 def _not_insiders(reason: str) -> Capability:
     return Capability(kind="insiders", applies=False, reason=reason)
+
+
+def _stakes(company: Classified) -> Capability:
+    """5% stakes come from the Schedules 13D and 13G filed about a company (E16): every class
+    files them, but only a universe company's listings are watched and parsed."""
+    if not company.in_universe:
+        reason, applies = "Not in the covered universe.", False
+    elif company.filer_type == "unknown":
+        reason, applies = "Not classified yet: its SEC filings could not be loaded.", False
+    else:
+        reason, applies = (
+            "In the covered universe: the Schedule 13D and 13G filings about it apply, read "
+            "from the SEC's structured format (from 2024).",
+            True,
+        )
+    return Capability(kind="stakes", applies=applies, reason=reason)
 
 
 def require(security: ResolvedSecurity, kind: DataKind) -> None:
@@ -283,10 +301,7 @@ class CompanyRef(BaseModel):
 def primary_ticker(listed: Sequence[Security]) -> str | None:
     """The ticker a company is shown under when none was asked for: common stock first, then
     the shortest, then the first in order (GOOG before GOOGL, BRK-A before BRK-B)."""
-    ranked = sorted(
-        listed, key=lambda row: (row.security_type != "common", len(row.ticker), row.ticker)
-    )
-    return ranked[0].ticker if ranked else None
+    return primary_of((row.ticker, row.security_type) for row in listed)
 
 
 async def group_of(conn: AsyncConnection[Any], cik: int) -> list[int]:

@@ -12,6 +12,8 @@ contributing filings, the calc version, the filing's index page) is the API's an
 page's. latest_earnings answers the API's release as it is, each fact with its full proof; a
 snapshot's release keeps each fact's source quote and cross-check status. investor_portfolio
 answers a 13F quarter's largest positions and its changes, each list cut short (E9).
+major_holders answers each 5% holder's latest Schedule 13D or 13G in a line, by name, with its
+filing's link, and the newest old-format filings as links (E16).
 """
 
 from datetime import date, datetime
@@ -30,6 +32,7 @@ from marketdata.service.funds import CompanyFunds, FundHoldings, FundPosition, H
 from marketdata.service.insiders import CodeTotal, Insider, InsiderActivity
 from marketdata.service.served import Number, Served, Source
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
+from marketdata.service.stakes import CompanyStakes, OlderFiling, StakeHolder
 
 
 class Answer[T](BaseModel):
@@ -643,6 +646,120 @@ def holders(served: Served[CompanyFunds], *, limit: int) -> Answer[HoldersAnswer
                 for group in shown
             ),
             more_holders=len(by_manager) > limit,
+            note=data.note,
+        ),
+        sources=(),
+        as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
+    )
+
+
+class StakeLine(BaseModel):
+    """A holder's stake in one class, from its latest filing; the class is named by our ticker
+    (the API gives the class title as filed)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    holder: str  # the filing's first reporting person
+    form: str  # SCHEDULE 13D or 13G, /A for an amendment
+    filed_at: date
+    event_date: date  # the event that required the filing
+    ticker: str | None  # the class: the company's ticker for it
+    shares: Number  # the largest amount one reporting person states
+    percent: Number  # of the class
+    reporting_persons: int
+    accession_no: str
+    url: str  # the filing's folder on sec.gov
+    flags: tuple[str, ...]
+
+
+class ExitLine(BaseModel):
+    """A holder whose latest filing about a class reports below 5%."""
+
+    model_config = ConfigDict(frozen=True)
+
+    holder: str
+    form: str
+    filed_at: date
+    ticker: str | None
+    shares: Number
+    percent: Number
+    accession_no: str
+    url: str
+
+
+class OlderLine(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    form: str  # SC 13D, SC 13G ... (HTML or text, not read)
+    filed_at: date
+    url: str  # the filing's index page on sec.gov
+
+
+class StakesAnswer(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    company: str | None
+    holders: tuple[StakeLine, ...]  # by holder name, never by size
+    more_holders: bool
+    exited: tuple[ExitLine, ...]  # latest filing below 5%, by holder name
+    more_exited: bool
+    older_filings: tuple[OlderLine, ...]  # newest first, not read
+    more_older_filings: bool
+    note: str
+
+
+def _stake_line(holder: StakeHolder) -> StakeLine:
+    return StakeLine(
+        holder=holder.holder,
+        form=holder.form,
+        filed_at=holder.filed_at,
+        event_date=holder.event_date,
+        ticker=holder.ticker,
+        shares=holder.shares,
+        percent=holder.percent,
+        reporting_persons=len(holder.reporting_persons),
+        accession_no=holder.proof.accession_no,
+        url=holder.proof.filing_url,
+        flags=holder.quality_flags,
+    )
+
+
+def _exit_line(holder: StakeHolder) -> ExitLine:
+    return ExitLine(
+        holder=holder.holder,
+        form=holder.form,
+        filed_at=holder.filed_at,
+        ticker=holder.ticker,
+        shares=holder.shares,
+        percent=holder.percent,
+        accession_no=holder.proof.accession_no,
+        url=holder.proof.filing_url,
+    )
+
+
+def _older_line(filing: OlderFiling) -> OlderLine:
+    return OlderLine(form=filing.form, filed_at=filing.filed_at, url=filing.url)
+
+
+def stakes(
+    served: Served[CompanyStakes], *, holders: int, exited: int, older: int
+) -> Answer[StakesAnswer]:
+    """At most `holders` holders and `exited` exits, by name, and `older` old-format filings;
+    each carries its link, as recent_filings' filings carry theirs: `sources` stays empty."""
+    data = served.data
+    return Answer(
+        data=StakesAnswer(
+            ticker=data.ticker,
+            company=data.company,
+            holders=tuple(_stake_line(holder) for holder in data.holders[:holders]),
+            more_holders=len(data.holders) > holders,
+            exited=tuple(_exit_line(holder) for holder in data.exited[:exited]),
+            more_exited=len(data.exited) > exited,
+            older_filings=tuple(_older_line(filing) for filing in data.older_filings[:older]),
+            more_older_filings=data.more_older_filings or len(data.older_filings) > older,
             note=data.note,
         ),
         sources=(),

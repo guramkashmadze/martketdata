@@ -34,6 +34,9 @@ from marketdata.service.proof import (
     METHODS,
     REASONS,
     SLOT_NAMES,
+    STAKE_CHECKS,
+    STAKE_FLAGS,
+    STAKE_REASONS,
     SUPERSEDED,
 )
 from marketdata.service.served import DISCLAIMER
@@ -110,6 +113,7 @@ KIND_NAMES = {
     "earnings": "Earnings releases",
     "fundamentals": "Financial metrics from the 10-K and 10-Q",
     "insiders": "Insider trades (Form 4)",
+    "stakes": "5% holders (Schedules 13D and 13G)",
 }
 ROLE_NAMES = {
     "director": "Director",
@@ -232,6 +236,11 @@ def trade_url(trade: InsiderTrade) -> str:
     return insider_url(first.accession_no, first.lines[0] if first.lines else None)
 
 
+def stake_url(accession_no: str) -> str:
+    """A Schedule 13D or 13G's proof page."""
+    return f"/proof/stakes/{accession_no}"
+
+
 def position_url(manager_cik: int, quarter: str, position: FundPosition) -> str:
     """A fund position's proof page."""
     url = f"/proof/funds/{manager_cik}/{quarter}/{quote(position.cusip, safe='')}"
@@ -313,6 +322,7 @@ _environment.globals.update(
     insider_url=insider_url,
     trade_url=trade_url,
     position_url=position_url,
+    stake_url=stake_url,
     insider_names=insider_names,
     insider_roles=insider_roles,
     year_end=year_end,
@@ -327,6 +337,9 @@ _environment.globals.update(
     cross_checks=CROSS_CHECKS,
     insider_checks=INSIDER_CHECKS,
     insider_flags=INSIDER_FLAGS,
+    stake_checks=STAKE_CHECKS,
+    stake_flags=STAKE_FLAGS,
+    stake_reasons=STAKE_REASONS,
     superseded=SUPERSEDED,
     methods=METHODS,
     reasons=REASONS,

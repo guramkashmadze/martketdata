@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+  <schemaVersion>X0202</schemaVersion>
+<headerData>
+    <submissionType>SCHEDULE 13D/A</submissionType>
+    <previousAccessionNumber>0001104659-21-112194</previousAccessionNumber>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <!-- Field: Pseudo-Tag; ID: Name; Data: FRESENIUS MEDICAL CARE HOLDINGS INC /NY/ -->
+          <cik>0000042872</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>10</amendmentNo>
+      <securitiesClassTitle>Common Stock, par value $0.0001 per share</securitiesClassTitle>
+      <dateOfEvent>07/10/2026</dateOfEvent>
+      <previouslyFiledFlag>false</previouslyFiledFlag>
+      <issuerInfo>
+        <issuerCIK>0001818382</issuerCIK>
+        <issuerCusips>
+          <issuerCusipNumber>020751103</issuerCusipNumber>
+        </issuerCusips>
+        <issuerName>HUMACYTE, INC.</issuerName>
+        <address>
+          <com:street1>2525 East North Carolina Highway 54</com:street1>
+          <com:city>Durham</com:city>
+          <com:stateOrCountry>NC</com:stateOrCountry>
+          <com:zipCode>27713</com:zipCode>
+        </address>
+      </issuerInfo>
+      <authorizedPersons>
+        <notificationInfo>
+          <personName>Robert A. Grauman</personName>
+          <personPhoneNum>646 202-2932</personPhoneNum>
+          <personAddress>
+            <com:street1>145 West 86 Street</com:street1>
+            <com:city>New York</com:city>
+            <com:stateOrCountry>NY</com:stateOrCountry>
+            <com:zipCode>10024</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+        <notificationInfo>
+          <personName>Thomas D. Brouillard</personName>
+          <personPhoneNum>781 699 9000</personPhoneNum>
+          <personAddress>
+            <com:street1>Fresenius Medical Care Holdings, Inc.</com:street1>
+            <com:street2>920 Winter Street</com:street2>
+            <com:city>Waltham</com:city>
+            <com:stateOrCountry>MA</com:stateOrCountry>
+            <com:zipCode>02451-1547</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+        <notificationInfo>
+          <personName>Christof Koester</personName>
+          <personPhoneNum>011 49 6172 609 0</personPhoneNum>
+          <personAddress>
+            <com:street1>Fresenius Medical Care AG</com:street1>
+            <com:street2>Else-Kroener Strasse 1</com:street2>
+            <com:city>Bad Homburg</com:city>
+            <com:stateOrCountry>2M</com:stateOrCountry>
+            <com:zipCode>61352</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+      </authorizedPersons>
+    </coverPageHeader>
+    <reportingPersons>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0000042872</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>Fresenius Medical Care Holdings, Inc.</reportingPersonName>
+        <fundType>WC</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>NY</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>18312735.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>18312735.00</sharedDispositivePower>
+        <aggregateAmountOwned>18312735.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>6.8</percentOfClass>
+        <typeOfReportingPerson>CO</typeOfReportingPerson>
+      </reportingPersonInfo>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0001333141</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>Fresenius Medical Care AG</reportingPersonName>
+        <fundType>AF</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>2M</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>18312735.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>18312735.00</sharedDispositivePower>
+        <aggregateAmountOwned>18312735.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>6.8</percentOfClass>
+        <typeOfReportingPerson>CO</typeOfReportingPerson>
+      </reportingPersonInfo>
+    </reportingPersons>
+    <items1To7>
+      <item1>
+        <securityTitle>Common Stock, par value $0.0001 per share</securityTitle>
+        <issuerName>HUMACYTE, INC.</issuerName>
+        <issuerPrincipalAddress>
+          <com:street1>2525 East North Carolina Highway 54</com:street1>
+          <com:city>Durham</com:city>
+          <com:stateOrCountry>NC</com:stateOrCountry>
+          <com:zipCode>27713</com:zipCode>
+        </issuerPrincipalAddress>
+        <commentText>This Amendment No. 10 amends certain information contained in the Schedule 13D originally filed by Fresenius Medical Care Holdings, Inc., a New York Corporation ("FMCH") and Fresenius Medical Care AG a German stock corporation formerly called Fresenius Medical Care AG &amp; Co. KGaA ("FME AG") on September 2, 2021, as previously amended by Amendment No. 1 filed December 1, 2023, Amendment No. 2 filed March 7, 2024, Amendment No 3 filed November 18, 2024, Amendment No 4 filed May 22, 2025, Amendment No 5 filed solely by FME AG on October 16 2025, Amendment No. 6 filed by FME AG and FMCH on January 9, 2026, Amendment No. 7 filed March 24, 2026, Amendment No 8 filed Apil 27, 2026 and Amendment No 9 filed June 15, 2026 (as so amended, the "Schedule 13D"), with respect to the common stock, par value $0.0001 per share (the "Common Stock") of Humacyte, Inc., a Delaware corporation, formerly known as Alpha Healthcare Acquisition Corp. (the "Issuer" or "Humacyte"). Capitalized terms not otherwise defined herein have the meanings set forth in the Schedule 13D. Except as provided herein, this Amendment No. 10 does not modify any of the information previously reported on the Schedule 13D.</commentText>
+      </item1>
+      <item4>
+        <transactionPurpose>Item 4 of the Schedule 13D is hereby amended by the addition of the following information:
+
+Consistent with FME AG's FME Reignite strategy implementation and the strategic focus previously outlined to investors, FME AG and FMCH have determined to reduce their beneficial ownership of the Issuers' securities. FME Reignite centers on value creation, based on three strategic elements: Reignite the core, Reignite growth and innovation and Reignite culture. Additional information about the FME AG Reignite strategy can be found in FME AG's public filings and its investor communications. The Distribution Agreement between the Issuer and FMCH, as amended to date, remains in effect.
+
+To actualize this determination, on July 10, 2026, FMCH established a trading plan pursuant to Rule 10b5-1 under the Securities Exchange Act of 1934, as amended (the "Plan"), with Citigroup Global Markets Inc. ("CGMI"). Pursuant to the Plan, CGMI has agreed to use its reasonable best efforts to sell 5,000,000 shares of the Issuer's Common Stock during the Plan sales period commencing upon expiration of the 30-day cooling-off period following the date of the Plan, as required by Rule 10b5-1(c), and ending on October 31, 2026 in accordance with the terms and conditions of the Plan, or earlier if the Plan is terminated in accordance with its terms. The sale of shares of Common Stock under the Plan is subject to certain volume limitations and other transaction parameters included in the Plan. The number of shares of Common Stock to be sold under the Plan is subject to adjustment to account for any stock split, reverse stock split, stock dividend, or other like distribution or adjustment affecting the Common Stock or any change in the Issuer's capitalization.
+
+While FME AG and FMCH expect to continue to sell Common Stock following the completion of sales pursuant to the Plan, the timing and amount of any such additional sales will depend on a number of factors, including consideration of the business, operations, and financial condition of the Issuer, the market price of the Common Stock, conditions in the securities markets, and general economic and industry conditions. In connection with its consideration of such factors and in preparation for establishment of the Plan, FMCH instructed its observer on the Issuer's board to discontinue attending board meetings and to decline access to materials that the Issuer furnishes to its directors and any other confidential information relating to the Issuer. The sale of all shares of Common Stock covered by the Plan will reduce FMCH's and FME AG's beneficial ownership below 5% of the Issuer's Common Stock, and any sales of the Common Stock after completion of sales pursuant to the Plan will not be subject to reporting under Section 13(d) of the Securities Exchange Act and Regulation 13D-G thereunder.
+
+The foregoing description of the Plan does not purport to be complete and is qualified in its entirety by the terms and conditions of such Amendment, which is an exhibit to this Schedule 13D Amendment No. 10).</transactionPurpose>
+      </item4>
+      <item6>
+        <contractDescription>The description of the Plan set forth in Item 4 (including the caveat referring to the entire copy of the Plan filed as an exhibit to this Amendment No. 10) is hereby incorporated by reference into this Item 6.</contractDescription>
+      </item6>
+      <item7>
+        <filedExhibits>Exhibit 99.8. Rule 10b5-1 Sales Plan dated July 10, 2026 between Fresenius Medical Care Holdings, Inc. and Citigroup Global Markets Inc.</filedExhibits>
+      </item7>
+    </items1To7>
+    <signatureInfo>
+      <signaturePerson>
+        <signatureReportingPerson>Fresenius Medical Care Holdings, Inc.</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Mollie Miller</signature>
+          <title>Mollie Miller, VP and Asst. Treasurer</title>
+          <date>07/13/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+      <signaturePerson>
+        <signatureReportingPerson>Fresenius Medical Care AG</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ ppa Angela Koelbl</signature>
+          <title>Dr. Angela Koelbl, Registered Manager (Prokurist)</title>
+          <date>07/13/2026</date>
+        </signatureDetails>
+        <signatureDetails>
+          <signature>/s/ ppa Christof Koester</signature>
+          <title>Christof Koester (Registered Manager (Prokurist)</title>
+          <date>07/13/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+    </signatureInfo>
+  </formData>
+
+</edgarSubmission>

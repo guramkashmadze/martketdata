@@ -3,7 +3,8 @@
 Apple's third quarter of fiscal 2026 and Alphabet's trailing twelve months as the dev database
 served them on 2026-10-29, from their 8-K and 10-Q filings (shortened: two earnings slots, two
 metrics); Berkshire Hathaway's 13F report for 2026-06-30 as it served it on 2026-11-01 (E9,
-shortened to one position). They are built from the response models, so they keep the shape
+shortened to one position); AMD's 5% holders as it served them on 2026-11-08 (E16, shortened
+to one older filing). They are built from the response models, so they keep the shape
 the API returns.
 """
 
@@ -62,6 +63,14 @@ from marketdata.service.pages import encode_cursor
 from marketdata.service.quality import Mismatch
 from marketdata.service.served import DISCLAIMER, Served, Source, checked_fields
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
+from marketdata.service.stakes import (
+    ABOUT_STAKES,
+    CompanyStakes,
+    OlderFiling,
+    StakeHolder,
+    StakePerson,
+    StakeProof,
+)
 from marketdata.service.status import Freshness, StatusReport
 
 AAPL, GOOGL = 320193, 1652044
@@ -802,6 +811,126 @@ COMPANY_FUNDS: Served[CompanyFunds] = Served(
     check_overdue=False,
     quality_flags=(),
 )
+
+
+AMD = 2488
+STAKES_AT = datetime(2026, 11, 8, 13, 5, 40, tzinfo=UTC)
+VCM_AMD = "0002100119-26-000052"  # Vanguard Capital Management's SCHEDULE 13G of 2026-04-29
+VANGUARD_AMD = "0000102909-26-000540"  # The Vanguard Group's SCHEDULE 13G/A of 2026-03-26
+STAKE_CHECKS = (
+    "issuer_matches_listing",
+    "form_matches_listing",
+    "percent_in_range",
+    "powers_within_amount",
+)
+
+
+def _stake(
+    accession: str,
+    form: str,
+    filed: date,
+    event: date,
+    holder: str,
+    filer: int,
+    shares: int,
+    percent: str,
+    sole_voting: int,
+    ceased: bool | None,
+) -> StakeHolder:
+    return StakeHolder(
+        holder=holder,
+        filer_cik=filer,
+        schedule="13G",
+        form=form,
+        filed_at=filed,
+        event_date=event,
+        class_title="Common Stock",
+        ticker="AMD",
+        cusips=("007903107",),
+        shares=Decimal(shares),
+        percent=Decimal(percent),
+        status="exited" if ceased else "held",
+        rules=("Rule 13d-1(b)",),
+        ceased_5pct=ceased,
+        reporting_persons=(
+            StakePerson(
+                name=holder,
+                cik=None,
+                types=("IA",),
+                citizenship="PA",
+                shares=Decimal(shares),
+                percent=Decimal(percent),
+                sole_voting=Decimal(sole_voting),
+                shared_voting=Decimal(0),
+                sole_dispositive=Decimal(shares),
+                shared_dispositive=Decimal(0),
+                member_of_group=None,
+            ),
+        ),
+        purpose=None,
+        filings=1,
+        quality_flags=(),
+        proof=StakeProof(
+            accession_no=accession,
+            form=form,
+            filed_at=filed,
+            filing_url=urls.filing_folder(AMD, accession),
+            document_url=urls.filing_document(AMD, accession, "primary_doc.xml"),
+            method="schedule13_xml",
+            extractor_version="1",
+            checks=STAKE_CHECKS,
+            supersedes=(),
+        ),
+    )
+
+
+STAKES: Served[CompanyStakes] = Served(
+    data=CompanyStakes(
+        ticker="AMD",
+        cik=AMD,
+        company="ADVANCED MICRO DEVICES INC",
+        holders=(
+            _stake(
+                VCM_AMD, "SCHEDULE 13G", date(2026, 4, 29), date(2026, 3, 31),
+                "Vanguard Capital Management", 2100119, 122092206, "7.48", 16151940, None,
+            ),
+        ),
+        exited=(
+            _stake(
+                VANGUARD_AMD, "SCHEDULE 13G/A", date(2026, 3, 26), date(2026, 3, 13),
+                "The Vanguard Group", 102909, 0, "0", 0, True,
+            ),
+        ),
+        older_filings=(
+            OlderFiling(
+                accession_no="0001104659-24-020184",
+                form="SC 13G/A",
+                filed_at=date(2024, 2, 13),
+                url=urls.filing_index_page(AMD, "0001104659-24-020184"),
+            ),
+        ),
+        more_older_filings=True,
+        note=ABOUT_STAKES,
+    ),
+    sources=(
+        Source(
+            accession_no=VCM_AMD,
+            form="SCHEDULE 13G",
+            filed_at=date(2026, 4, 29),
+            url=urls.filing_folder(AMD, VCM_AMD),
+        ),
+        Source(
+            accession_no=VANGUARD_AMD,
+            form="SCHEDULE 13G/A",
+            filed_at=date(2026, 3, 26),
+            url=urls.filing_folder(AMD, VANGUARD_AMD),
+        ),
+    ),
+    as_of=STAKES_AT,
+    quality_flags=(),
+    checked_at=STAKES_AT + timedelta(minutes=4),
+    check_overdue=False,
+)  # fmt: skip
 
 
 def ok(served: Served[Any], description: str) -> dict[int | str, dict[str, Any]]:

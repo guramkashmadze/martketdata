@@ -28,6 +28,7 @@ from marketdata.service.insiders import (
 )
 from marketdata.service.pages import DEFAULT_LIMIT
 from marketdata.service.snapshot import CompanySnapshot, company_snapshot
+from marketdata.service.stakes import CompanyStakes, major_holders
 
 router = APIRouter(prefix="/companies/{ticker}", tags=["Companies"])
 
@@ -226,3 +227,26 @@ async def funds(conn: Conn, ticker: TickerPath) -> EnvelopeResponse:
     the managers that exited it there. Securities are linked to the company through their FIGI;
     CUSIPs are as the 13F reports state them."""
     return respond(await company_funds(conn, ticker))
+
+
+@router.get(
+    "/stakes",
+    summary="5% holders (Schedules 13D and 13G)",
+    response_model=Envelope[CompanyStakes],
+    response_class=EnvelopeResponse,
+    responses={
+        **examples.ok(examples.STAKES, "The holders by name, each from its latest filing."),
+        404: examples.NOT_FOUND,
+        422: examples.NOT_APPLICABLE,
+    },
+)
+async def stakes(conn: Conn, ticker: TickerPath) -> EnvelopeResponse:
+    """Who filed a Schedule 13D or 13G about the company (its predecessors' too) in the SEC's
+    structured format, from 2024: each holder's latest filing about each class of its shares,
+    however old, with the shares and percent of the class, the event date, every reporting
+    person as filed, a 13D's purpose (Item 4) word for word and the checks it passed. Holders
+    are listed by name, never by size; those whose latest filing reports below 5% are listed
+    as exited. A holder's shares are the largest amount one reporting person states: joint
+    filers' amounts overlap and are never added. The newest old-format filings (SC 13D, SC
+    13G), which are not read, are listed as links. Universe companies of every class."""
+    return respond(await major_holders(conn, ticker))

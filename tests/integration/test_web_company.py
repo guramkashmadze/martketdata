@@ -1,8 +1,8 @@
 """E15-S2: the search and the company page (PLAN.md §9.14): identity, class and what applies; the
 latest release with the changes from a year earlier; eight quarters of the core metrics with a
-chart; recent filings with their labels; the insider section (D-111) and the "held by" section
-(D-120). Every value links to its proof page; a fund, a foreign issuer or a company outside the
-universe gets a page of what applies, never an error."""
+chart; recent filings with their labels; the insider section (D-111), the 5% holders (E16) and
+the "held by" section (D-120). Every value links to its proof page; a fund, a foreign issuer or
+a company outside the universe gets a page of what applies, never an error."""
 
 import html
 import json
@@ -13,7 +13,18 @@ from typing import Any
 import httpx2
 import psycopg
 import pytest
-from api_seed import ACME, ACME_CUSIP, INSIDER_FORM4, MANAGER, Q3_RELEASE, seed
+from api_seed import (
+    ACME,
+    ACME_CUSIP,
+    INSIDER_FORM4,
+    MANAGER,
+    OLD_13G,
+    Q3_RELEASE,
+    STAKE_13D,
+    STAKE_13G,
+    STAKE_13G_BEFORE,
+    seed,
+)
 from web_pages import DISCLAIMER, basic, document
 
 Conn = psycopg.AsyncConnection[Any]
@@ -116,7 +127,12 @@ async def test_the_held_by_section_lists_curated_managers_by_name(
     [
         (
             "FNDX",
-            ["Index Fund Trust", "A fund: fundamentals don't apply.", 'id="held-by"'],
+            [
+                "Index Fund Trust",
+                "A fund: fundamentals don't apply.",
+                'id="held-by"',
+                'id="stakes"',
+            ],
             ["Latest earnings release", 'id="insiders"', "Last twelve months"],
         ),
         (
@@ -124,7 +140,11 @@ async def test_the_held_by_section_lists_curated_managers_by_name(
             ["Foreign private issuer", "filed since March 2026", 'id="insiders"'],
             ["Latest earnings release", "Last twelve months"],
         ),
-        ("OUTC", ["Not in the covered universe."], ["Latest earnings release", 'id="insiders"']),
+        (
+            "OUTC",
+            ["Not in the covered universe."],
+            ["Latest earnings release", 'id="insiders"', 'id="stakes"'],
+        ),
     ],
 )
 async def test_funds_and_foreign_issuers_get_a_page_of_what_applies(
@@ -209,3 +229,33 @@ async def test_the_home_page_lists_the_covered_companies_by_class(
     assert sections == ["US domestic filers", "Foreign private issuers", "Funds"]
     assert 'href="/companies/ACME">ACME</a>' in page and "ACME-PA" not in page
     assert 'href="/companies/FNDX">FNDX</a>' in page and "OUTC" not in page
+
+
+async def test_the_stakes_section_lists_holders_by_name_with_their_proof(
+    api: httpx2.AsyncClient, auth: dict[str, str]
+) -> None:
+    page = html.unescape(await _page(api, auth, "/companies/ACME"))
+
+    proof = f"/proof/stakes/{STAKE_13G}"
+    assert 'id="stakes"' in page and "Big Index Advisers" in page
+    for number in ("12,500,000", "6.25%"):
+        assert f'<a class="v" href="{proof}">{number}</a>' in page
+    assert 'id="stakes-exited"' in page and "Activist Partners LP" in page
+    assert "and 1 other reporting person" in page
+    assert f"/proof/stakes/{STAKE_13G_BEFORE}" not in page  # superseded: not served
+    assert f"https://www.sec.gov/Archives/edgar/data/{ACME}/" in page
+    assert OLD_13G in page and 'id="stakes-older"' in page
+
+
+async def test_a_stake_proof_page_shows_the_filing_as_read(
+    api: httpx2.AsyncClient, auth: dict[str, str]
+) -> None:
+    exited = html.unescape(await _page(api, auth, f"/proof/stakes/{STAKE_13D}"))
+    earlier = html.unescape(await _page(api, auth, f"/proof/stakes/{STAKE_13G_BEFORE}"))
+
+    assert "Activist Partners LP" in exited and "Activist GP LLC" in exited
+    assert "CIK 9200" in exited and "Purpose of the transaction (Item 4)" in exited
+    assert "The Reporting Persons sold shares in open market transactions." in exited
+    assert "every reporting person reports below 5% of the class" in exited
+    assert "not served" in earlier and f"/proof/stakes/{STAKE_13G}" in earlier
+    assert "issuer_matches_listing" in earlier

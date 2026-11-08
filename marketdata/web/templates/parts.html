@@ -1,4 +1,4 @@
-{% macro history(entries, unit) -%}
+{% macro history(entries, unit, meanings=none) -%}
 <h2>Change history</h2>
 {% if entries %}
 <p class="sub">A stored value never changes silently: each change is logged with the old value,
@@ -13,7 +13,7 @@ the new value and why, served by <code>/v1/changes</code> and sent as <code>data
       <td>{{ change.what }}</td>
       <td class="num">{{ change.old_value | amount(unit) }}</td>
       <td class="num">{{ change.new_value | amount(unit) }}</td>
-      <td>{{ change.reason }}: {{ reasons.get(change.reason, "") }}{% if change.detail %}<br><span class="sub">{{ change.detail }}</span>{% endif %}</td>
+      <td>{{ change.reason }}: {{ (meanings or reasons).get(change.reason, "") }}{% if change.detail %}<br><span class="sub">{{ change.detail }}</span>{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>
@@ -198,4 +198,52 @@ newest first; each opens the filing on sec.gov.</p>
   </tbody>
 </table>
 </div>
+{%- endmacro %}
+
+{% macro stake_rows(listed) -%}
+<div class="scroll">
+<table>
+  <thead><tr><th scope="col">Holder</th><th scope="col">Form</th><th scope="col" class="num">Filed</th><th scope="col" class="num">Event date</th><th scope="col">Class</th><th scope="col" class="num">Shares</th><th scope="col" class="num">Percent of class</th></tr></thead>
+  <tbody>
+  {% for holder in listed %}
+    {% set url = stake_url(holder.proof.accession_no) %}
+    {% set others = holder.reporting_persons | length - 1 %}
+    <tr>
+      <td>{{ holder.holder }}{% if others %}<br><span class="note">and {{ others }} other reporting {{ "person" if others == 1 else "persons" }}</span>{% endif %}</td>
+      <td><a href="{{ url }}">{{ holder.form }}</a></td>
+      <td class="num">{{ holder.filed_at | day }}</td>
+      <td class="num">{{ holder.event_date | day }}</td>
+      <td>{{ holder.class_title or "—" }}{% if holder.ticker %} <span class="badge">{{ holder.ticker }}</span>{% endif %}</td>
+      <td class="num"><a class="v" href="{{ url }}">{{ holder.shares | exact }}</a></td>
+      <td class="num"><a class="v" href="{{ url }}">{{ holder.percent | exact }}%</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{%- endmacro %}
+
+{% macro stakes(held) -%}
+<h2 id="stakes">5% holders</h2>
+<p class="sub">{{ held.note }} Holders are listed by name, each from its latest filing.</p>
+{% if held.holders %}
+{{ stake_rows(held.holders) }}
+{% else %}
+<p class="sub">No holder's latest structured filing reports more than 5% of a class.</p>
+{% endif %}
+{% if held.exited %}
+<h3 id="stakes-exited">Exited</h3>
+<p class="sub">Their latest filing reports below 5% of the class, or says they no longer own more
+than 5%.</p>
+{{ stake_rows(held.exited) }}
+{% endif %}
+{% if held.older_filings %}
+<h3 id="stakes-older">Older filings, not read</h3>
+<p class="sub">Filed in the format used before December 2024 (HTML or text), so they are links to
+sec.gov only: a holder whose latest filing is one of these isn't listed above.</p>
+<ul>
+  {% for filing in held.older_filings %}<li><a href="{{ filing.url }}">{{ filing.form }}</a> filed {{ filing.filed_at | day }} <span class="note">{{ filing.accession_no }}</span></li>{% endfor %}
+</ul>
+{% if held.more_older_filings %}<p class="note">Only the newest {{ held.older_filings | length }} are listed.</p>{% endif %}
+{% endif %}
 {%- endmacro %}

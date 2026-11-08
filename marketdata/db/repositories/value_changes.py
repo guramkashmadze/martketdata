@@ -77,6 +77,16 @@ _FOR_POSITION = f"""
     order by change_id
 """
 
+# E16: a stake filing's history: the change when a later filing replaced its stake, and the
+# changes its own stake made to those it replaced.
+_FOR_STAKE_FILING = f"""
+    select {_COLUMNS} from value_changes
+    where entity = 'stake_holding'
+      and (entity_key->>'accession_no' = %(accession_no)s
+           or entity_key->>'served_from' = %(accession_no)s)
+    order by change_id
+"""
+
 # E5b: the feed, newest first, a page at a time before the last change served.
 _PAGE = f"""
     select {_COLUMNS} from value_changes
@@ -125,6 +135,13 @@ async def record_position_changes(
 ) -> list[int]:
     """Log changes to a curated manager's stored 13F positions (E9); their ids, in order."""
     return await _record(conn, "fund_position", manager_cik, changes)
+
+
+async def record_stake_changes(
+    conn: AsyncConnection[Any], cik: int, changes: Sequence[ValueChange]
+) -> list[int]:
+    """Log changes to served 5% stakes about a company (E16); their ids, in order."""
+    return await _record(conn, "stake_holding", cik, changes)
 
 
 async def _record(
@@ -196,6 +213,14 @@ async def for_position(
                 "put_call": put_call,
             },
         )
+        return await cur.fetchall()
+
+
+async def for_stake_filing(conn: AsyncConnection[Any], accession_no: str) -> list[StoredChange]:
+    """A stake filing's change history (E16): when its stake was replaced, and the stakes it
+    replaced."""
+    async with conn.cursor(row_factory=class_row(StoredChange)) as cur:
+        await cur.execute(_FOR_STAKE_FILING, {"accession_no": accession_no})
         return await cur.fetchall()
 
 

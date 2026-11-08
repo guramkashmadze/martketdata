@@ -36,6 +36,7 @@ from marketdata.service import (
     funds,
     insiders,
     snapshot,
+    stakes,
 )
 from marketdata.service.errors import InvalidParameter
 from marketdata.service.json_text import dumps
@@ -71,6 +72,9 @@ MAX_CODES = 20
 PORTFOLIO_LARGEST = 20  # positions investor_portfolio lists by value (E9, §10.3)
 PORTFOLIO_CHANGES = 6  # of each change type: new, added, trimmed, exited
 FUND_HOLDERS = 20  # managers fund_holders lists, by name
+STAKE_HOLDERS = 12  # holders major_holders lists, by name (E16)
+STAKE_EXITS = 6  # holders whose latest filing is below 5%, by name
+STAKE_OLDER = 4  # old-format filings it links, newest first
 MAX_MANAGER = 80
 MAX_QUARTER = 10
 UNIT_WORDS = {"USD": "in USD", "shares": "in shares", "USD/shares": "in USD per share"}
@@ -153,6 +157,7 @@ class Tools:
             (self.insider_activity, "Insider trades"),
             (self.investor_portfolio, "Investor portfolio"),
             (self.fund_holders, "Funds holding a company"),
+            (self.major_holders, "5% holders (13D and 13G)"),
         ):
             server.add_tool(
                 tool,
@@ -298,7 +303,9 @@ class Tools:
         filings are those about the company, never the company's own stakes in others; a 13G
         amendment, which the list without `form` leaves out, comes with its label at
         importance hidden. `more` says that more filings match than are shown: ask for fewer
-        days or one form. Works for every filer, funds and foreign issuers too.
+        days or one form. Works for every filer, funds and foreign issuers too. For "who owns
+        <company>", major_holders reads the 13D and 13G filings: each holder's shares and
+        percent.
 
         `checked_at` is when the company's filings were last checked on the SEC; with
         `check_overdue` true (more than a day ago, or never) newer filings may be missing.
@@ -502,3 +509,30 @@ class Tools:
         async with self._connect()() as conn:
             served = await funds.company_funds(conn, ticker)
         return answer(answers.holders(served, limit=FUND_HOLDERS))
+
+    async def major_holders(self, ticker: Ticker) -> str:
+        """Who has reported owning more than 5% of a class of a company's shares, from the
+        Schedule 13D and 13G filings with the SEC about it, read from the SEC's structured
+        format: filed from late 2024 and required since 2024-12-18. For each holder, its latest
+        filing about each class however old, at most 12 holders, listed by holder name, never
+        ranked by size: the form (a 13D may seek to influence the company, a 13G is a passive
+        investor or a qualified institution such as a fund manager; /A an amendment), the
+        filing date, the date of the event that required it, the class, the shares (the
+        largest amount one reporting person states: joint filers' amounts overlap and are
+        never added) and the percent of the class as filed, with its SEC link. Holders whose
+        latest filing reports below 5%, or says they no longer own more than 5%, are listed
+        apart as exited. Filings in the older format (SC 13D, SC 13G, before December 2024)
+        are not read: the newest are linked, and a holder whose last filing is one of them
+        isn't among the holders. Use it for "who owns <company>" or "who are its largest
+        shareholders"; fund_holders answers which curated 13F managers hold it. With the
+        server's public address set, `proof_url` is each holder's proof page (the filing as
+        read, every reporting person, the checks): fill in its {accession_no}.
+
+        The data is information from public filings, not investment advice.
+        """
+        async with self._connect()() as conn:
+            served = await stakes.major_holders(conn, ticker)
+        return answer(
+            answers.stakes(served, holders=STAKE_HOLDERS, exited=STAKE_EXITS, older=STAKE_OLDER),
+            self._proof("/proof/stakes/{accession_no}"),
+        )
