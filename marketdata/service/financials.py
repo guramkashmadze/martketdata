@@ -23,6 +23,7 @@ from marketdata.normalize.quality import STALE_DATA, is_stale
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, require, resolve_ticker
 from marketdata.service.errors import InvalidParameter
+from marketdata.service.freshness import financials_check
 from marketdata.service.served import (
     FlagRef,
     Number,
@@ -191,6 +192,7 @@ async def get_financials(
     require(security, "fundamentals")
     series = await metric_rows(conn, security.cik, wanted, period, limit=limit, today=today)
     rows = tuple(row for each in series for row in each.rows)
+    check = await financials_check(conn, security.cik)
     return Served(
         data=Financials(
             ticker=security.ticker,
@@ -202,6 +204,8 @@ async def get_financials(
         ),
         sources=await sources_of(conn, metric_refs(rows)),
         as_of=newest(each.updated_at for each in series),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=metric_flags(rows, security.ticker),
     )
 

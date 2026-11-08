@@ -1,7 +1,9 @@
 """Worker process: claims tasks and runs their handlers (E3-S2, D-007).
 
 One worker process does all queued work with async concurrency, so the SEC rate limit lives in
-one place (D-007); it holds the SEC slot while it runs (ingest/sec_lock.py).
+one place (D-007); it holds the SEC slot while it runs (ingest/sec_lock.py). It names itself
+with its host in PostgreSQL, so a process refused the slot says where the holder runs; with
+`wait`, as in Docker Compose (D-137), it waits for the slot rather than refusing to start.
 
 - Up to `concurrency` attempts run at once. A free slot claims the oldest ready task of the
   registered kinds; with nothing ready the worker looks again every `poll_interval`.
@@ -18,7 +20,10 @@ one place (D-007); it holds the SEC slot while it runs (ingest/sec_lock.py).
 
 import asyncio
 import signal
+import socket
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -30,7 +35,7 @@ from marketdata.config import Settings
 from marketdata.db.pool import create_pool
 from marketdata.db.repositories.tasks import Task
 from marketdata.ingest.fetch import Connect, RawFetcher
-from marketdata.ingest.sec_lock import sec_process_lock
+from marketdata.ingest.sec_lock import SecWaitStopped, sec_process_lock
 from marketdata.sec.client import SecClient
 from marketdata.sec.raw_store import RawStore
 from marketdata.tasks import queue
@@ -226,17 +231,33 @@ def describe(error: BaseException) -> str:
     return text if len(text) <= MAX_ERROR else text[: MAX_ERROR - 1] + "…"
 
 
-async def run_until_stopped(worker: Worker) -> None:
-    """Run the worker; SIGTERM and SIGINT (Ctrl-C) stop it, a second one hurries it."""
+@contextmanager
+def stop_signals(handler: Callable[[], None]) -> Iterator[None]:
+    """SIGTERM and SIGINT (Ctrl-C) call `handler` while the block runs."""
     loop = asyncio.get_running_loop()
     signals = (signal.SIGTERM, signal.SIGINT)
     for signum in signals:
-        loop.add_signal_handler(signum, worker.stop)
+        loop.add_signal_handler(signum, handler)
     try:
-        await worker.run()
+        yield
     finally:
         for signum in signals:
             loop.remove_signal_handler(signum)
+
+
+async def run_until_stopped(worker: Worker, *, stopped: asyncio.Event | None = None) -> None:
+    """Run the worker; SIGTERM and SIGINT (Ctrl-C) stop it, a second one hurries it. `stopped`
+    already set (a stop that came while the worker was being set up) stops it at once."""
+    with stop_signals(worker.stop):
+        if stopped is not None and stopped.is_set():
+            worker.stop()
+        await worker.run()
+
+
+def process_name() -> str:
+    """How the worker names itself in pg_stat_activity: with its host (a container's hostname
+    in Docker Compose), so a refused process says where the SEC slot's holder runs."""
+    return f"marketdata worker on {socket.gethostname()}"
 
 
 async def serve(
@@ -246,11 +267,34 @@ async def serve(
     store: RawStore,
     *,
     concurrency: int,
+    wait: bool = False,
 ) -> None:
-    """The `marketdata worker` process: hold the SEC slot, then run until stopped."""
+    """The `marketdata worker` process: hold the SEC slot, then run until stopped. With `wait`
+    it waits for a busy slot; SIGTERM or Ctrl-C meanwhile ends it cleanly (D-137)."""
     database_url = str(settings.database_url)
+    waiting = asyncio.Event()
+    try:
+        with stop_signals(waiting.set):
+            async with sec_process_lock(database_url, process_name(), wait=wait, stop=waiting):
+                if waiting.is_set():
+                    return
+                await _work(settings, registry, sec, store, database_url, concurrency, waiting)
+    except SecWaitStopped:
+        log.info("worker_stopped", reason="stopped while it waited for the SEC slot")
+
+
+async def _work(
+    settings: Settings,
+    registry: Registry,
+    sec: SecClient,
+    store: RawStore,
+    database_url: str,
+    concurrency: int,
+    stopped: asyncio.Event,
+) -> None:
+    """Run the worker until SIGTERM or Ctrl-C stops it (a second one hurries it), or until
+    `stopped` was set just as the SEC slot was taken."""
     async with (
-        sec_process_lock(database_url, "marketdata worker"),
         sec,
         # Each attempt may use two connections at once (a transaction and a raw_objects row),
         # plus the worker's own claims and heartbeats.
@@ -262,4 +306,4 @@ async def serve(
             fetcher=RawFetcher(sec, store, pool.connection),
             kinds=registry.kinds,
         )
-        await run_until_stopped(Worker(registry, context, concurrency=concurrency))
+        await run_until_stopped(Worker(registry, context, concurrency=concurrency), stopped=stopped)

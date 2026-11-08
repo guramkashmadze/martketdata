@@ -2,10 +2,11 @@
 
 A company page shows the company's identity and class, what applies to it and why, its latest
 earnings release with the changes from a year earlier, eight quarters of the core metrics with a
-chart, its recent filings with their plain-language labels, its insiders' trades (E8, D-111) and
-the curated managers holding it (E9, D-120). Every number links to its proof page. A fund, a
-foreign issuer or a company outside the universe gets the same page with the parts that apply
-and the reasons the others don't, never an error. Prices come with E10.
+chart, its recent filings with their plain-language labels and when the SEC was last checked for
+them (D-135), its insiders' trades (E8, D-111) and the curated managers holding it (E9, D-120).
+Every number links to its proof page. A fund, a foreign issuer or a company outside the universe
+gets the same page with the parts that apply and the reasons the others don't, never an error.
+Prices come with E10.
 
 Everything is read through the service functions the API and the MCP server use.
 """
@@ -215,7 +216,8 @@ async def company(
         rows = (await get_financials(conn, ticker, period="Q", limit=HISTORY_QUARTERS)).data.rows
         columns, table = history(rows, CORE_METRICS)
         chart = chart_data(ticker, columns, table)
-    filings = (await recent_filings(conn, ticker, reports_only=True, limit=FILINGS_SHOWN)).data
+    # The filings with their check: when the company's watch last polled the SEC (D-135).
+    filings = await recent_filings(conn, ticker, reports_only=True, limit=FILINGS_SHOWN)
     activity = None
     if applies["insiders"]:
         activity = (

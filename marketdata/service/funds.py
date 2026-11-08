@@ -47,6 +47,7 @@ from marketdata.normalize.holdings import (
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, name_words, resolve_ticker
 from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.service.freshness import managers_check
 from marketdata.service.pages import (
     DEFAULT_LIMIT,
     check_limit,
@@ -270,10 +271,13 @@ async def list_funds(conn: AsyncConnection[Any], *, curated: bool = True) -> Ser
                 long_value_usd=totals.long_value_usd if totals else None,
             )
         )
+    check = await managers_check(conn, [manager.manager_cik for manager in listed])
     return Served(
         data=FundList(funds=tuple(funds), note=ABOUT_13F),
         sources=_sources(latest.values()),
         as_of=newest(filing.parsed_at for filing in latest.values()),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=(),
     )
 
@@ -370,10 +374,13 @@ async def fund_holdings(
         next_cursor=encode_cursor(*keys[end - 1]) if more else None,
         note=ABOUT_13F,
     )
+    check = await managers_check(conn, [fund.manager_cik])
     return Served(
         data=data,
         sources=_sources(filed),
         as_of=newest([*(f.parsed_at for f in filed), *(p.updated_at for p in now)]),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=tuple(
             FlagRef(code=code, metric="fund_position", period_end=period, ticker=p.ticker)
             for p in page
@@ -438,6 +445,7 @@ async def company_funds(conn: AsyncConnection[Any], ticker: str) -> Served[Compa
                 )
             )
         used.append(filing)
+    check = await managers_check(conn, [manager.manager_cik for manager in curated])
     return Served(
         data=CompanyFunds(
             ticker=security.ticker,
@@ -449,6 +457,8 @@ async def company_funds(conn: AsyncConnection[Any], ticker: str) -> Served[Compa
         ),
         sources=_sources(used),
         as_of=newest([*(f.parsed_at for f in used), *(r.updated_at for r in rows)]),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=tuple(
             FlagRef(
                 code=code,

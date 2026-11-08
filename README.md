@@ -40,6 +40,8 @@ pdm run marketdata worker             # run queued tasks; the one process that c
 pdm run marketdata scheduler          # enqueue the filings watch (every 10 minutes) and the daily security master
 docker compose up -d api              # the API, MCP server and web UI in Docker, kept running (CONTAINER_DATABASE_URL in .env)
 docker compose up -d --build api      # the same after a code change
+docker compose up -d --build api worker scheduler   # all three from the one image api builds (D-137)
+docker compose stop worker            # before running a worker with pdm run
 pdm run marketdata backfill filings --years 5   # queue five years of filing history for the worker
 pdm run marketdata tasks list         # tasks by kind and status, with errors
 pdm run marketdata filings list <TICKER>   # a company's filings with plain-language event labels
@@ -48,7 +50,7 @@ pdm run python scripts/fetch_fixture.py --from-raw <raw key> <name>   # a fixtur
 pdm add <package>                     # new dependency; also list it in docs/PLAN.md §5 with its license
 ```
 
-Only one process calls the SEC at a time: while the worker runs, `sec get` and `ingest security-master` refuse to start and say who holds the SEC slot (PLAN.md D-062).
+Only one process calls the SEC at a time: while the worker runs, `sec get`, `ingest security-master` and a second worker refuse to start and say who holds the SEC slot (PLAN.md D-062); the worker in Docker names itself `marketdata worker on docker-compose`. The Docker worker runs with `--wait`: started while another process holds the slot, it waits and takes over when that one stops (D-137).
 
 Integration tests use `TEST_DATABASE_URL`. Its database name must end in `_test`, because the tests drop and recreate its schema. They fail rather than skip when PostgreSQL is down.
 
@@ -58,4 +60,18 @@ Integration tests use `TEST_DATABASE_URL`. Its database name must end in `_test`
 - **`DATABASE_URL is missing`** on startup: copy `.env.example` to `.env`, or export the variable.
 - **`pdm install` picks the wrong Python**: run `pdm use python3.15`, then `pdm install` again.
 - **`.venv` stops working after a Homebrew cleanup**: if python@3.15 was only installed as PDM's dependency, `brew autoremove` can delete it when PDM moves to a newer Python. `brew install python@3.15` keeps it. Then rebuild with `rm -rf .venv && pdm install`.
+- **The Docker worker's SEC requests fail with `CERTIFICATE_VERIFY_FAILED`** ("self-signed certificate in certificate chain"): this machine's network re-signs HTTPS with its own root (TLS inspection on a managed Mac), which macOS trusts and the container's Debian store doesn't. Processes run with `pdm run` are fine: they verify through the macOS keychain. Give the worker a bundle of this Mac's roots, the proxy's included, mounted over the image's CA file by a `docker-compose.override.yml` of your own (git-ignored; Compose reads it with the main file):
+
+  ```bash
+  mkdir -p var/certs && security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain /Library/Keychains/System.keychain > var/certs/ca-bundle.pem
+  ```
+
+  ```yaml
+  services:
+    worker:
+      volumes:
+        - ./var/certs/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro
+  ```
+
+  Don't use `SSL_CERT_FILE` for it: with that set, the HTTP client checks certificates strictly, and a proxy root without a key-usage extension fails again ("CA cert does not include key usage extension"). Then `docker compose up -d --build api worker scheduler` (PLAN.md D-137).
 - **Why not uv or ruff?** On some managed Macs, endpoint security kills binaries signed by "OpenAI OpCo, LLC" (team ID 2DC432GLL2) as soon as they start (exit code 137, no output), and Astral now signs uv and ruff that way. The project uses PDM, black, isort and flake8 instead (PLAN.md D-041). `codesign -dv <binary>` shows a binary's signer.

@@ -3,19 +3,20 @@ facts; running it again changes nothing. A predecessor's file is loaded with it 
 new 10-K or 10-Q the SEC's file doesn't list yet makes the task retry (D-081)."""
 
 import json
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import psycopg
 import pytest
-from conftest import SEC_FIXTURES, LoadMaster, connect_to, sec_serving
+from conftest import SEC_FIXTURES, LoadMaster, connect_to, found_soon_after, sec_serving
 
 from marketdata.db.repositories import filings, predecessors, raw_objects, xbrl_facts
 from marketdata.db.repositories.predecessors import CompanyPredecessor
 from marketdata.ingest.facts import FactsLoader, FactsNotPublished, FactsReport
 from marketdata.ingest.fetch import RawFetcher
-from marketdata.ingest.watcher import FilingsWatcher
+from marketdata.ingest.watcher import FilingsWatcher, utc_now
 from marketdata.normalize.filings import FACTS_REFRESH, FilingRow
 from marketdata.sec import urls
 from marketdata.sec.raw_store import LocalRawStore
@@ -239,18 +240,20 @@ async def test_every_new_periodic_filing_queues_the_refresh_again(
     for values in one_back["filings"]["recent"].values():
         del values[ten_qs[1]]
     kinds = frozenset({FACTS_REFRESH})
+    # The last watch finds the 10-Q before the newest within minutes of its filing (D-136).
+    soon = found_soon_after(AAPL_SUBMISSIONS, recent["accessionNumber"][ten_qs[1]])
 
-    async def watch(body: dict[str, Any]) -> None:
+    async def watch(body: dict[str, Any], clock: Callable[[], datetime] = utc_now) -> None:
         async with sec_serving({urls.submissions(AAPL): json.dumps(body).encode()}) as sec:
             fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
-            await FilingsWatcher(fetcher, connect_to(conn), kinds).watch(AAPL)
+            await FilingsWatcher(fetcher, connect_to(conn), kinds, clock=clock).watch(AAPL)
 
     await watch(without)  # the first watch routes nothing (D-063)
-    await watch(one_back)  # the newest 10-Q
+    await watch(one_back)  # the newest 10-Q, found today, months after it was filed
     claimed = await queue.claim(conn, [FACTS_REFRESH], timedelta(minutes=5))
-    assert claimed is not None
+    assert claimed is not None and claimed.payload == {"cik": AAPL, "late": True}
     await queue.complete(conn, claimed)
-    await watch(document)  # the 10-Q before it
+    await watch(document, soon)  # the 10-Q before it
 
     [task] = await queue.list_tasks(conn, kind=FACTS_REFRESH)
     assert (task.key, task.status) == (str(AAPL), "queued")

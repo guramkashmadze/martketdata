@@ -52,6 +52,9 @@ from 10-Q and 10-K reports, and filings with plain-language event labels. Every 
 its proof: the filing it came from (its accession number; `sources` gives each filing's SEC \
 link), how it was found and the checks it passed. Cite the SEC links when you use a value. \
 A missing or unverified value is null with the reason: say so, and never estimate one. \
+Answers about a company or an investor carry `checked_at`, when we last checked the SEC for the \
+filings they depend on. When `check_overdue` is true, that check is more than a day old or never \
+ran, so newer filings may be missing: say when the data was last checked. \
 Amounts are in base units (USD, shares, USD per share); margins and growth are percents. Use \
 lookup_company when you don't know a company's ticker. The data is information from public \
 filings, not investment advice."""

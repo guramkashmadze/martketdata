@@ -34,6 +34,7 @@ from marketdata.normalize.insiders import (
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, require, resolve_ticker
 from marketdata.service.errors import InvalidParameter
+from marketdata.service.freshness import company_check
 from marketdata.service.pages import (
     DEFAULT_LIMIT,
     check_limit,
@@ -329,6 +330,7 @@ async def insider_activity(
         trades=tuple(page),
         next_cursor=encode_cursor(*keys[start + limit - 1]) if more else None,
     )
+    check = await company_check(conn, security.cik)
     return Served(
         data=activity,
         sources=tuple(
@@ -345,6 +347,8 @@ async def insider_activity(
             )
         ),
         as_of=newest(filing.parsed_at for filing in filings.values()),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=tuple(
             FlagRef(
                 code=code,

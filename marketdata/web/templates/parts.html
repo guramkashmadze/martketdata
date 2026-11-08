@@ -111,8 +111,17 @@ flows summed, balances at the quarter end, margins and growth computed from them
 {% endif %}
 {%- endmacro %}
 
-{% macro filing_list(listed) -%}
+{% macro filing_check(check) -%}
+<p class="note" id="filings-checked">
+{%- if check.checked_at %}Last checked against the SEC's list of its filings {{ check.checked_at | utc }}
+{%- if check.check_overdue %}, more than a day ago: newer filings may be missing{% endif %}.
+{%- else %}Not checked against the SEC's list of its filings yet: newer filings may be missing.
+{%- endif %}</p>
+{%- endmacro %}
+
+{% macro filing_list(listed, check) -%}
 <h2 id="filings">Recent filings</h2>
+{{ filing_check(check) }}
 {% if listed.filings %}
 <p class="sub">Annual, quarterly and current reports, and stakes of 5% or more in the company,
 newest first; each opens the filing on sec.gov.</p>

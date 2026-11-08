@@ -22,6 +22,8 @@ htmlcov/
 # Local settings and data
 .env
 var/
+# This machine's own Compose settings, e.g. a CA bundle for a proxy that re-signs HTTPS (D-137)
+docker-compose.override.yml
 
 # OS
 .DS_Store

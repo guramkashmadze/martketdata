@@ -2,9 +2,10 @@
 call stays under about 8 KB.
 
 An answer is the API's envelope without its list of flags (each value carries its own): data,
-sources, as_of and the disclaimer. Inside `data` a metric value keeps a short proof: the filing
-it came from (`accession_no`; for a derived, TTM or computed value the latest filing it reads),
-the method and the XBRL concept, named once for a series whose values share it. Every filing a
+sources, as_of, the check (`checked_at` and `check_overdue`, D-135) and the disclaimer. Inside
+`data` a metric value keeps a short proof: the filing it came from (`accession_no`; for a
+derived, TTM or computed value the latest filing it reads), the method and the XBRL concept,
+named once for a series whose values share it. Every filing a
 value reads is in `sources`, with its SEC link; recent_filings' filings and fund_holders'
 holders carry their own links, so their sources stay empty. The full proof object (each value's
 contributing filings, the calc version, the filing's index page) is the API's and the proof
@@ -39,6 +40,10 @@ class Answer[T](BaseModel):
     data: T
     sources: tuple[Source, ...]  # the filings the values read, newest first
     as_of: datetime | None
+    # D-135: when the SEC was last checked for the data, and whether that was over a day ago;
+    # left out of an answer that depends on no watch (lookup_company).
+    checked_at: datetime | None = None
+    check_overdue: bool | None = None
 
 
 def lookup(served: Served[Lookup]) -> Answer[Lookup]:
@@ -130,6 +135,8 @@ def financials(served: Served[Financials]) -> Answer[FinancialsAnswer]:
         ),
         sources=served.sources,
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )
 
 
@@ -183,6 +190,8 @@ def filings(
         ),
         sources=(),  # each filing carries its own link
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )
 
 
@@ -267,6 +276,8 @@ def snapshot(served: Served[CompanySnapshot]) -> Answer[SnapshotAnswer]:
         ),
         sources=served.sources,
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )
 
 
@@ -330,6 +341,8 @@ def comparison(served: Served[Comparison]) -> Answer[ComparisonAnswer]:
         ),
         sources=served.sources,
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )
 
 
@@ -432,6 +445,8 @@ def insiders(served: Served[InsiderActivity], *, max_insiders: int) -> Answer[In
         ),
         sources=served.sources,
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )
 
 
@@ -562,6 +577,8 @@ def portfolio(
         ),
         sources=served.sources,
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )
 
 
@@ -619,4 +636,6 @@ def holders(served: Served[CompanyFunds], *, limit: int) -> Answer[HoldersAnswer
         ),
         sources=(),
         as_of=served.as_of,
+        checked_at=served.checked_at,
+        check_overdue=served.check_overdue,
     )

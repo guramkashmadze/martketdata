@@ -1,6 +1,7 @@
 """The watch_state table (E3-S4, D-059): the last submissions file each company's watch
 processed, so an unchanged file is neither stored again nor parsed."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -38,6 +39,8 @@ _RECORD_CHANGE = """
 
 _RECORD_CHECK = "update watch_state set checked_at = %(at)s where cik = %(cik)s"
 
+_CHECKED_AT = "select cik, checked_at from watch_state where cik = any(%(ciks)s)"
+
 
 async def lock(conn: AsyncConnection[Any], cik: int) -> None:
     """Wait until no other transaction writes this company's filings; released at commit."""
@@ -61,3 +64,11 @@ async def record_change(
 async def record_check(conn: AsyncConnection[Any], cik: int, at: datetime) -> None:
     """The file was fetched at `at` and had not changed."""
     await conn.execute(_RECORD_CHECK, {"cik": cik, "at": at})
+
+
+async def checked_at(conn: AsyncConnection[Any], ciks: Sequence[int]) -> dict[int, datetime]:
+    """When each of these companies' watches last polled the SEC (D-135); a company never
+    watched is left out."""
+    async with conn.cursor() as cur:
+        await cur.execute(_CHECKED_AT, {"ciks": list(ciks)})
+        return {cik: at for cik, at in await cur.fetchall()}

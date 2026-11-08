@@ -85,7 +85,7 @@ for that quarter.</p>
 {% endif %}
 {% endif %}
 
-{{ parts.filing_list(filings) }}
+{{ parts.filing_list(filings.data, filings) }}
 
 {% if activity %}
 {% include "partials/insiders.html" %}

@@ -21,11 +21,21 @@ INSIDER_PROOF = (  # E8: each Form 4 an insider trade sums
 )
 
 
+ENVELOPE = ["data", "sources", "as_of", "quality_flags", "disclaimer"]
+# D-135: an answer about a company, a comparison or a 13F manager says when the SEC was last
+# checked for its data, and whether that was more than a day ago (or never).
+CHECKED_ENVELOPE = ["data", "sources", "as_of", "checked_at", "check_overdue", "quality_flags"]
+
+
 def check_envelope(body: dict[str, Any]) -> None:
     """The §10.1 envelope, and the §9.10 proof on every value in `data`."""
-    assert list(body) == ["data", "sources", "as_of", "quality_flags", "disclaimer"]
+    assert list(body) in (ENVELOPE, [*CHECKED_ENVELOPE, "disclaimer"]), list(body)
     assert body["disclaimer"] == DISCLAIMER
     assert body["as_of"] is None or body["as_of"].endswith("Z")
+    if "check_overdue" in body:
+        assert isinstance(body["check_overdue"], bool)
+        assert body["checked_at"] is None or body["checked_at"].endswith("Z")
+        assert body["check_overdue"] or body["checked_at"] is not None
     for source in body["sources"]:
         assert set(source) == {"accession_no", "form", "filed_at", "url"}
         assert source["url"].startswith(SEC_FOLDER), source

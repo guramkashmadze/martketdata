@@ -60,7 +60,7 @@ from marketdata.service.insiders import (
 from marketdata.service.json_text import dumps
 from marketdata.service.pages import encode_cursor
 from marketdata.service.quality import Mismatch
-from marketdata.service.served import DISCLAIMER, Served, Source
+from marketdata.service.served import DISCLAIMER, Served, Source, checked_fields
 from marketdata.service.snapshot import CompanyIdentity, CompanySnapshot, LatestPeriod
 from marketdata.service.status import Freshness, StatusReport
 
@@ -72,6 +72,8 @@ SCALE = (
     "amounts)"
 )
 AS_OF = datetime(2026, 10, 29, 17, 18, 56, tzinfo=UTC)
+# D-135: the company's watch polled the SEC a few minutes after the newest row was written.
+CHECKED_AT = datetime(2026, 10, 29, 17, 25, 3, tzinfo=UTC)
 APPLE_TTM_SOURCES = (
     "0000320193-25-000079",
     "0000320193-26-000006",
@@ -314,10 +316,17 @@ SNAPSHOT: Served[CompanySnapshot] = Served(
     ),
     sources=(*APPLE_TTM_FILINGS[:1], RELEASE_SOURCES[1], *APPLE_TTM_FILINGS[1:]),
     as_of=AS_OF,
+    checked_at=CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 EARNINGS_LATEST: Served[EarningsRelease] = Served(
-    data=APPLE_RELEASE, sources=RELEASE_SOURCES, as_of=AS_OF, quality_flags=()
+    data=APPLE_RELEASE,
+    sources=RELEASE_SOURCES,
+    as_of=AS_OF,
+    checked_at=CHECKED_AT,
+    check_overdue=False,
+    quality_flags=(),
 )
 EARNINGS_FEED: Served[EarningsFeed] = Served(
     data=EarningsFeed(
@@ -339,6 +348,8 @@ FINANCIALS: Served[Financials] = Served(
     ),
     sources=RELEASE_SOURCES[:1],
     as_of=AS_OF,
+    checked_at=CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 FILINGS: Served[CompanyFilings] = Served(
@@ -347,6 +358,8 @@ FILINGS: Served[CompanyFilings] = Served(
     ),
     sources=RELEASE_SOURCES,
     as_of=AS_OF,
+    checked_at=CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 # E8: Apple's principal accounting officer sold under a 10b5-1 plan on 2026-10-16 (Form 4
@@ -440,6 +453,8 @@ INSIDERS: Served[InsiderActivity] = Served(
     ),
     sources=(_source(AAPL, INSIDER_FORM4, "4", date(2026, 10, 19)),),
     as_of=AS_OF,
+    checked_at=CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 COMPARE: Served[Comparison] = Served(
@@ -462,6 +477,8 @@ COMPARE: Served[Comparison] = Served(
         _source(GOOGL, "0001652044-26-000071", "10-Q", date(2026, 7, 23)),
     ),
     as_of=AS_OF,
+    checked_at=CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 _APPLIES = (
@@ -583,7 +600,8 @@ CHANGES: Served[ChangeFeed] = Served(
 
 
 # E5b: the status as the dev database gave it on 2026-10-30, before the live run (shortened: one
-# slot, one metric, one of the two mismatches).
+# slot, one metric, one of the two mismatches). The oldest watch and the overdue count (D-135)
+# are what its watch_state gave for that day: every universe company watched days before.
 STATUS_AT = datetime(2026, 10, 30, 16, 48, 8, tzinfo=UTC)
 STATUS: Served[StatusReport] = Served(
     data=StatusReport(
@@ -593,6 +611,8 @@ STATUS: Served[StatusReport] = Served(
             metrics_updated_at=datetime(2026, 10, 29, 17, 18, 57, tzinfo=UTC),
             filing_discovered_at=datetime(2026, 10, 28, 3, 14, 48, tzinfo=UTC),
             watched_at=datetime(2026, 10, 28, 6, 22, 29, tzinfo=UTC),
+            oldest_watched_at=datetime(2026, 10, 25, 21, 25, 27, tzinfo=UTC),
+            overdue_watches=74,
             live_releases=0,
         ),
         accuracy=AccuracyReport(
@@ -653,6 +673,7 @@ STATUS: Served[StatusReport] = Served(
 BERKSHIRE = 1067983
 BERKSHIRE_13F = "0001193125-26-352200"
 FUNDS_AT = datetime(2026, 11, 1, 0, 2, 13, tzinfo=UTC)
+FUNDS_CHECKED_AT = datetime(2026, 11, 1, 0, 5, 41, tzinfo=UTC)  # the oldest manager's watch
 BERKSHIRE_SOURCE = Source(
     accession_no=BERKSHIRE_13F,
     form="13F-HR",
@@ -702,6 +723,8 @@ FUNDS: Served[FundList] = Served(
     ),
     sources=(BERKSHIRE_SOURCE,),
     as_of=FUNDS_AT,
+    checked_at=FUNDS_CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 
@@ -748,6 +771,8 @@ FUND_HOLDINGS: Served[FundHoldings] = Served(
     ),
     sources=(BERKSHIRE_SOURCE,),
     as_of=FUNDS_AT,
+    checked_at=FUNDS_CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 
@@ -773,13 +798,15 @@ COMPANY_FUNDS: Served[CompanyFunds] = Served(
     ),
     sources=(BERKSHIRE_SOURCE,),
     as_of=FUNDS_AT,
+    checked_at=FUNDS_CHECKED_AT,
+    check_overdue=False,
     quality_flags=(),
 )
 
 
 def ok(served: Served[Any], description: str) -> dict[int | str, dict[str, Any]]:
     """The 200 response of a route, with its example in the envelope."""
-    body = {**served.model_dump(mode="python"), "disclaimer": DISCLAIMER}
+    body = {**checked_fields(served.model_dump(mode="python")), "disclaimer": DISCLAIMER}
     example = json.loads(dumps(body), parse_float=Decimal)
     return {
         200: {"description": description, "content": {"application/json": {"example": example}}}

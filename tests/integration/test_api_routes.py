@@ -34,6 +34,19 @@ ROUTES: list[tuple[str, str, dict[str, str]]] = [
 ]
 
 
+CHECKED_ROUTES = {
+    "/v1/companies/{ticker}",
+    "/v1/companies/{ticker}/earnings/latest",
+    "/v1/companies/{ticker}/financials",
+    "/v1/companies/{ticker}/filings",
+    "/v1/compare",
+    "/v1/companies/{ticker}/insiders",
+    "/v1/funds",
+    "/v1/funds/{manager_cik}/holdings",
+    "/v1/companies/{ticker}/funds",
+}
+
+
 @pytest.fixture
 async def headers(conn: Conn, api_key: str) -> dict[str, str]:
     await seed(conn)
@@ -74,6 +87,8 @@ async def test_route_contract(
     assert response.headers["content-type"] == "application/json"
     body = response.json(parse_float=Decimal)
     check_envelope(body)
+    # D-135: an answer about a company, a comparison or 13F managers says when it was checked.
+    assert ("check_overdue" in body) == (declared in CHECKED_ROUTES), declared
 
 
 async def test_numbers_are_json_numbers(api: httpx2.AsyncClient, headers: dict[str, str]) -> None:

@@ -8,9 +8,12 @@ A watch of one company:
 3. checks the file's acceptance times; a file that fails gives no times (D-057);
 4. in one transaction, under a lock per company: inserts the listings not stored yet, fills
    acceptance times stored as missing, enqueues the tasks §4 routes new filings to (only for
-   registered kinds) as live work, ahead of backfills (D-067) and marked `live`, announces new
-   filings with a high-importance label to webhook destinations (`filing.event`, E5b), and
-   records the file processed.
+   registered kinds) and records the file processed. A new filing found within a day of its
+   acceptance is live: its tasks run ahead of everything else (D-067) marked `live`, and one
+   with a high-importance label is announced to webhook destinations (`filing.event`, E5b).
+   One found later was missed while the watches were stopped (D-136): its tasks are caught up
+   behind live work, marked `late`, and nothing is announced, so a restarted watch doesn't send
+   two weeks of old releases as news or count them in the time to verified.
 
 A company's first watch only records what is there: history goes through each epic's backfill,
 so the first watch routes nothing. A curated 13F manager (E9) is watched like a company; one
@@ -22,9 +25,9 @@ as asked. Those filings are more than a year old and never routed. A page's acce
 are checked on the whole page before the rows outside the window are dropped.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import structlog
@@ -37,6 +40,7 @@ from marketdata.normalize.filings import (
     FilingRow,
     Submissions,
     check_acceptance_times,
+    found_live,
     parse_submissions,
     parse_submissions_page,
     plan_filings,
@@ -61,6 +65,7 @@ class StoreReport:
     differ: int
     acceptance: AcceptanceCheck
     routed: tuple[str, ...]  # "kind key" of each task enqueued
+    late: int = 0  # new filings found more than a day after their acceptance (D-136)
 
 
 @dataclass(frozen=True)
@@ -83,11 +88,23 @@ class BackfillReport:
         return recent + sum(page.inserted for page in self.pages)
 
 
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class FilingsWatcher:
-    def __init__(self, fetcher: RawFetcher, connect: Connect, kinds: frozenset[str]) -> None:
+    def __init__(
+        self,
+        fetcher: RawFetcher,
+        connect: Connect,
+        kinds: frozenset[str],
+        *,
+        clock: Callable[[], datetime] = utc_now,
+    ) -> None:
         self._fetcher = fetcher
         self._connect = connect
         self._kinds = kinds  # registered task kinds: the only ones work is routed to (§4)
+        self._clock = clock  # when a watch finds a filing, to tell live ones (D-136)
 
     async def watch(self, cik: int) -> WatchReport:
         """Look for new filings of `cik` and enqueue their work."""
@@ -158,6 +175,8 @@ class FilingsWatcher:
             )
             rows = without_acceptance_times(rows)
         routed: list[str] = []
+        late = 0
+        found_at = self._clock()
         async with self._connect() as conn, conn.transaction():
             await watch_state.lock(conn, cik)
             state = await watch_state.get(conn, cik)
@@ -174,6 +193,8 @@ class FilingsWatcher:
                 for row in plan.new:
                     if row.accession_no not in inserted:
                         continue
+                    live = found_live(row, found_at)
+                    late += not live
                     for work in route(
                         row,
                         filer_type=filer_type,
@@ -185,13 +206,15 @@ class FilingsWatcher:
                                 conn,
                                 work.kind,
                                 work.key,
-                                {**work.payload, "live": True},
+                                {**work.payload, "live" if live else "late": True},
                                 force=work.force,
-                                priority=tasks.PRIORITY_LIVE,
+                                priority=tasks.PRIORITY_LIVE if live else tasks.PRIORITY_NORMAL,
                             )
                             routed.append(f"{work.kind} {work.key}")
-                    if not manager_only and announces_filing(
-                        row.form, row.items_8k, row.file_number
+                    if (
+                        live
+                        and not manager_only
+                        and announces_filing(row.form, row.items_8k, row.file_number)
                     ):
                         await announce(conn, FILING_EVENT, f"{row.accession_no}:{row.cik}")
             if watched:
@@ -215,6 +238,7 @@ class FilingsWatcher:
             differ=len(plan.differ),
             acceptance=check,
             routed=tuple(routed),
+            late=late,
         )
         log.info(
             "filings_stored",
@@ -226,6 +250,14 @@ class FilingsWatcher:
             routed=list(report.routed),
             first_watch=watched and state is None,
         )
+        if late:
+            log.warning(
+                "filings_caught_up",
+                cik=cik,
+                late=late,
+                reason="found more than a day after their acceptance: routed behind live work, "
+                "not announced",
+            )
         return _Stored(report, first_watch=watched and state is None)
 
 
@@ -250,5 +282,6 @@ def watch_summary(report: WatchReport) -> dict[str, Any]:
         "changed": True,
         "inserted": report.stored.inserted,
         "routed": len(report.stored.routed),
+        "late": report.stored.late,
         "first_watch": report.first_watch,
     }

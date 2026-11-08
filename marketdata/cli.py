@@ -193,11 +193,19 @@ def worker(
         int | None,
         typer.Option(min=1, max=32, help="Tasks run at once; default WORKER_CONCURRENCY."),
     ] = None,
+    wait: Annotated[
+        bool,
+        typer.Option(
+            help="When another process holds the SEC slot, wait for it (trying every 30 "
+            "seconds) instead of refusing to start. The worker in Docker Compose runs so."
+        ),
+    ] = False,
 ) -> None:
     """Run queued tasks until stopped (SIGTERM or Ctrl-C), as the one process calling the SEC.
 
     On a stop it finishes running tasks for up to a minute and puts the rest back in the queue;
-    a second Ctrl-C puts them back at once.
+    a second Ctrl-C puts them back at once. Exits with 1 when another process holds the SEC
+    slot, unless --wait.
     """
     settings = _settings()
     try:
@@ -207,7 +215,9 @@ def worker(
         raise _fail(str(exc), 2) from None
     concurrency = concurrency or settings.worker_concurrency
     try:
-        asyncio.run(serve(settings, build_registry(), sec, store, concurrency=concurrency))
+        asyncio.run(
+            serve(settings, build_registry(), sec, store, concurrency=concurrency, wait=wait)
+        )
     except SecProcessBusy as exc:
         raise _fail(str(exc)) from None
 

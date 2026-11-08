@@ -6,6 +6,11 @@ Sources are the filings behind the served values, newest first, each with its fo
 and folder on sec.gov. The form and date come from the filings table, or, for filings older
 than the five-year filings backfill, from the facts they reported (D-096). `as_of` is when the
 newest row used was last written: it moves when a value, flag or proof changes.
+
+An answer about a company, a comparison or a 13F manager also says when the SEC was last checked
+for the data it depends on (`checked_at`) and whether that check is overdue: more than a day ago,
+or never (`check_overdue`, D-135; service/freshness.py). Other answers (lookups, feeds, coverage,
+the status report) depend on no one watch and write neither field.
 """
 
 from collections.abc import Iterable
@@ -54,7 +59,22 @@ class Served[T](BaseModel):
     data: T
     sources: tuple[Source, ...]
     as_of: datetime | None  # UTC: when the newest row used was last written
+    # D-135: when the SEC was last checked for the data this depends on (null: never), and
+    # whether that was more than a day ago. Both None: the answer depends on no watch, and the
+    # envelope leaves them out (checked_fields).
+    checked_at: datetime | None = None
+    check_overdue: bool | None = None
     quality_flags: tuple[FlagRef, ...]
+
+
+CHECK_FIELDS = ("checked_at", "check_overdue")
+
+
+def checked_fields(written: dict[str, Any]) -> dict[str, Any]:
+    """An envelope or answer as written, without the check fields when it depends on no watch."""
+    if written.get("check_overdue") is None:
+        return {name: value for name, value in written.items() if name not in CHECK_FIELDS}
+    return written
 
 
 async def sources_of(

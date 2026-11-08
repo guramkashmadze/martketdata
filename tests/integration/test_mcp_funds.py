@@ -35,8 +35,8 @@ async def test_investor_portfolio_is_the_apis_in_short(
 
     assert result.is_error is False, text_of(result)
     answer = parsed(result)
-    assert set(answer) == {"data", "sources", "as_of", "disclaimer"}
-    for key in ("sources", "as_of", "disclaimer"):
+    assert set(answer) == {"data", "sources", "as_of", "checked_at", "check_overdue", "disclaimer"}
+    for key in ("sources", "as_of", "checked_at", "check_overdue", "disclaimer"):
         assert answer[key] == rest[key], key
     data = answer["data"]
     assert (data["manager"], data["quarter"], data["report_period"], data["filed_at"]) == (

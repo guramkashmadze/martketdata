@@ -47,5 +47,52 @@ services:
       start_period: 30s
       start_interval: 2s
 
+  # The worker and the scheduler run the image the api service builds (D-137), so filings are
+  # watched without a terminal: `docker compose up -d --build api worker scheduler` builds it once
+  # and starts all three. They don't build it themselves, as two builds of one tag collide; name
+  # api in every --build. The scheduler only enqueues: a watch of each universe company and
+  # curated manager every 10 minutes, the security-master load daily. The worker does the work and
+  # is the one process calling the SEC (D-062): while it runs, `pdm run marketdata worker` refuses
+  # to start and names it ('marketdata worker on docker-compose'); stop it first with `docker
+  # compose stop worker`. Started while another process holds the SEC slot, this worker waits and
+  # takes over when that one stops.
+  worker:
+    image: marketdata
+    pull_policy: never  # built by the api service, never pulled
+    command: ["marketdata", "worker", "--wait"]
+    restart: unless-stopped
+    init: true  # passes SIGTERM on and reaps child processes
+    hostname: docker-compose  # names the worker in PostgreSQL, so a refusal says where it runs
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql://marketdata:marketdata@postgres:5432/marketdata}
+      RAW_STORE_PATH: /app/var/raw
+    volumes:
+      # The raw store this machine's processes use (RAW_STORE_PATH in .env): keys start with
+      # raw/, so the files sit under var/raw/raw/...
+      - ${RAW_STORE_PATH:-./var/raw}:/app/var/raw
+      # The universe, overrides and managers files, which the image doesn't hold.
+      - ./data:/app/data:ro
+      # Behind a proxy that re-signs HTTPS (this dev Mac's network does), the container trusts
+      # only Debian's roots and every SEC request fails: a docker-compose.override.yml of this
+      # machine's (not committed) mounts a bundle with the proxy's root over the image's CA file
+      # (README, "Behind a proxy that re-signs HTTPS").
+    # A stop lets running tasks finish for up to a minute and puts the rest back (D-058).
+    stop_grace_period: 75s
+
+  scheduler:
+    image: marketdata
+    pull_policy: never
+    command: ["marketdata", "scheduler"]
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${CONTAINER_DATABASE_URL:-postgresql://marketdata:marketdata@postgres:5432/marketdata}
+
 volumes:
   postgres-data:

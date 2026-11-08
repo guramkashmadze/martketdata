@@ -3,12 +3,20 @@ name; the scheduler watches the curated managers with the universe, and a manage
 universe company has nothing but its new 13F reports routed (§4)."""
 
 import json
-from datetime import date
+from collections.abc import Callable
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 import psycopg
-from conftest import SEC_FIXTURES, TEST_UNIVERSE, LoadMaster, connect_to, sec_serving
+from conftest import (
+    SEC_FIXTURES,
+    TEST_UNIVERSE,
+    LoadMaster,
+    connect_to,
+    found_soon_after,
+    sec_serving,
+)
 
 from marketdata.db.repositories import managers
 from marketdata.db.repositories.managers import CuratedManager
@@ -135,11 +143,18 @@ def _changed(data: bytes, removed: set[str], items: dict[str, str]) -> bytes:
     return json.dumps(document).encode()
 
 
-async def _watch(conn: Conn, tmp_path: Path, body: bytes) -> WatchReport:
+async def _watch(
+    conn: Conn, tmp_path: Path, body: bytes, clock: Callable[[], datetime] | None = None
+) -> WatchReport:
     kinds = frozenset({F13_PARSE, FORM4_PARSE, FACTS_REFRESH, EARNINGS_EXTRACT})
     async with sec_serving({urls.submissions(MARKEL): body}) as sec:
         fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
-        return await FilingsWatcher(fetcher, connect_to(conn), kinds).watch(MARKEL)
+        watcher = (
+            FilingsWatcher(fetcher, connect_to(conn), kinds, clock=clock)
+            if clock
+            else FilingsWatcher(fetcher, connect_to(conn), kinds)
+        )
+        return await watcher.watch(MARKEL)
 
 
 async def test_a_manager_outside_the_universe_has_only_its_13f_routed(
@@ -151,7 +166,7 @@ async def test_a_manager_outside_the_universe_has_only_its_13f_routed(
     full = _changed(MARKEL_FILE, set(), {EIGHT_K: "2.02,9.01"})
     first = await _watch(conn, tmp_path, _changed(full, {REPORT, EIGHT_K, TEN_Q, FORM4}, {}))
 
-    report = await _watch(conn, tmp_path, full)
+    report = await _watch(conn, tmp_path, full, found_soon_after(full, REPORT))
 
     assert first.first_watch and first.stored is not None and first.stored.routed == ()
     assert report.stored is not None and report.stored.inserted == 4

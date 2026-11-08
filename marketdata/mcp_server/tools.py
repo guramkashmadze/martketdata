@@ -39,7 +39,7 @@ from marketdata.service import (
 )
 from marketdata.service.errors import InvalidParameter
 from marketdata.service.json_text import dumps
-from marketdata.service.served import DISCLAIMER, Served
+from marketdata.service.served import DISCLAIMER, Served, checked_fields
 
 # A pool's `connection` method, as api/deps.py's Connect: a connection that commits on exit.
 type Connect = Callable[[], AbstractAsyncContextManager[AsyncConnection[Any]]]
@@ -111,7 +111,7 @@ def today() -> date:
 def answer(result: answers.Answer[Any] | Served[Any], proof_url: str | None = None) -> str:
     """An answer, or the API's envelope, with its proof pages' address when there is one and
     the disclaimer, as JSON text."""
-    written = result.model_dump(mode="python")
+    written = checked_fields(result.model_dump(mode="python"))
     if proof_url is not None:
         written["proof_url"] = proof_url
     return dumps({**written, "disclaimer": DISCLAIMER})
@@ -205,6 +205,10 @@ class Tools:
         With the server's public address set, `proof_url` is each value's proof page (the
         filing, the checks, the history): fill in its {placeholders} from the value.
 
+        `checked_at` is when the company's filings and financials were last checked against the
+        SEC; with `check_overdue` true (more than a day ago, or never) newer filings may be
+        missing.
+
         The data is information from public filings, not investment advice.
         """
         async with self._connect()() as conn:
@@ -242,6 +246,10 @@ class Tools:
 
         With the server's public address set, `proof_url` is each value's proof page (the
         filing, the checks, the history): fill in its {placeholders} from the value.
+
+        `checked_at` is when the company's financials were last checked against its SEC filings;
+        with `check_overdue` true (more than a day ago, or never) a newer 10-Q or 10-K may be
+        missing.
 
         The data is information from public filings, not investment advice.
         """
@@ -282,6 +290,9 @@ class Tools:
         to influence the company") with their importance. Use it for "what has <company> filed
         or announced lately" questions. `more` says that more filings match than are shown:
         ask for fewer days or one form. Works for every filer, funds and foreign issuers too.
+
+        `checked_at` is when the company's filings were last checked on the SEC; with
+        `check_overdue` true (more than a day ago, or never) newer filings may be missing.
 
         The data is information from public filings, not investment advice.
         """
@@ -329,6 +340,9 @@ class Tools:
         With the server's public address set, `proof_url` is each value's proof page (the
         filing, the checks, the history): fill in its {placeholders} from the value.
 
+        `checked_at` is the oldest of the companies' last checks against the SEC; with
+        `check_overdue` true (more than a day ago, or never) newer filings may be missing.
+
         The data is information from public filings, not investment advice.
         """
         names = wanted(metrics)
@@ -357,6 +371,9 @@ class Tools:
         whether the release is complete, partial or failed. Amounts are in USD, EPS in USD
         per share. With the server's public address set, `proof_url` is the release's proof
         page.
+
+        `checked_at` is when the company's filings were last checked on the SEC; with
+        `check_overdue` true (more than a day ago, or never) a newer release may be missing.
 
         The data is information from public filings, not investment advice.
         """
@@ -394,6 +411,9 @@ class Tools:
         than are listed: ask for fewer days or one code. Domestic companies, and foreign
         private issuers from March 2026. With the server's public address set, `proof_url` is
         each trade's proof page, the Form 4 as read: fill in its {accession_no}.
+
+        `checked_at` is when the company's filings were last checked on the SEC; with
+        `check_overdue` true (more than a day ago, or never) newer Forms 4 may be missing.
 
         The data is information from public filings, not investment advice.
         """
@@ -441,6 +461,9 @@ class Tools:
         securities and options on them at the quarter end, filed up to 45 days later: say the
         quarter and the filing date. `more` names the lists that were cut short.
 
+        `checked_at` is when the investor's filings were last checked on the SEC; with
+        `check_overdue` true (more than a day ago, or never) a newer 13F may be missing.
+
         The data is information from public filings, not investment advice.
         """
         async with self._connect()() as conn:
@@ -456,6 +479,9 @@ class Tools:
         the change from its quarter before; investors that sold all of it that quarter are
         listed as exited. Use it for "which famous investors own <company>". A 13F reports
         positions at a quarter end, filed up to 45 days later.
+
+        `checked_at` is the oldest of the curated investors' last checks on the SEC; with
+        `check_overdue` true (more than a day ago, or never) a newer 13F may be missing.
 
         The data is information from public filings, not investment advice.
         """

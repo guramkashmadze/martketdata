@@ -148,11 +148,12 @@ async def parse_13f_filing(context: TaskContext, task: Task) -> None:
     stored. A filing that isn't a curated manager's 13F, or a broken unit overrides file, is
     refused: retrying can't help."""
     cik, accession_no = _cik(task), _accession(task)
-    live = task.payload.get("live") is True
+    # Routed by a watch, live or caught up late (D-136): not queued by the funds backfill.
+    routed = task.payload.get("live") is True or task.payload.get("late") is True
     try:
         overrides = read_unit_overrides(context.settings.f13_overrides_file)
         ingest = F13Ingest(context.fetcher, context.connect, overrides)
-        await ingest.run(cik, accession_no, live=live)
+        await ingest.run(cik, accession_no, routed=routed)
     except (F13Refused, SecFileError, UnitOverrideError) as exc:
         raise TaskRefused(str(exc)) from exc
 

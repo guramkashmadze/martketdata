@@ -22,11 +22,19 @@ import httpx2
 import psycopg
 import pytest
 from api_seed import ACME, Q2_RELEASE, Q3_RELEASE, seed
-from conftest import SEC_FIXTURES, LoadMaster, connect_to, filing_routes, sec_serving
+from conftest import (
+    SEC_FIXTURES,
+    LoadMaster,
+    connect_to,
+    filing_routes,
+    found_soon_after,
+    sec_serving,
+)
 from cryptography.fernet import Fernet
 from structlog.testing import capture_logs
 
 from marketdata.config import Settings
+from marketdata.db.repositories import earnings
 from marketdata.ingest.announce import announce
 from marketdata.ingest.earnings import EarningsIngest
 from marketdata.ingest.facts import FactsLoader, rebuild_all
@@ -48,7 +56,7 @@ from marketdata.service.earnings import get_earnings
 from marketdata.service.errors import InvalidParameter
 from marketdata.service.json_text import dumps
 from marketdata.tasks import queue
-from marketdata.tasks.handlers import DELIVERY_RETRY, delivery_handler
+from marketdata.tasks.handlers import DELIVERY_RETRY, delivery_handler, extract_earnings
 from marketdata.tasks.registry import TaskContext, TaskRefused
 from marketdata.webhooks import deliver, outbox
 from marketdata.webhooks.deliver import DeliveryFailed, DeliveryRefused
@@ -526,11 +534,12 @@ async def test_a_watch_announces_a_new_filing_with_a_high_label(
 ) -> None:
     await load_master()
     kinds = frozenset({EARNINGS_EXTRACT})
+    soon = found_soon_after(AAPL_SUBMISSIONS, AAPL_RELEASE)  # found as it was filed (D-136)
 
     async def watch(body: bytes) -> None:
         async with sec_serving({urls.submissions(AAPL): body}) as sec:
             fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
-            await FilingsWatcher(fetcher, connect_to(conn), kinds).watch(AAPL)
+            await FilingsWatcher(fetcher, connect_to(conn), kinds, clock=soon).watch(AAPL)
 
     document = json.loads(AAPL_SUBMISSIONS)
     recent = document["filings"]["recent"]
@@ -552,3 +561,47 @@ async def test_a_watch_announces_a_new_filing_with_a_high_label(
     announced = body["data"]["object"]
     assert (announced["ticker"], announced["cik"]) == ("AAPL", AAPL)
     assert announced["filing"]["form"] == "8-K" and body["data"]["proof_url"] is None
+
+
+async def test_a_release_a_restarted_watch_catches_up_is_neither_announced_nor_timed(
+    conn: Conn, tmp_path: Path, load_master: LoadMaster, migrated_database: str
+) -> None:
+    """D-136: the watches were stopped for two weeks in the middle of an earnings season. The
+    release the restarted watch finds is caught up: no filing.event, its extraction behind live
+    work, served once verified but never announced as earnings.verified, and left out of the
+    time to verified."""
+    await load_master()
+    kinds = frozenset({EARNINGS_EXTRACT})
+    accepted = found_soon_after(AAPL_SUBMISSIONS, AAPL_RELEASE)() - timedelta(minutes=5)
+    document = json.loads(AAPL_SUBMISSIONS)
+    recent = document["filings"]["recent"]
+    index = recent["accessionNumber"].index(AAPL_RELEASE)
+    for values in recent.values():
+        del values[index]
+    for body, found in (
+        (json.dumps(document).encode(), accepted - timedelta(days=1)),  # before the gap
+        (AAPL_SUBMISSIONS, accepted + timedelta(days=14)),  # two weeks later
+    ):
+        async with sec_serving({urls.submissions(AAPL): body}) as sec:
+            fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
+            watcher = FilingsWatcher(
+                fetcher, connect_to(conn), kinds, clock=lambda found=found: found
+            )
+            await watcher.watch(AAPL)
+
+    assert await _events(conn, FILING_EVENT) == []
+    [task] = await queue.list_tasks(conn, kind=EARNINGS_EXTRACT)
+    assert task.payload == {"cik": AAPL, "accession_no": AAPL_RELEASE, "late": True}
+    async with sec_serving(filing_routes()) as sec:
+        context = TaskContext(
+            settings=_settings(migrated_database),
+            connect=connect_to(conn),
+            fetcher=RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn)),
+            kinds=kinds,
+        )
+        await extract_earnings(context, task)  # as the worker runs it
+
+    release = await earnings.get_release(conn, AAPL_RELEASE)
+    assert release is not None and release.status == "complete" and not release.live
+    assert await _events(conn, EARNINGS_VERIFIED) == []
+    assert await earnings.live_latencies(conn) == []

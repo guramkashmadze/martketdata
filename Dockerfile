@@ -1,7 +1,7 @@
 # The marketdata image (D-134): the API with /health, /v1, /proof, /mcp and the web UI. The
 # builder stage installs the locked production dependencies and the package into a virtualenv;
-# the runtime stage copies only that virtualenv and runs as a user that can't log in. From E7c
-# the worker and the scheduler run from the same image with another command.
+# the runtime stage copies only that virtualenv and runs as a user that can't log in. The worker
+# and the scheduler run from the same image with another command (docker-compose.yml, D-137).
 ARG PYTHON_IMAGE=python:3.15-slim-trixie
 
 FROM ${PYTHON_IMAGE} AS builder

@@ -114,8 +114,8 @@ def _compared(row: dict[str, Any] | None) -> dict[str, Any] | None:
 
 def _same_envelope(answer: dict[str, Any], rest: dict[str, Any]) -> None:
     """A compact answer keeps the API's envelope but its list of flags."""
-    assert set(answer) == {"data", "sources", "as_of", "disclaimer"}
-    for key in ("sources", "as_of", "disclaimer"):
+    assert set(answer) == {"data", "sources", "as_of", "checked_at", "check_overdue", "disclaimer"}
+    for key in ("sources", "as_of", "checked_at", "check_overdue", "disclaimer"):
         assert answer[key] == rest[key], key
 
 

@@ -19,6 +19,7 @@ from marketdata.normalize.filing_events import SUBJECT_FILE_NUMBER, Importance, 
 from marketdata.sec import urls
 from marketdata.service.companies import group_of, resolve_ticker
 from marketdata.service.errors import InvalidParameter
+from marketdata.service.freshness import company_check
 from marketdata.service.pages import (
     BAD_CURSOR,
     DEFAULT_LIMIT,
@@ -109,6 +110,7 @@ async def recent_filings(
         limit=limit,
         cursor=cursor,
     )
+    check = await company_check(conn, security.cik)
     return Served(
         data=CompanyFilings(
             ticker=security.ticker,
@@ -119,6 +121,8 @@ async def recent_filings(
         ),
         sources=await sources_of(conn, ((row.cik, row.accession_no) for row in listed)),
         as_of=newest(row.discovered_at for row in listed),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=(),
     )
 

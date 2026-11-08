@@ -15,7 +15,13 @@ The same report is served without a key by <code>GET /v1/status</code>.</p>
   <dt>Financial metrics</dt><dd class="num">last changed {{ f.metrics_updated_at | utc }}</dd>
   <dt>Filings</dt><dd class="num">newest found {{ f.filing_discovered_at | utc }}</dd>
   <dt>Watch of the SEC's filing lists</dt><dd class="num">last run {{ f.watched_at | utc }}</dd>
+  <dt>Least recent watch of a company or manager</dt><dd class="num">{{ f.oldest_watched_at | utc }}</dd>
+  <dt>Watches more than a day old, or never run</dt><dd class="num">{{ f.overdue_watches }}</dd>
 </dl>
+{% if f.overdue_watches %}
+<p class="note">While a company's watch is more than a day old, its answers say so
+(<code>check_overdue</code>): filings newer than its last check may be missing.</p>
+{% endif %}
 
 <h2>Track record</h2>
 {% if a.latency.releases %}

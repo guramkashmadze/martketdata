@@ -28,6 +28,7 @@ from marketdata.service.financials import (
     metric_refs,
     metric_rows,
 )
+from marketdata.service.freshness import financials_check
 from marketdata.service.served import (
     Served,
     merge_sources,
@@ -96,6 +97,8 @@ async def company_snapshot(
         limit=SNAPSHOT_FILINGS,
     )
     current = await securities.list_current_for_cik(conn, security.cik)
+    # The financials check covers the release and filings too: it is the watch at most (D-135).
+    check = await financials_check(conn, security.cik)
     sources = await sources_of(
         conn,
         [
@@ -139,6 +142,8 @@ async def company_snapshot(
                 *(row.discovered_at for row in listed),
             ]
         ),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=unique_flags(
             [
                 *metric_flags(ttm, security.ticker),

@@ -76,7 +76,7 @@ class FakeOpenFigi:
         )
 
 
-async def _store_report(conn: Conn, tmp_path: Path, *, live: bool = False) -> None:
+async def _store_report(conn: Conn, tmp_path: Path, *, routed: bool = False) -> None:
     manager = CuratedManager(BERKSHIRE, "BERKSHIRE HATHAWAY INC", "Berkshire Hathaway", "test")
     await managers.replace_curated(conn, [BERKSHIRE], [manager])
     row = FilingRow(
@@ -94,7 +94,7 @@ async def _store_report(conn: Conn, tmp_path: Path, *, live: bool = False) -> No
     await filings.insert_new(conn, [row])
     async with sec_serving(filing_routes()) as sec:
         fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
-        await F13Ingest(fetcher, connect_to(conn)).run(BERKSHIRE, REPORT, live=live)
+        await F13Ingest(fetcher, connect_to(conn)).run(BERKSHIRE, REPORT, routed=routed)
 
 
 async def _map(
@@ -190,8 +190,9 @@ async def test_a_wrong_check_digit_is_stored_without_asking(conn: Conn, tmp_path
     assert (row.status, row.note) == ("unmatched", "not a CUSIP: the check digit is wrong")
 
 
-async def test_a_live_report_queues_the_mapping(conn: Conn, tmp_path: Path) -> None:
-    await _store_report(conn, tmp_path, live=True)
+async def test_a_report_a_watch_routed_queues_the_mapping(conn: Conn, tmp_path: Path) -> None:
+    # Live or caught up late (D-135): either way a watch found it, not the funds backfill.
+    await _store_report(conn, tmp_path, routed=True)
 
     [task] = await queue.list_tasks(conn, kind=CUSIP_MAP)
     assert (task.key, task.status) == (PENDING, "queued")

@@ -6,9 +6,10 @@ tests fail rather than skip, so a green run means they ran.
 """
 
 import gzip
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -166,6 +167,16 @@ def connect_to(conn: psycopg.AsyncConnection[Any]) -> Connect:
         yield conn
 
     return connect
+
+
+def found_soon_after(submissions: bytes, accession: str) -> Callable[[], datetime]:
+    """A watch's clock five minutes after the SEC accepted `accession`, as these submissions list
+    it: the watch finds that filing live, not caught up (D-136). The fixtures were accepted
+    months before the tests run."""
+    recent = json.loads(submissions)["filings"]["recent"]
+    listed = recent["acceptanceDateTime"][recent["accessionNumber"].index(accession)]
+    found = datetime.fromisoformat(listed) + timedelta(minutes=5)
+    return lambda: found
 
 
 LoadMaster = Callable[..., Awaitable[LoadReport]]

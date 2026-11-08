@@ -26,6 +26,7 @@ from marketdata.service.financials import (
     metric_refs,
     metric_rows,
 )
+from marketdata.service.freshness import comparison_check
 from marketdata.service.served import Served, newest, sources_of, unique_flags
 
 MIN_COMPANIES, MAX_COMPANIES = 2, 5
@@ -85,6 +86,7 @@ async def compare(
         for ticker, by_metric in found.items()
     }
     rows = [row for listed in newest_rows.values() for row in listed]
+    check = await comparison_check(conn, [security.cik for security in resolved])
     return Served(
         data=Comparison(
             period_type=period_type,
@@ -108,6 +110,8 @@ async def compare(
         as_of=newest(
             each.updated_at for by_metric in found.values() for each in by_metric.values()
         ),
+        checked_at=check.at,
+        check_overdue=check.overdue,
         quality_flags=unique_flags(
             flag for ticker, listed in newest_rows.items() for flag in metric_flags(listed, ticker)
         ),

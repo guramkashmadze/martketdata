@@ -113,9 +113,10 @@ class F13Ingest:
         self._connect = connect
         self._overrides = overrides
 
-    async def run(self, cik: int, accession_no: str, *, live: bool = False) -> F13Report:
+    async def run(self, cik: int, accession_no: str, *, routed: bool = False) -> F13Report:
         """Fetch, parse and store the 13F-HR or 13F-HR/A `accession_no` from `cik`'s listing.
-        A `live` report (routed when filed) queues the mapping of its new CUSIPs."""
+        A report a watch `routed`, live or caught up late (D-136), queues the mapping of its new
+        CUSIPs; the funds backfill queues one mapping after all its reports."""
         accession_no = urls.accession_no(accession_no)
         async with self._connect() as conn:
             listed = [
@@ -188,7 +189,7 @@ class F13Ingest:
             previous = await holdings.get_filing(conn, accession_no)
             await holdings.store(conn, record, method=METHOD, version=PARSER_VERSION)
             built, changes = await _build_quarter(conn, record, previous)
-            if live:
+            if routed:
                 await tasks.enqueue(conn, CUSIP_MAP, PENDING, {}, force=True)
         report = F13Report(
             accession_no=accession_no,

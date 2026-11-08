@@ -1,18 +1,21 @@
 """E3-S4: the first watch stores a company's recent filings and routes nothing, a second watch
-stores none, and one new filing enqueues exactly its task (§4)."""
+stores none, and one new filing enqueues exactly its task (§4): as live work when the watch
+finds it within a day of its acceptance, caught up behind live work otherwise (D-136)."""
 
 import json
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import psycopg
-from conftest import SEC_FIXTURES, LoadMaster, connect_to, sec_serving
+from conftest import SEC_FIXTURES, LoadMaster, connect_to, found_soon_after, sec_serving
 
 from marketdata.db.repositories import filings, watch_state
 from marketdata.ingest.fetch import RawFetcher
 from marketdata.ingest.watcher import FilingsWatcher
 from marketdata.normalize.filings import EARNINGS_EXTRACT
+from marketdata.normalize.webhooks import WEBHOOK_PUBLISH
 from marketdata.sec import urls
 from marketdata.sec.raw_store import LocalRawStore
 from marketdata.tasks import queue
@@ -32,10 +35,18 @@ def _without(data: bytes, accession: str) -> bytes:
     return json.dumps(document).encode()
 
 
-async def _watch(conn: Conn, tmp_path: Path, body: bytes, kinds: frozenset[str]) -> Any:
+async def _watch(
+    conn: Conn,
+    tmp_path: Path,
+    body: bytes,
+    kinds: frozenset[str],
+    clock: Callable[[], datetime] | None = None,
+) -> Any:
     async with sec_serving({urls.submissions(AAPL): body}) as sec:
         fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
-        return await FilingsWatcher(fetcher, connect_to(conn), kinds).watch(AAPL)
+        if clock is None:
+            return await FilingsWatcher(fetcher, connect_to(conn), kinds).watch(AAPL)
+        return await FilingsWatcher(fetcher, connect_to(conn), kinds, clock=clock).watch(AAPL)
 
 
 async def test_first_watch_stores_recent_filings_and_a_second_stores_none(
@@ -64,9 +75,9 @@ async def test_one_new_filing_enqueues_exactly_its_task(
     kinds = frozenset({EARNINGS_EXTRACT})
     await _watch(conn, tmp_path, _without(CORRECT, EARNINGS), kinds)
 
-    report = await _watch(conn, tmp_path, CORRECT, kinds)
+    report = await _watch(conn, tmp_path, CORRECT, kinds, found_soon_after(CORRECT, EARNINGS))
 
-    assert report.stored.inserted == 1
+    assert report.stored.inserted == 1 and report.stored.late == 0
     assert report.stored.routed == (f"{EARNINGS_EXTRACT} {EARNINGS}",)
     [task] = await queue.list_tasks(conn, kind=EARNINGS_EXTRACT)
     assert (task.key, task.payload) == (
@@ -74,6 +85,44 @@ async def test_one_new_filing_enqueues_exactly_its_task(
         {"cik": AAPL, "accession_no": EARNINGS, "live": True},  # E5b: routed when filed
     )
     assert task.priority == queue.PRIORITY_LIVE  # ahead of backfills (D-067)
+
+
+async def test_a_filing_found_more_than_a_day_late_is_caught_up_not_live(
+    conn: Conn, tmp_path: Path, load_master: LoadMaster
+) -> None:
+    """D-136: the watches were stopped when the release was filed. Found a day and a second
+    after its acceptance, its extraction is routed behind live work, not live, and the filing
+    isn't announced: a restarted watch doesn't send old releases as news."""
+    await load_master()
+    kinds = frozenset({EARNINGS_EXTRACT})
+    accepted = found_soon_after(CORRECT, EARNINGS)() - timedelta(minutes=5)
+    await _watch(conn, tmp_path, _without(CORRECT, EARNINGS), kinds)
+
+    report = await _watch(
+        conn, tmp_path, CORRECT, kinds, lambda: accepted + timedelta(days=1, seconds=1)
+    )
+
+    assert report.stored.inserted == 1 and report.stored.late == 1
+    assert report.stored.routed == (f"{EARNINGS_EXTRACT} {EARNINGS}",)
+    [task] = await queue.list_tasks(conn, kind=EARNINGS_EXTRACT)
+    assert task.payload == {"cik": AAPL, "accession_no": EARNINGS, "late": True}
+    assert task.priority == queue.PRIORITY_NORMAL  # behind live work, ahead of backfills
+    assert await queue.list_tasks(conn, kind=WEBHOOK_PUBLISH) == []  # no filing.event
+
+
+async def test_a_filing_found_a_day_after_its_acceptance_is_still_live(
+    conn: Conn, tmp_path: Path, load_master: LoadMaster
+) -> None:
+    await load_master()
+    kinds = frozenset({EARNINGS_EXTRACT})
+    accepted = found_soon_after(CORRECT, EARNINGS)() - timedelta(minutes=5)
+    await _watch(conn, tmp_path, _without(CORRECT, EARNINGS), kinds)
+
+    report = await _watch(conn, tmp_path, CORRECT, kinds, lambda: accepted + timedelta(days=1))
+
+    assert report.stored.late == 0
+    [task] = await queue.list_tasks(conn, kind=EARNINGS_EXTRACT)
+    assert task.payload["live"] is True and task.priority == queue.PRIORITY_LIVE
 
 
 async def test_a_shifted_file_stores_no_times_and_a_right_one_fills_them(

@@ -16,6 +16,9 @@ ingest/watcher.py fetches the files (raw store first) and writes.
   summer, 5 in winter). `check_acceptance_times` catches such a file: its new filings look
   accepted in the future, and many of its filings outside EDGAR's hours. A file that fails
   gives no acceptance times (null), never a guessed correction (D-057).
+- A new filing a watch finds within a day of its acceptance is live: its work is routed ahead
+  of everything else and announced. One found later was missed while the watches were stopped
+  and is caught up behind live work, announcing nothing (`found_live`, D-136).
 """
 
 import json
@@ -26,6 +29,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from marketdata.normalize.freshness import CHECK_OVERDUE_AFTER
 from marketdata.normalize.security_master import FilerType, SecFileError
 
 EASTERN = ZoneInfo("America/New_York")
@@ -228,6 +232,21 @@ def plan_filings(stored: Mapping[str, datetime | None], listed: Sequence[FilingR
         elif known != row.accepted_at:
             differ.append(AcceptanceDiffers(row.accession_no, known, row.accepted_at))
     return FilingsPlan(tuple(new), tuple(fill), tuple(differ))
+
+
+# D-136: how long after its acceptance a filing a watch finds is still live. The same day as an
+# answer's check takes to be overdue: a filing found later was missed while data was overdue.
+LIVE_WITHIN = CHECK_OVERDUE_AFTER
+
+
+def found_live(filing: FilingRow, found_at: datetime) -> bool:
+    """Whether a watch that found `filing` at `found_at` found it live: within a day of its
+    acceptance by the SEC, or of its filing day when the file's times failed the check (D-057).
+    A filing found later was missed while the watches were stopped: its work is caught up like a
+    backfill's, never announced as new or counted in the time to verified (D-136)."""
+    if filing.accepted_at is not None:
+        return found_at - filing.accepted_at <= LIVE_WITHIN
+    return found_at.date() - filing.filed_at <= LIVE_WITHIN
 
 
 @dataclass(frozen=True)

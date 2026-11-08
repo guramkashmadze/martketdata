@@ -12,7 +12,14 @@ from typing import Any
 
 import psycopg
 import pytest
-from conftest import SEC_FIXTURES, LoadMaster, connect_to, filing_routes, sec_serving
+from conftest import (
+    SEC_FIXTURES,
+    LoadMaster,
+    connect_to,
+    filing_routes,
+    found_soon_after,
+    sec_serving,
+)
 
 from marketdata.config import Settings
 from marketdata.db.repositories import filings, insiders, raw_objects
@@ -189,10 +196,11 @@ async def test_the_watcher_routes_a_new_form_4_to_its_task(
     kinds = build_registry().kinds
     assert FORM4_PARSE in kinds
 
+    soon = found_soon_after(full, newest)  # found within minutes of its filing (D-136)
     for body in (json.dumps(document).encode(), full):
         async with sec_serving({urls.submissions(AAPL): body}) as sec:
             fetcher = RawFetcher(sec, LocalRawStore(tmp_path / "raw"), connect_to(conn))
-            report = await FilingsWatcher(fetcher, connect_to(conn), kinds).watch(AAPL)
+            report = await FilingsWatcher(fetcher, connect_to(conn), kinds, clock=soon).watch(AAPL)
 
     assert report.stored is not None and report.stored.routed == (f"{FORM4_PARSE} {newest}",)
     [task] = await queue.list_tasks(conn, kind=FORM4_PARSE)

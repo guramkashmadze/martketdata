@@ -33,6 +33,7 @@ from marketdata.service.companies import (
     resolve_ticker,
 )
 from marketdata.service.errors import InvalidParameter, NotFound
+from marketdata.service.freshness import Check, company_check
 from marketdata.service.pages import (
     BAD_CURSOR,
     DEFAULT_LIMIT,
@@ -268,7 +269,8 @@ async def latest_earnings(conn: AsyncConnection[Any], ticker: str) -> Served[Ear
     if stored is None:
         raise NotFound(f"No earnings release of {security.ticker} is stored yet.")
     company = CompanyRef(ticker=security.ticker, cik=security.cik, name=security.name)
-    return (await _build(conn, [stored], {stored.cik: company})).one()
+    built = await _build(conn, [stored], {stored.cik: company})
+    return built.one(await company_check(conn, security.cik))
 
 
 async def get_earnings(conn: AsyncConnection[Any], accession_no: str) -> Served[EarningsRelease]:
@@ -338,10 +340,16 @@ class _Built:
     as_of: datetime | None
     quality_flags: tuple[FlagRef, ...]
 
-    def one(self) -> Served[EarningsRelease]:
+    def one(self, check: Check | None = None) -> Served[EarningsRelease]:
+        """The one release, with the company's check when it is the latest (D-135)."""
         (release,) = self.releases
         return Served(
-            data=release, sources=self.sources, as_of=self.as_of, quality_flags=self.quality_flags
+            data=release,
+            sources=self.sources,
+            as_of=self.as_of,
+            checked_at=check.at if check else None,
+            check_overdue=check.overdue if check else None,
+            quality_flags=self.quality_flags,
         )
 
 
