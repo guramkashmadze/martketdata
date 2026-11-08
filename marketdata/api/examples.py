@@ -97,9 +97,27 @@ GOOGL_TTM_SOURCES = (
 )
 
 
+# D-140: the example filings' primary documents, as the SEC's lists name them.
+PRIMARY_DOCS = {
+    "0000320193-25-000079": "aapl-20250927.htm",
+    "0000320193-26-000006": "aapl-20251227.htm",
+    "0000320193-26-000013": "aapl-20260328.htm",
+    RELEASE: "aapl-20260730.htm",
+    TEN_Q: "aapl-20260627.htm",
+    "0001140361-26-040127": "xslF345X06/form4.xml",  # Apple's Form 4 (INSIDER_FORM4)
+    "0001652044-26-000071": "goog-20260630.htm",
+    "0001874178-26-000053": "rivn-20260730.htm",
+    "0001874178-26-000054": "rivn-20260630.htm",
+}
+
+
 def _source(cik: int, accession: str, form: str, filed: date) -> Source:
     return Source(
-        accession_no=accession, form=form, filed_at=filed, url=urls.filing_folder(cik, accession)
+        accession_no=accession,
+        form=form,
+        filed_at=filed,
+        url=urls.filing_folder(cik, accession),
+        document_url=urls.main_document(cik, accession, PRIMARY_DOCS.get(accession)),
     )
 
 
@@ -283,6 +301,7 @@ APPLE_FILINGS = (
         accepted_at=datetime(2026, 7, 31, 10, 1, 2, tzinfo=UTC),
         period_of_report=date(2026, 6, 27),
         url=urls.filing_index_page(AAPL, TEN_Q),
+        document_url=urls.main_document(AAPL, TEN_Q, PRIMARY_DOCS[TEN_Q]),
         events=(),
     ),
     FilingView(
@@ -293,6 +312,7 @@ APPLE_FILINGS = (
         accepted_at=datetime(2026, 7, 30, 20, 30, 28, tzinfo=UTC),
         period_of_report=date(2026, 7, 30),
         url=urls.filing_index_page(AAPL, RELEASE),
+        document_url=urls.main_document(AAPL, RELEASE, PRIMARY_DOCS[RELEASE]),
         events=(
             FilingEventView(
                 item_or_form="2.02", label="Quarterly or annual results", importance="high"
@@ -688,6 +708,7 @@ BERKSHIRE_SOURCE = Source(
     form="13F-HR",
     filed_at=date(2026, 8, 14),
     url=urls.filing_folder(BERKSHIRE, BERKSHIRE_13F),
+    document_url=urls.filing_document(BERKSHIRE, BERKSHIRE_13F, "primary_doc.xml"),
 )
 BERKSHIRE_APPLE = FundPosition(
     cusip="037833100",

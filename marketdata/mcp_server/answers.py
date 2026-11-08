@@ -6,8 +6,11 @@ sources, as_of, the check (`checked_at` and `check_overdue`, D-135) and the disc
 `data` a metric value keeps a short proof: the filing it came from (`accession_no`; for a
 derived, TTM or computed value the latest filing it reads), the method and the XBRL concept,
 named once for a series whose values share it. Every filing a
-value reads is in `sources`, with its SEC link; recent_filings' filings and fund_holders'
-holders carry their own links, so their sources stay empty. The full proof object (each value's
+value reads is in `sources`, with its SEC link (its folder: the main document the REST envelope
+adds to each is left out, D-140); recent_filings' filings and fund_holders' holders carry their
+own links, so their sources stay empty. A filing in a list links its main document as filed
+(for an XML form the XML itself), and its index page only when the SEC names no main document
+(D-140). The full proof object (each value's
 contributing filings, the calc version, the filing's index page) is the API's and the proof
 page's. latest_earnings answers the API's release as it is, each fact with its full proof; a
 snapshot's release keeps each fact's source quote and cross-check status. investor_portfolio
@@ -144,14 +147,25 @@ def financials(served: Served[Financials]) -> Answer[FinancialsAnswer]:
 
 
 class Filing(BaseModel):
+    """A filing with one link (D-140): its main document, or its index page when the SEC
+    names no main document. Two links a filing would take 20 filings past 8 KB."""
+
     model_config = ConfigDict(frozen=True)
 
     accession_no: str
     form: str
     filed_at: date
     period_of_report: date | None
-    url: str  # the filing's index page
+    document_url: str | None  # the main document as filed: for an XML form, the XML itself
+    url: str | None  # the filing's index page, written only when there is no document_url
     events: tuple[FilingEventView, ...]  # plain-language labels (§9.6)
+
+    @model_serializer(mode="wrap")
+    def _one_link(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        written: dict[str, Any] = handler(self)
+        if written["url"] is None:
+            del written["url"]
+        return written
 
 
 def filing_of(view: FilingView) -> Filing:
@@ -160,7 +174,8 @@ def filing_of(view: FilingView) -> Filing:
         form=view.form,
         filed_at=view.filed_at,
         period_of_report=view.period_of_report,
-        url=view.url,
+        document_url=view.document_url,
+        url=None if view.document_url else view.url,
         events=view.events,
     )
 

@@ -693,6 +693,10 @@ def _sources(filed: Iterable[StoredF13Filing]) -> tuple[Source, ...]:
             form=filing.form,
             filed_at=filing.filed_at,
             url=urls.filing_folder(filing.manager_cik, filing.accession_no),
+            # the cover (primary_doc.xml): a 13F report's main document (D-140)
+            document_url=urls.filing_document(
+                filing.manager_cik, filing.accession_no, filing.cover_doc
+            ),
         )
         for filing in sorted(filed, key=lambda f: (f.filed_at, f.accession_no), reverse=True)
     )

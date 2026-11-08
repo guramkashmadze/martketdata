@@ -339,6 +339,9 @@ async def insider_activity(
                 form=filing.form,
                 filed_at=filing.filed_at,
                 url=urls.filing_folder(filing.issuer_cik, filing.accession_no),
+                document_url=urls.filing_document(
+                    filing.issuer_cik, filing.accession_no, filing.doc_name
+                ),  # the XML read: the filing's main document (D-140)
             )
             for filing in sorted(
                 (filings[accession] for accession in used),

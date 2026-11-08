@@ -3,7 +3,8 @@ MCP server from E6).
 
 Reads the filings table only; it never calls the SEC (CLAUDE.md). A company's filings include
 its predecessors' (D-068): XOM's history is under Exxon Mobil Corp (34088). Each filing links to
-its index page on sec.gov, the proof of what was filed.
+its index page on sec.gov, the proof of what was filed, and to its main document as filed: for
+a form filed as XML, the XML itself (D-140). Both are in the folder of the listing served.
 
 A form asked for matches its family (D-139, normalize/form_families.py): `13G` the four 13G
 codes, `8-K` its amendments too; the answer names the codes in `matched_forms`. A 13D or 13G
@@ -72,6 +73,9 @@ class FilingView(BaseModel):
     accepted_at: datetime | None  # null when the SEC's times for it failed the check (D-057)
     period_of_report: date | None
     url: str  # the filing's index page on sec.gov
+    # D-140: its main document as filed, for an XML form the XML itself; null when the SEC's
+    # list names none
+    document_url: str | None
     events: tuple[FilingEventView, ...]
 
 
@@ -201,6 +205,7 @@ def filing_view(row: Filing, *, form_asked: bool = False) -> FilingView:
         accepted_at=row.accepted_at,
         period_of_report=row.period_of_report,
         url=urls.filing_index_page(row.cik, row.accession_no),
+        document_url=urls.main_document(row.cik, row.accession_no, row.primary_doc),
         events=tuple(
             FilingEventView(
                 item_or_form=event.item_or_form,

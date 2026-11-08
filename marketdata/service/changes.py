@@ -265,6 +265,7 @@ async def _build(
                     form=trade.proof.form,
                     filed_at=trade.proof.filed_at,
                     url=trade.proof.filing_url,
+                    document_url=trade.proof.document_url,
                 )
                 for trade in trades.values()
                 if trade is not None
@@ -275,6 +276,9 @@ async def _build(
                     form=filing.form,
                     filed_at=filing.filed_at,
                     url=urls.filing_folder(filing.manager_cik, filing.accession_no),
+                    document_url=urls.filing_document(
+                        filing.manager_cik, filing.accession_no, filing.cover_doc
+                    ),
                 )
                 for filing in filed.values()
             ],

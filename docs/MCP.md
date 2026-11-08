@@ -159,7 +159,8 @@ headers in plain text in `~/.mcp-inspector/mcp.json`.
 ## The tools
 
 Every answer is JSON text: `data`, `sources` (the filings the values read, each with its form,
-filing date and SEC link), `as_of` (when the newest row used last changed) and the disclaimer.
+filing date and folder on sec.gov), `as_of` (when the newest row used last changed) and the
+disclaimer.
 An answer about a company or an investor (all but `lookup_company`) also carries `checked_at`,
 when the SEC was last checked for the filings it depends on, and `check_overdue`, true when that
 check is more than a day old or never ran: filings newer than it may be missing, and the client
@@ -177,6 +178,14 @@ release's page; `company_snapshot`, `get_financials`, `compare_companies` and `i
 one address with `{placeholders}` to fill in from each value, e.g.
 `https://<host>/proof/metrics/AAPL/{metric}/Q/{period_end}`. The pages ask for the same API key
 as the password of HTTP Basic auth while the web UI is private.
+
+A filing that `recent_filings` or `company_snapshot` lists links its main document as filed in
+`document_url`, to read the filing itself (D-140): an 8-K or a 10-Q is its HTML page, and a form
+filed as XML (Forms 3, 4 and 5, 13D, 13G, 13F, 144) is the XML, where a 13G's holder, shares and
+percent are. EDGAR's readable rendering of the XML is linked from the filing's index page, and
+the filing's other documents, such as an 8-K's exhibits, are in the same folder. A filing whose
+SEC listing names no main document (some filed before mid-2000) has `document_url` null and its
+index page in `url`. The REST API names both links on every filing, and on every source.
 
 | Tool | Use it for | Arguments | Limits |
 | --- | --- | --- | --- |

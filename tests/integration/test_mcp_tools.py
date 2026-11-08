@@ -33,7 +33,7 @@ from apple_data import RELEASES, load_apple
 from conftest import LoadMaster
 from fastapi import FastAPI
 from mcp import Client
-from mcp_client import connected, parsed, text_of
+from mcp_client import connected, mcp_sources, parsed, text_of
 
 from marketdata.mcp_server.tools import HEADLINE
 from marketdata.normalize.metric_catalog import UNITS
@@ -115,9 +115,11 @@ def _compared(row: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _same_envelope(answer: dict[str, Any], rest: dict[str, Any]) -> None:
-    """A compact answer keeps the API's envelope but its list of flags."""
+    """A compact answer keeps the API's envelope but its list of flags, and its sources' main
+    documents (D-140)."""
     assert set(answer) == {"data", "sources", "as_of", "checked_at", "check_overdue", "disclaimer"}
-    for key in ("sources", "as_of", "checked_at", "check_overdue", "disclaimer"):
+    assert answer["sources"] == mcp_sources(rest)
+    for key in ("as_of", "checked_at", "check_overdue", "disclaimer"):
         assert answer[key] == rest[key], key
 
 
@@ -441,7 +443,8 @@ async def test_latest_earnings_is_the_apis_release_with_its_full_proof(
         answer = await _call(client, "latest_earnings", {"ticker": "ACME"})
     rest = await _rest(api, api_key, "/v1/companies/ACME/earnings/latest")
 
-    assert answer == rest
+    # The API's answer as it is, its sources as every MCP answer writes them (D-140).
+    assert answer == {**rest, "sources": mcp_sources(rest)}
     assert answer["disclaimer"] == DISCLAIMER
     assert answer["data"]["release"]["status"] == "failed"  # the newest, whatever its status
 

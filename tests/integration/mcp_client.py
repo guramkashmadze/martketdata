@@ -88,3 +88,12 @@ def text_of(result: CallToolResult) -> str:
 def parsed(result: CallToolResult) -> Any:
     """A tool's answer, numbers as Decimal so every digit is compared."""
     return json.loads(text_of(result), parse_float=Decimal)
+
+
+def mcp_sources(rest: dict[str, Any]) -> list[dict[str, Any]]:
+    """The REST envelope's sources as an MCP answer writes them: each filing's folder, without
+    its main document (D-140)."""
+    return [
+        {key: value for key, value in source.items() if key != "document_url"}
+        for source in rest["sources"]
+    ]

@@ -11,7 +11,7 @@ import httpx2
 import psycopg
 from api_seed import ACME, INSIDER_FORM4, seed
 from fastapi import FastAPI
-from mcp_client import connected, parsed, text_of
+from mcp_client import connected, mcp_sources, parsed, text_of
 
 from marketdata.mcp_server.tools import INSIDER_LINES, INSIDER_TRADES
 
@@ -33,7 +33,8 @@ async def test_insider_activity_is_the_apis_in_short(
     assert result.is_error is False, text_of(result)
     answer = parsed(result)
     assert set(answer) == {"data", "sources", "as_of", "checked_at", "check_overdue", "disclaimer"}
-    for key in ("sources", "as_of", "checked_at", "check_overdue", "disclaimer"):
+    assert answer["sources"] == mcp_sources(rest)  # without their main documents (D-140)
+    for key in ("as_of", "checked_at", "check_overdue", "disclaimer"):
         assert answer[key] == rest[key], key
     data = answer["data"]
     assert (data["ticker"], data["codes"], data["totals"]) == (

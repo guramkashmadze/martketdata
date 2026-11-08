@@ -290,6 +290,11 @@ def day(moment: date | datetime | None) -> str:
     return moment.isoformat()
 
 
+def file_name(url: str) -> str:
+    """The last part of a document's address: amd-20261103.htm, primary_doc.xml (D-140)."""
+    return url.rsplit("/", 1)[-1]
+
+
 _environment = Environment(
     loader=PackageLoader("marketdata.web", "templates"),
     autoescape=select_autoescape(["html"]),
@@ -301,6 +306,7 @@ _environment.filters.update(
     amount=amount,
     utc=utc,
     day=day,
+    file_name=file_name,
     exact=exact,
     scaled=scaled,
     change=change,

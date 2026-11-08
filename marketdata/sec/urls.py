@@ -28,6 +28,11 @@ MAX_CIK = 9_999_999_999
 _ACCESSION = re.compile(r"^(\d{10})-?(\d{2})-?(\d{6})$")
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _SUBMISSIONS_PAGE = re.compile(r"^CIK(\d{10})-submissions-(\d{3})\.json$")
+# EDGAR shows a document filed as XML (Forms 3, 4 and 5, 13F, Schedules 13D and 13G, 144,
+# N-PORT ...) through a stylesheet kept in a folder of its own, and the submissions'
+# primaryDocument names that rendering: xslF345X06/form4.xml. The XML as filed has the same
+# name in the filing folder (D-140; normalize/form4.py reads Forms 4 so).
+_RENDERING_FOLDER = re.compile(r"^xsl[^/]*/", re.IGNORECASE)
 
 
 def cik10(cik: int) -> str:
@@ -126,6 +131,20 @@ def filing_index_page(cik: int, accession: str) -> str:
 def filing_document(cik: int, accession: str, file: str) -> str:
     """A document in the filing folder. `file` may have a folder, e.g. xslF345X05/form4.xml."""
     return filing_folder(cik, accession) + _relative_path(file)
+
+
+def main_document(cik: int, accession: str, primary_doc: str | None) -> str | None:
+    """The filing's main document as filed, in the folder of the listing `cik` (D-140): the
+    document the submissions name as primary (amd-20261103.htm), or for a form filed as XML
+    the XML itself rather than EDGAR's rendering of it: primary_doc.xml for
+    xslSCHEDULE_13G_X02/primary_doc.xml. None when the submissions name no document, or a
+    name that isn't a file in the folder: an address is never guessed."""
+    name = _RENDERING_FOLDER.sub("", (primary_doc or "").strip())
+    try:
+        file = _relative_path(name)
+    except ValueError:
+        return None
+    return filing_folder(cik, accession) + file
 
 
 def www_path(path: str) -> str:
