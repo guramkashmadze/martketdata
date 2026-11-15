@@ -530,14 +530,16 @@ class Tools:
         investor or a qualified institution such as a fund manager; /A an amendment), the
         filing date, the date of the event that required it, the class, the shares (the
         largest amount one reporting person states: joint filers' amounts overlap and are
-        never added) and the percent of the class as filed, with its SEC link. Holders whose
-        latest filing reports below 5%, or says they no longer own more than 5%, are listed
-        apart as exited. Filings in the older format (SC 13D, SC 13G, before December 2024)
-        are not read: the newest are linked, and a holder whose last filing is one of them
-        isn't among the holders. Use it for "who owns <company>" or "who are its largest
-        shareholders"; fund_holders answers which curated 13F managers hold it. With the
-        server's public address set, `proof_url` is each holder's proof page (the filing as
-        read, every reporting person, the checks): fill in its {accession_no}.
+        never added) and the percent of the class as filed, with `document_url`, the filing's
+        XML on sec.gov that the stake was read from. Holders whose latest filing reports below
+        5%, or says they no longer own more than 5%, are listed apart as exited. Filings in the
+        older format (SC 13D, SC 13G, before December 2024) are not read: the newest are linked
+        to their HTML or text (`document_url`, or `url`, the index page, when the SEC names no
+        document), and a holder whose last filing is one of them isn't among the holders. Use
+        it for "who owns <company>" or "who are its largest shareholders"; fund_holders
+        answers which curated 13F managers hold it. With the server's public address set,
+        `proof_url` is each holder's proof page (the filing as read, every reporting person,
+        the checks): fill in its {accession_no}.
 
         The data is information from public filings, not investment advice.
         """

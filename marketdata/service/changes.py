@@ -288,6 +288,7 @@ async def _build(
                     form=stake.proof.form,
                     filed_at=stake.proof.filed_at,
                     url=stake.proof.filing_url,
+                    document_url=stake.proof.document_url,
                 )
                 for stake in stakes.values()
                 if stake is not None

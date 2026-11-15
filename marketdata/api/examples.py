@@ -928,6 +928,9 @@ STAKES: Served[CompanyStakes] = Served(
                 form="SC 13G/A",
                 filed_at=date(2024, 2, 13),
                 url=urls.filing_index_page(AMD, "0001104659-24-020184"),
+                document_url=urls.filing_document(
+                    AMD, "0001104659-24-020184", "tv0191-advancedmicrodevicesi.htm"
+                ),
             ),
         ),
         more_older_filings=True,
@@ -939,12 +942,14 @@ STAKES: Served[CompanyStakes] = Served(
             form="SCHEDULE 13G",
             filed_at=date(2026, 4, 29),
             url=urls.filing_folder(AMD, VCM_AMD),
+            document_url=urls.filing_document(AMD, VCM_AMD, "primary_doc.xml"),
         ),
         Source(
             accession_no=VANGUARD_AMD,
             form="SCHEDULE 13G/A",
             filed_at=date(2026, 3, 26),
             url=urls.filing_folder(AMD, VANGUARD_AMD),
+            document_url=urls.filing_document(AMD, VANGUARD_AMD, "primary_doc.xml"),
         ),
     ),
     as_of=STAKES_AT,

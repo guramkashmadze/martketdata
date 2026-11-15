@@ -122,6 +122,8 @@ class OlderFiling(BaseModel):
     form: str  # SC 13D, SC 13D/A, SC 13G or SC 13G/A
     filed_at: date
     url: str  # the filing's index page on sec.gov
+    # D-140: its main document as filed, the HTML or text; null when the SEC's list names none
+    document_url: str | None
     quality_flags: tuple[str, ...] = (NOT_PARSED,)
 
 
@@ -261,6 +263,9 @@ async def major_holders(
                 form=filing.form,
                 filed_at=filing.filed_at,
                 url=urls.filing_folder(filing.issuer_cik, filing.accession_no),
+                document_url=urls.filing_document(
+                    filing.issuer_cik, filing.accession_no, filing.doc_name
+                ),  # the XML read: the filing's main document (D-140)
             )
             for filing in sorted(
                 used, key=lambda filing: (filing.filed_at, filing.accession_no), reverse=True
@@ -314,6 +319,7 @@ def _older(listed: Sequence[Filing]) -> list[OlderFiling]:
                 form=row.form,
                 filed_at=row.filed_at,
                 url=urls.filing_index_page(row.cik, row.accession_no),
+                document_url=urls.main_document(row.cik, row.accession_no, row.primary_doc),
             ),
         )
     return list(seen.values())

@@ -15,8 +15,9 @@ contributing filings, the calc version, the filing's index page) is the API's an
 page's. latest_earnings answers the API's release as it is, each fact with its full proof; a
 snapshot's release keeps each fact's source quote and cross-check status. investor_portfolio
 answers a 13F quarter's largest positions and its changes, each list cut short (E9).
-major_holders answers each 5% holder's latest Schedule 13D or 13G in a line, by name, with its
-filing's link, and the newest old-format filings as links (E16).
+major_holders answers each 5% holder's latest Schedule 13D or 13G in a line, by name, with the
+filing's XML it was read from, and the newest old-format filings as links to their documents
+(E16, D-140).
 """
 
 from datetime import date, datetime
@@ -162,10 +163,15 @@ class Filing(BaseModel):
 
     @model_serializer(mode="wrap")
     def _one_link(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
-        written: dict[str, Any] = handler(self)
-        if written["url"] is None:
-            del written["url"]
-        return written
+        return one_link(handler(self))
+
+
+def one_link(written: dict[str, Any]) -> dict[str, Any]:
+    """A filing as written with one link (D-140): its index page only when it has no
+    document."""
+    if written["url"] is None:
+        del written["url"]
+    return written
 
 
 def filing_of(view: FilingView) -> Filing:
@@ -685,7 +691,7 @@ class StakeLine(BaseModel):
     percent: Number  # of the class
     reporting_persons: int
     accession_no: str
-    url: str  # the filing's folder on sec.gov
+    document_url: str  # the filing's XML on sec.gov, which the stake was read from (D-140)
     flags: tuple[str, ...]
 
 
@@ -701,15 +707,22 @@ class ExitLine(BaseModel):
     shares: Number
     percent: Number
     accession_no: str
-    url: str
+    document_url: str  # the filing's XML (D-140)
 
 
 class OlderLine(BaseModel):
+    """An old-format filing with one link (D-140), as recent_filings' filings."""
+
     model_config = ConfigDict(frozen=True)
 
     form: str  # SC 13D, SC 13G ... (HTML or text, not read)
     filed_at: date
-    url: str  # the filing's index page on sec.gov
+    document_url: str | None  # the HTML or text as filed
+    url: str | None  # the filing's index page, written only when there is no document_url
+
+    @model_serializer(mode="wrap")
+    def _one_link(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        return one_link(handler(self))
 
 
 class StakesAnswer(BaseModel):
@@ -737,7 +750,7 @@ def _stake_line(holder: StakeHolder) -> StakeLine:
         percent=holder.percent,
         reporting_persons=len(holder.reporting_persons),
         accession_no=holder.proof.accession_no,
-        url=holder.proof.filing_url,
+        document_url=holder.proof.document_url,
         flags=holder.quality_flags,
     )
 
@@ -751,12 +764,17 @@ def _exit_line(holder: StakeHolder) -> ExitLine:
         shares=holder.shares,
         percent=holder.percent,
         accession_no=holder.proof.accession_no,
-        url=holder.proof.filing_url,
+        document_url=holder.proof.document_url,
     )
 
 
 def _older_line(filing: OlderFiling) -> OlderLine:
-    return OlderLine(form=filing.form, filed_at=filing.filed_at, url=filing.url)
+    return OlderLine(
+        form=filing.form,
+        filed_at=filing.filed_at,
+        document_url=filing.document_url,
+        url=None if filing.document_url else filing.url,
+    )
 
 
 def stakes(

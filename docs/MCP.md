@@ -179,13 +179,14 @@ one address with `{placeholders}` to fill in from each value, e.g.
 `https://<host>/proof/metrics/AAPL/{metric}/Q/{period_end}`. The pages ask for the same API key
 as the password of HTTP Basic auth while the web UI is private.
 
-A filing that `recent_filings` or `company_snapshot` lists links its main document as filed in
-`document_url`, to read the filing itself (D-140): an 8-K or a 10-Q is its HTML page, and a form
-filed as XML (Forms 3, 4 and 5, 13D, 13G, 13F, 144) is the XML, where a 13G's holder, shares and
-percent are. EDGAR's readable rendering of the XML is linked from the filing's index page, and
-the filing's other documents, such as an 8-K's exhibits, are in the same folder. A filing whose
-SEC listing names no main document (some filed before mid-2000) has `document_url` null and its
-index page in `url`. The REST API names both links on every filing, and on every source.
+A filing that `recent_filings`, `company_snapshot` or `major_holders` lists links its main
+document as filed in `document_url`, to read the filing itself (D-140): an 8-K or a 10-Q is its
+HTML page, and a form filed as XML (Forms 3, 4 and 5, 13D, 13G, 13F, 144) is the XML, where a
+13G's holder, shares and percent are. EDGAR's readable rendering of the XML is linked from the
+filing's index page, and the filing's other documents, such as an 8-K's exhibits, are in the
+same folder. A filing whose SEC listing names no main document (some filed before mid-2000) has
+`document_url` null and its index page in `url`. The REST API names both links on every filing,
+and on every source.
 
 | Tool | Use it for | Arguments | Limits |
 | --- | --- | --- | --- |
@@ -244,13 +245,15 @@ than 5% of a class of its shares files one (a 13D when it may seek to influence 
 changes. It answers each holder's latest filing about each class, however old, read from the
 SEC's structured format (from 2024, required since 2024-12-18): the form, the filing date, the
 date of the event that required it, the class (its ticker), the shares and the percent of the
-class as filed, how many reporting persons joined the filing, and its link. The shares are the
+class as filed, how many reporting persons joined the filing, and `document_url`, the filing's
+XML that the stake was read from (D-140). The shares are the
 largest amount one reporting person states: joint filers (a parent and its advisers, a family
 and its trusts) report overlapping amounts that are never added. Holders are listed by name,
 never by size; those whose latest filing reports below 5%, or says they no longer own more than
 5%, are listed apart as exited. Filings in the older format (SC 13D, SC 13G, before December
-2024) aren't read: the newest are linked, and a holder whose last filing is one of them isn't
-among the holders. With `PUBLIC_BASE_URL` set, `proof_url` is each holder's proof page
+2024) aren't read: the newest are linked to their HTML or text (`document_url`, or the index
+page in `url` when the SEC names no document), and a holder whose last filing is one of them
+isn't among the holders. With `PUBLIC_BASE_URL` set, `proof_url` is each holder's proof page
 (`/proof/stakes/{accession_no}`): every reporting person, a 13D's purpose word for word, the
 checks and the holder's other filings. `fund_holders` answers the other question, which curated
 13F managers hold a company.

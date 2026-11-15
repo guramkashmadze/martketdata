@@ -249,9 +249,10 @@ than 5%.</p>
 {% if held.older_filings %}
 <h3 id="stakes-older">Older filings, not read</h3>
 <p class="sub">Filed in the format used before December 2024 (HTML or text), so they are links to
-sec.gov only: a holder whose latest filing is one of these isn't listed above.</p>
+sec.gov only: the form opens the filing, the file name its document. A holder whose latest
+filing is one of these isn't listed above.</p>
 <ul>
-  {% for filing in held.older_filings %}<li><a href="{{ filing.url }}">{{ filing.form }}</a> filed {{ filing.filed_at | day }} <span class="note">{{ filing.accession_no }}</span></li>{% endfor %}
+  {% for filing in held.older_filings %}<li><a href="{{ filing.url }}">{{ filing.form }}</a> filed {{ filing.filed_at | day }} <span class="note">{{ filing.accession_no }}</span>{% if filing.document_url %} · {{ document_link(filing.document_url) }}{% endif %}</li>{% endfor %}
 </ul>
 {% if held.more_older_filings %}<p class="note">Only the newest {{ held.older_filings | length }} are listed.</p>{% endif %}
 {% endif %}
