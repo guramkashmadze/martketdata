@@ -24,17 +24,24 @@ the new value and why, served by <code>/v1/changes</code> and sent as <code>data
 {% endif %}
 {%- endmacro %}
 
+{% macro document_link(url) -%}
+{% if url %}<a href="{{ url }}">{{ url | file_name }}</a>{% else %}—{% endif %}
+{%- endmacro %}
+
 {% macro filings(sources) -%}
 <h2>Filings</h2>
+<p class="sub">The accession number opens the filing's folder on sec.gov; the document opens the
+filing itself.</p>
 <div class="scroll">
 <table>
-  <thead><tr><th scope="col">Form</th><th scope="col">Filed</th><th scope="col">Accession number</th></tr></thead>
+  <thead><tr><th scope="col">Form</th><th scope="col">Filed</th><th scope="col">Accession number</th><th scope="col">Document</th></tr></thead>
   <tbody>
   {% for source in sources %}
     <tr>
       <td>{{ source.form or "—" }}</td>
       <td class="num">{{ source.filed_at or "—" }}</td>
       <td class="num"><a href="{{ source.url }}">{{ source.accession_no }}</a></td>
+      <td class="nowrap">{{ document_link(source.document_url) }}</td>
     </tr>
   {% endfor %}
   </tbody>
@@ -124,17 +131,19 @@ flows summed, balances at the quarter end, margins and growth computed from them
 {{ filing_check(check) }}
 {% if listed.filings %}
 <p class="sub">Annual, quarterly and current reports, and stakes of 5% or more in the company,
-newest first; each opens the filing on sec.gov.</p>
+newest first. The form opens the filing on sec.gov, the document the filing itself as filed:
+a 13D or 13G is filed as XML.</p>
 <div class="scroll">
 <table>
-  <thead><tr><th scope="col">Filed</th><th scope="col">Form</th><th scope="col">Period</th><th scope="col">What it reports</th></tr></thead>
+  <thead><tr><th scope="col">Filed</th><th scope="col">Form</th><th scope="col">Period</th><th scope="col">What it reports</th><th scope="col">Document</th></tr></thead>
   <tbody>
   {% for filing in listed.filings %}
     <tr>
       <td class="num">{{ filing.filed_at | day }}</td>
-      <td><a href="{{ filing.url }}">{{ filing.form }}</a></td>
+      <td class="nowrap"><a href="{{ filing.url }}">{{ filing.form }}</a></td>
       <td class="num">{{ filing.period_of_report | day }}</td>
       <td>{% for event in filing.events %}{% if event.importance == "high" %}<strong>{{ event.label }}</strong>{% else %}{{ event.label }}{% endif %}{{ "; " if not loop.last }}{% else %}—{% endfor %}</td>
+      <td class="nowrap">{{ document_link(filing.document_url) }}</td>
     </tr>
   {% endfor %}
   </tbody>
@@ -240,9 +249,10 @@ than 5%.</p>
 {% if held.older_filings %}
 <h3 id="stakes-older">Older filings, not read</h3>
 <p class="sub">Filed in the format used before December 2024 (HTML or text), so they are links to
-sec.gov only: a holder whose latest filing is one of these isn't listed above.</p>
+sec.gov only: the form opens the filing, the file name its document. A holder whose latest
+filing is one of these isn't listed above.</p>
 <ul>
-  {% for filing in held.older_filings %}<li><a href="{{ filing.url }}">{{ filing.form }}</a> filed {{ filing.filed_at | day }} <span class="note">{{ filing.accession_no }}</span></li>{% endfor %}
+  {% for filing in held.older_filings %}<li><a href="{{ filing.url }}">{{ filing.form }}</a> filed {{ filing.filed_at | day }} <span class="note">{{ filing.accession_no }}</span>{% if filing.document_url %} · {{ document_link(filing.document_url) }}{% endif %}</li>{% endfor %}
 </ul>
 {% if held.more_older_filings %}<p class="note">Only the newest {{ held.older_filings | length }} are listed.</p>{% endif %}
 {% endif %}

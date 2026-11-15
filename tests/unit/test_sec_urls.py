@@ -1,7 +1,9 @@
-"""E1-S4: SEC URL builders, one test per PLAN.md §8 endpoint row, and the parser."""
+"""E1-S4: SEC URL builders, one test per PLAN.md §8 endpoint row, and the parser. D-140: a
+filing's main document as filed."""
 
 import pytest
 
+from marketdata.normalize.form4 import xml_document_name
 from marketdata.openfigi.client import MAPPING_URL
 from marketdata.sec import urls
 from marketdata.sec.urls import SecUrl
@@ -144,6 +146,72 @@ def test_filing_documents() -> None:
 def test_document_paths_stay_inside_the_folder(file: str) -> None:
     with pytest.raises(ValueError, match="relative path|name"):
         urls.filing_document(AAPL, ACCESSION, file)
+
+
+# --- D-140: a filing's main document as filed ---
+
+AMD, AMD_8K, VANGUARD_13G = 2488, "0000002488-26-000188", "0002100119-26-000052"
+
+
+@pytest.mark.parametrize(
+    ("cik", "accession", "primary_doc", "file"),
+    [
+        # HTML and text documents are served as the SEC's list names them (dev database).
+        (AMD, AMD_8K, "amd-20261103.htm", "amd-20261103.htm"),
+        (AMD, "0000215457-18-005123", "us0079031078_012418.txt", "us0079031078_012418.txt"),
+        # A form filed as XML: the list names EDGAR's rendering, the XML is the same name.
+        (
+            AMD,
+            "0000002488-26-000184",
+            "xslF345X06/wk-form4_1792441001.xml",
+            "wk-form4_1792441001.xml",
+        ),
+        (AMD, VANGUARD_13G, "xslSCHEDULE_13G_X02/primary_doc.xml", "primary_doc.xml"),
+        (1484769, "0000950157-25-000917", "xslSCHEDULE_13D_X01/primary_doc.xml", "primary_doc.xml"),
+        (1067983, "0001193125-26-352200", "xslForm13F_X02/primary_doc.xml", "primary_doc.xml"),
+        (AMD, "0001950047-26-010251", "xsl144X01/primary_doc.xml", "primary_doc.xml"),
+        (36405, "0000036405-26-000483", "xslFormNPORT-P_X01/primary_doc.xml", "primary_doc.xml"),
+        (
+            AMD,
+            "0000002488-26-000058",
+            "XSLF345X05/wk-form4_1773694083.xml",
+            "wk-form4_1773694083.xml",
+        ),
+        # An XML named without the folder is the document already.
+        (AMD, VANGUARD_13G, "primary_doc.xml", "primary_doc.xml"),
+        (AAPL, "0001140361-26-040127", " form4.xml ", "form4.xml"),
+    ],
+)
+def test_the_main_document_is_the_file_as_filed(
+    cik: int, accession: str, primary_doc: str, file: str
+) -> None:
+    folder = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}/"
+
+    url = urls.main_document(cik, accession, primary_doc)
+
+    assert url == folder + file
+    assert urls.parse(url) == SecUrl("filing", cik=cik, accession_no=accession, file=file)
+
+
+@pytest.mark.parametrize(
+    "primary_doc", [None, "", "  ", "xslF345X06/", "../form4.xml", "a b.htm", "x/../y.htm"]
+)
+def test_no_main_document_is_guessed(primary_doc: str | None) -> None:
+    """No primary document in the SEC's list, or a name that isn't a file in the folder:
+    null, never a guessed address and never an error that would fail the answer."""
+    assert urls.main_document(AMD, AMD_8K, primary_doc) is None
+
+
+@pytest.mark.parametrize(
+    "folder", ["xslF345X02", "xslF345X03", "xslF345X04", "xslF345X05", "xslF345X06"]
+)
+def test_the_main_document_of_a_form_4_is_the_xml_e8_reads(folder: str) -> None:
+    """The XML of a Form 4 that ingest/form4.py fetches (normalize/form4.py's name for it)."""
+    primary_doc = f"{folder}/form4.xml"
+
+    assert urls.main_document(AMD, AMD_8K, primary_doc) == urls.filing_document(
+        AMD, AMD_8K, xml_document_name(primary_doc)
+    )
 
 
 def test_insider_13f_and_nport_data_sets() -> None:

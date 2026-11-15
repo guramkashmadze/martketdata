@@ -4,8 +4,10 @@ the disclaimer (api/envelope.py); the MCP server (E6) returns the same content.
 
 Sources are the filings behind the served values, newest first, each with its form, filing date
 and folder on sec.gov. The form and date come from the filings table, or, for filings older
-than the five-year filings backfill, from the facts they reported (D-096). `as_of` is when the
-newest row used was last written: it moves when a value, flag or proof changes.
+than the five-year filings backfill, from the facts they reported (D-096). A listed filing also
+names its main document as filed, in the same folder: for an XML form the XML itself (D-140);
+MCP answers leave it out. `as_of` is when the newest row used was last written: it moves when a
+value, flag or proof changes.
 
 An answer about a company, a comparison or a 13F manager also says when the SEC was last checked
 for the data it depends on (`checked_at`) and whether that check is overdue: more than a day ago,
@@ -40,6 +42,9 @@ class Source(BaseModel):
     form: str | None
     filed_at: date | None
     url: str  # the filing's folder on sec.gov
+    # D-140: its main document as filed (for an XML form the XML itself) in that folder; null
+    # for a filing known only from its facts, or whose listing names none
+    document_url: str | None = None
 
 
 class FlagRef(BaseModel):
@@ -90,11 +95,13 @@ async def sources_of(
     found: dict[str, Source] = {}
     for listing in await filings.listings(conn, list(wanted)):
         if listing.accession_no not in found or listing.cik == wanted[listing.accession_no]:
+            cik = wanted[listing.accession_no]
             found[listing.accession_no] = Source(
                 accession_no=listing.accession_no,
                 form=listing.form,
                 filed_at=listing.filed_at,
-                url=urls.filing_folder(wanted[listing.accession_no], listing.accession_no),
+                url=urls.filing_folder(cik, listing.accession_no),
+                document_url=urls.main_document(cik, listing.accession_no, listing.primary_doc),
             )
     missing = [accession for accession in wanted if accession not in found]
     for fact in await xbrl_facts.filings_of_facts(conn, missing) if missing else []:

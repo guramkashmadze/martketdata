@@ -1,7 +1,7 @@
 """E16-S5: the MCP tool major_holders (§10.3): the API's 5% holders in a compact answer under 8 KB,
-even for a company with many holders; holders and exits by name, each with its filing's link;
-the newest old-format filings as links; the description says what it covers and that it is
-information, not advice."""
+even for a company with many holders; holders and exits by name, each with its filing's XML
+(D-140); the newest old-format filings as links, to their documents or, without one, their
+index pages; the description says what it covers and that it is information, not advice."""
 
 from datetime import date, timedelta
 from decimal import Decimal
@@ -52,7 +52,7 @@ async def test_major_holders_is_the_apis_in_short(
         "percent": Decimal("6.25"),
         "reporting_persons": 1,
         "accession_no": STAKE_13G,
-        "url": urls.filing_folder(ACME, STAKE_13G),
+        "document_url": urls.filing_document(ACME, STAKE_13G, "primary_doc.xml"),
         "flags": [],
     }
     [exited] = data["exited"]
@@ -61,8 +61,14 @@ async def test_major_holders_is_the_apis_in_short(
         STAKE_13D,
         Decimal("4.1"),
     )
+    # The seed's old filing names no primary document: its index page instead (D-140).
     assert data["older_filings"] == [
-        {"form": "SC 13G", "filed_at": "2024-02-12", "url": urls.filing_index_page(ACME, OLD_13G)}
+        {
+            "form": "SC 13G",
+            "filed_at": "2024-02-12",
+            "document_url": None,
+            "url": urls.filing_index_page(ACME, OLD_13G),
+        }
     ]
     assert (data["more_holders"], data["more_exited"], data["more_older_filings"]) == (
         False,

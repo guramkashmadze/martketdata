@@ -48,8 +48,8 @@ the API reference, with an example for every route.
 ## 1. The API in curl (engineers)
 
 Every response has the same envelope: `data`, `sources` (the filings used, with their sec.gov
-folders), `as_of`, `quality_flags` and the disclaimer. Numbers are JSON numbers with every digit
-of the stored value; each value carries its proof.
+folders and main documents, D-140), `as_of`, `quality_flags` and the disclaimer. Numbers are JSON
+numbers with every digit of the stored value; each value carries its proof.
 
 Apple's latest earnings release:
 

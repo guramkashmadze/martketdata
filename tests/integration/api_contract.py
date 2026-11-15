@@ -47,8 +47,9 @@ def check_envelope(body: dict[str, Any]) -> None:
         assert body["checked_at"] is None or body["checked_at"].endswith("Z")
         assert body["check_overdue"] or body["checked_at"] is not None
     for source in body["sources"]:
-        assert set(source) == {"accession_no", "form", "filed_at", "url"}
+        assert set(source) == {"accession_no", "form", "filed_at", "url", "document_url"}
         assert source["url"].startswith(SEC_FOLDER), source
+        _check_document(source, source["url"])
     for flag in body["quality_flags"]:
         assert set(flag) == {"code", "metric", "period_end", "ticker"} and flag["code"]
     values = list(_with_value(body["data"]))
@@ -56,6 +57,7 @@ def check_envelope(body: dict[str, Any]) -> None:
         check_proof(value)
     for filing in _filings(body["data"]):
         assert filing["accession_no"] and filing["url"].startswith(SEC_FOLDER), filing
+        _check_document(filing, filing["url"].rsplit("/", 1)[0] + "/")
     for position in _positions(body["data"]):  # E9: every 13F position names its reports
         assert all(position["proof"][key] for key in FUND_PROOF), position
         assert position["value_usd"] is not None and position["shares"] is not None, position
@@ -64,6 +66,14 @@ def check_envelope(body: dict[str, Any]) -> None:
         assert stake["proof"]["filing_url"].startswith(SEC_FOLDER), stake
         assert stake["shares"] is not None and stake["percent"] is not None, stake
         assert stake["unit"] == "shares" and stake["reporting_persons"], stake
+
+
+def _check_document(filing: dict[str, Any], folder: str) -> None:
+    """D-140: a filing's main document is null or a file in its folder, never a rendering."""
+    document = filing["document_url"]
+    if document is not None:
+        assert document.startswith(folder) and "/xsl" not in document.lower(), filing
+        assert "/" not in document.removeprefix(folder), filing
 
 
 def check_proof(item: dict[str, Any]) -> None:

@@ -113,10 +113,15 @@ def today() -> date:
     return datetime.now(UTC).date()
 
 
+# D-140: `sources` give each filing's folder, without the main document the REST envelope adds:
+# a snapshot reads up to 19 filings (DE's), and a second link each would cost 2 KB.
+COMPACT_SOURCES = {"sources": {"__all__": {"document_url"}}}
+
+
 def answer(result: answers.Answer[Any] | Served[Any], proof_url: str | None = None) -> str:
     """An answer, or the API's envelope, with its proof pages' address when there is one and
     the disclaimer, as JSON text."""
-    written = checked_fields(result.model_dump(mode="python"))
+    written = checked_fields(result.model_dump(mode="python", exclude=COMPACT_SOURCES))
     if proof_url is not None:
         written["proof_url"] = proof_url
     return dumps({**written, "disclaimer": DISCLAIMER})
@@ -199,8 +204,9 @@ class Tools:
         """A one-call overview of a covered company: who it is (name, CIK, tickers, exchange,
         SIC industry, fiscal year end), its latest reported quarter, the trailing-twelve-month
         value of each core metric, its latest earnings release and its three latest filings
-        of results and events. Use it for "tell me about <company>" questions; use
-        get_financials for history and latest_earnings for a release's full proof.
+        of results and events, each with its main document's SEC link (`document_url`, as in
+        recent_filings). Use it for "tell me about <company>" questions; use get_financials
+        for history and latest_earnings for a release's full proof.
 
         Amounts are in base units: USD, shares, or USD per share for EPS; margins and growth
         are percents. Each value names its period end, the filing it came from (its accession
@@ -295,7 +301,7 @@ class Tools:
         ] = 90,
     ) -> str:
         """A company's recent SEC filings, newest first, at most 20 (fewer when their labels
-        would make the answer too long), each with its form, filing date, period, SEC link and
+        would make the answer too long), each with its form, filing date, period and
         plain-language event labels (e.g. "Quarterly or annual results", "Director or
         executive change", "An investor crossed 5% and may seek to influence the company")
         with their importance. Use it for "what has <company> filed or announced lately"
@@ -306,6 +312,11 @@ class Tools:
         days or one form. Works for every filer, funds and foreign issuers too. For "who owns
         <company>", major_holders reads the 13D and 13G filings: each holder's shares and
         percent.
+
+        `document_url` is each filing's main document on sec.gov, to read the filing itself:
+        for a form filed as XML (Forms 3, 4 and 5, 13D, 13G, 13F, 144) it is the XML, and the
+        filing's other documents are in the same folder. A filing whose SEC listing names no
+        main document has `url`, its index page, instead.
 
         `checked_at` is when the company's filings were last checked on the SEC; with
         `check_overdue` true (more than a day ago, or never) newer filings may be missing.
@@ -519,14 +530,16 @@ class Tools:
         investor or a qualified institution such as a fund manager; /A an amendment), the
         filing date, the date of the event that required it, the class, the shares (the
         largest amount one reporting person states: joint filers' amounts overlap and are
-        never added) and the percent of the class as filed, with its SEC link. Holders whose
-        latest filing reports below 5%, or says they no longer own more than 5%, are listed
-        apart as exited. Filings in the older format (SC 13D, SC 13G, before December 2024)
-        are not read: the newest are linked, and a holder whose last filing is one of them
-        isn't among the holders. Use it for "who owns <company>" or "who are its largest
-        shareholders"; fund_holders answers which curated 13F managers hold it. With the
-        server's public address set, `proof_url` is each holder's proof page (the filing as
-        read, every reporting person, the checks): fill in its {accession_no}.
+        never added) and the percent of the class as filed, with `document_url`, the filing's
+        XML on sec.gov that the stake was read from. Holders whose latest filing reports below
+        5%, or says they no longer own more than 5%, are listed apart as exited. Filings in the
+        older format (SC 13D, SC 13G, before December 2024) are not read: the newest are linked
+        to their HTML or text (`document_url`, or `url`, the index page, when the SEC names no
+        document), and a holder whose last filing is one of them isn't among the holders. Use
+        it for "who owns <company>" or "who are its largest shareholders"; fund_holders
+        answers which curated 13F managers hold it. With the server's public address set,
+        `proof_url` is each holder's proof page (the filing as read, every reporting person,
+        the checks): fill in its {accession_no}.
 
         The data is information from public filings, not investment advice.
         """
