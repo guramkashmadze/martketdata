@@ -403,12 +403,14 @@ _SUMMARIES = """
     group by manager_cik, report_period
 """
 # Curated managers' positions in these securities at these quarter ends (the cross-manager
-# unit check and splits, E9-S4; a company's holders, E9-S6).
+# unit check and splits, E9-S4; a company's holders, E9-S6). Ordered by the whole key, shares
+# held outright before calls and puts: a manager's shares and its option on the same CUSIP tied
+# before, so a company's holders came back in either order.
 _POSITIONS_OF = f"""
     select {", ".join(f"p.{name.strip()}" for name in _POSITION_COLUMNS.split(","))}
     from fund_positions p join managers m using (manager_cik)
     where m.curated and p.cusip = any(%(cusips)s) and p.report_period = any(%(periods)s)
-    order by p.report_period, p.cusip, p.manager_cik
+    order by p.report_period, p.cusip, p.manager_cik, p.put_call nulls first
 """
 
 

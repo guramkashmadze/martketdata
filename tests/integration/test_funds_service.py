@@ -11,6 +11,7 @@ import psycopg
 import pytest
 from fund_world import APPLE, NETFLIX, Q1, Q2, TOAST, Line, curate, link, report
 
+from marketdata.db.repositories import holdings
 from marketdata.service import funds
 from marketdata.service.errors import InvalidParameter, NotFound
 
@@ -218,6 +219,28 @@ async def test_a_companys_holders_by_manager_name(conn: Conn, world: None) -> No
     ]
     assert data.holders[0].filing_url.endswith("/data/1067983/000000000126000002/")
     assert {source.accession_no for source in served.sources} == {A_Q2, B_Q2, C_Q2}
+
+
+async def test_a_managers_shares_come_before_its_calls_and_puts(conn: Conn) -> None:
+    """The positions query orders by the whole key: a manager's shares and its options on one
+    CUSIP used to tie, and the holders above came back in either order, depending on where
+    PostgreSQL had put the rows (a full run's earlier tests move them)."""
+    await curate(conn, {BERKSHIRE: "Berkshire Hathaway"})
+    for put_call, shares in (("PUT", 300), ("CALL", 200), (None, 100)):  # stored options first
+        await conn.execute(
+            "insert into fund_positions (manager_cik, report_period, cusip, put_call, "
+            "share_type, name_of_issuer, title_of_class, shares, value_usd, lines, "
+            "source_accessions) values (%s, %s, %s, %s, 'SH', 'APPLE INC', 'COM', %s, %s, 1, %s)",
+            [BERKSHIRE, Q2, APPLE, put_call, shares, shares * 200, [A_Q2]],
+        )
+
+    rows = await holdings.positions_of(conn, [APPLE], [Q2])
+
+    assert [(row.put_call, row.shares) for row in rows] == [
+        (None, Decimal(100)),
+        ("CALL", Decimal(200)),
+        ("PUT", Decimal(300)),
+    ]
 
 
 async def test_a_company_no_curated_manager_holds_has_no_holders(conn: Conn, world: None) -> None:
